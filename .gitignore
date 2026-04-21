@@ -1,0 +1,21 @@
+# --- Rust ---
+/target
+Cargo.lock
+
+# --- Google API Credentials ---
+# Este archivo contiene tu Client ID y Client Secret
+client_secret.json
+
+# --- Local Session & Tokens ---
+# Aunque ahora se guardan en ~/.config/pomotask/, 
+# los ignoramos aquí por seguridad si se mueven o copian
+pomotask_token.json
+pomotask_stats.json
+pomotask_config.json
+*.json.bak
+
+# --- IDEs & OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
