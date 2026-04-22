@@ -1,10 +1,10 @@
 use crate::app::{Task, TaskList, App};
 use google_tasks1::{api, TasksHub};
-use yup_oauth2::{InstalledFlowAuthenticator, InstalledFlowReturnMethod, authenticator::Authenticator};
+use yup_oauth2::{InstalledFlowAuthenticator, InstalledFlowReturnMethod, authenticator::Authenticator, parse_application_secret};
 use yup_oauth2::authenticator_delegate::InstalledFlowDelegate;
 use hyper_rustls::HttpsConnector;
 use hyper::client::HttpConnector;
-use std::path::Path;
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::future::Future;
 use tokio::sync::mpsc;
@@ -23,9 +23,28 @@ pub struct ApiClient { hub: Option<TasksHub<HttpsConnector<HttpConnector>>>, aut
 
 impl ApiClient {
     pub async fn new(sender: mpsc::UnboundedSender<Event>) -> Self {
-        let secret_path = "client_secret.json";
-        if !Path::new(secret_path).exists() { return Self { hub: None, auth: None }; }
-        let secret = match yup_oauth2::read_application_secret(secret_path).await { Ok(s) => s, Err(_) => return Self { hub: None, auth: None } };
+        // Estrategia: Config Dir > Current Dir > Embedded
+        let mut secret_path = App::get_config_dir();
+        secret_path.push("client_secret.json");
+
+        let secret = if secret_path.exists() {
+            yup_oauth2::read_application_secret(&secret_path).await.ok()
+        } else {
+            let local_path = PathBuf::from("client_secret.json");
+            if local_path.exists() {
+                yup_oauth2::read_application_secret(&local_path).await.ok()
+            } else {
+                // Fallback: Credenciales incrustadas en el binario
+                let embedded_json = include_str!("../client_secret.json");
+                parse_application_secret(embedded_json).ok()
+            }
+        };
+
+        let secret = match secret {
+            Some(s) => s,
+            None => return Self { hub: None, auth: None },
+        };
+
         let mut token_path = App::get_config_dir(); token_path.push("pomotask_token.json");
         let auth = match InstalledFlowAuthenticator::builder(secret, InstalledFlowReturnMethod::HTTPRedirect).persist_tokens_to_disk(token_path).flow_delegate(Box::new(TuiDelegate { sender })).build().await { Ok(a) => a, Err(_) => return Self { hub: None, auth: None } };
         let https = hyper_rustls::HttpsConnectorBuilder::new().with_native_roots().expect("no native roots found").https_or_http().enable_http1().build();
@@ -78,11 +97,27 @@ impl ApiClient {
         self.ensure_full_permissions().await?;
         let hub = match &self.hub { Some(h) => h, None => return Ok(()) };
         let mut task = api::Task::default();
-        task.title = Some(title.to_string()); task.notes = notes; task.due = due.map(|d| d.to_rfc3339());
+        task.title = Some(title.to_string()); 
+        task.notes = notes; 
+        task.due = due.map(|d| d.to_rfc3339());
+        
+        if let Some(ref pid) = parent_id {
+            task.parent = Some(pid.clone());
+        }
+
         let mut call = hub.tasks().insert(task, list_id);
-        if let Some(pid) = parent_id { call = call.parent(&pid); }
-        call.doit().await?;
-        Ok(())
+        if let Some(ref pid) = parent_id {
+            call = call.parent(pid);
+        }
+
+        let res = call.doit().await;
+        match res {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                eprintln!("Error creating task: {:?}", e);
+                Err(Box::new(e))
+            }
+        }
     }
 
     pub async fn update_task(&self, list_id: &str, task_id: &str, title: &str, notes: Option<String>, due: Option<DateTime<Utc>>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

@@ -11,9 +11,9 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use color_eyre::Result;
-use chrono::{DateTime, Utc, TimeZone};
+use chrono::{DateTime, Utc, TimeZone, Local};
 
-use crate::app::{App, TimerMode, AppMode, InputField, Task};
+use crate::app::{App, TimerMode, AppMode, InputField, Task, DatePreset};
 use crate::events::{Event, EventHandler};
 use crate::api::ApiClient;
 
@@ -27,7 +27,7 @@ async fn main() -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     let mut app = App::new();
-    let mut events = EventHandler::new(Duration::from_millis(250));
+    let mut events = EventHandler::new(Duration::from_millis(50));
     let mut clipboard = arboard::Clipboard::new().ok();
     
     terminal.draw(|f| ui::render(&mut app, f))?;
@@ -58,20 +58,118 @@ async fn main() -> Result<()> {
                             match key.code {
                                 KeyCode::Esc => { app.mode = AppMode::Timer; }
                                 KeyCode::Enter => {
-                                    if let Some(task) = app.tasks.get(app.selected_task) {
+                                    if let Some(task) = app.tasks.get_mut(app.selected_task) {
                                         let task_id = task.id.clone();
                                         let is_completed = task.completed;
                                         let list_id = app.task_lists[app.selected_list_idx].id.clone();
                                         let api = api_client.clone();
                                         let sender = events.sender();
+                                        let show_comp = app.config.show_completed;
+                                        
+                                        if !is_completed {
+                                            // Actualización optimista local: marcar como hecho ya
+                                            task.completed = true;
+                                            
+                                            // Calcular posición aproximada en pantalla para la explosión
+                                            let x = 3; 
+                                            let y = 1 + 5 + 1 + app.selected_task as u16; 
+                                            let w = task.title.len() as u16 + 5;
+                                            app.start_completion_animation(task_id.clone(), x, y, w);
+                                            app.record_task_done();
+                                        }
+
                                         app.loading = true;
                                         app.mode = AppMode::Timer;
                                         tokio::spawn(async move {
+                                            // Delay para dejar ver la animación
+                                            if !is_completed { tokio::time::sleep(Duration::from_millis(1500)).await; }
+                                            
                                             if api.toggle_task_completion(&list_id, &task_id, !is_completed).await.is_ok() {
-                                                let tasks = api.fetch_tasks(&list_id, true).await.unwrap_or_default(); 
+                                                let tasks = api.fetch_tasks(&list_id, show_comp).await.unwrap_or_default(); 
                                                 let _ = sender.send(Event::ApiUpdate(tasks));
                                             }
                                         });
+                                    }
+                                }
+                                _ => {}
+                            }
+                        },
+
+                        AppMode::Help => {
+                            app.mode = AppMode::Timer;
+                        },
+
+                        AppMode::ConfirmLogout => {
+                            match key.code {
+                                KeyCode::Esc => { app.mode = AppMode::Settings; }
+                                KeyCode::Enter => {
+                                    app.logout();
+                                    app.running = false;
+                                }
+                                _ => {}
+                            }
+                        },
+
+                        AppMode::Settings => {
+                            match key.code {
+                                KeyCode::Esc => { app.mode = AppMode::Timer; }
+                                KeyCode::Up | KeyCode::Char('k') => {
+                                    if app.selected_settings_idx > 0 { app.selected_settings_idx -= 1; }
+                                    else { app.selected_settings_idx = 5; }
+                                }
+                                KeyCode::Down | KeyCode::Char('j') => {
+                                    if app.selected_settings_idx < 5 { app.selected_settings_idx += 1; }
+                                    else { app.selected_settings_idx = 0; }
+                                }
+                                KeyCode::Left | KeyCode::Char('h') => {
+                                    match app.selected_settings_idx {
+                                        0 => { if app.config.focus_duration > 60 { app.config.focus_duration -= 60; } }
+                                        1 => { if app.config.short_break_duration > 60 { app.config.short_break_duration -= 60; } }
+                                        2 => { if app.config.long_break_duration > 60 { app.config.long_break_duration -= 60; } }
+                                        3 => { app.toggle_language(); }
+                                        4 => {
+                                            use crate::app::Theme;
+                                            app.config.theme = match app.config.theme {
+                                                Theme::CatppuccinMocha => Theme::Dracula,
+                                                Theme::Nord => Theme::CatppuccinMocha,
+                                                Theme::Gruvbox => Theme::Nord,
+                                                Theme::Dracula => Theme::Gruvbox,
+                                            };
+                                        }
+                                        _ => {}
+                                    }
+                                    app.save_config();
+                                    app.timer_seconds = app.timer_mode.duration(&app.config);
+                                }
+                                KeyCode::Right | KeyCode::Char('l') => {
+                                    match app.selected_settings_idx {
+                                        0 => { app.config.focus_duration += 60; }
+                                        1 => { app.config.short_break_duration += 60; }
+                                        2 => { app.config.long_break_duration += 60; }
+                                        3 => { app.toggle_language(); }
+                                        4 => {
+                                            use crate::app::Theme;
+                                            app.config.theme = match app.config.theme {
+                                                Theme::CatppuccinMocha => Theme::Nord,
+                                                Theme::Nord => Theme::Gruvbox,
+                                                Theme::Gruvbox => Theme::Dracula,
+                                                Theme::Dracula => Theme::CatppuccinMocha,
+                                            };
+                                            app.save_config();
+                                        }
+                                        5 => {
+                                            if key.code == KeyCode::Enter || key.code == KeyCode::Right || key.code == KeyCode::Char('l') {
+                                                app.mode = AppMode::ConfirmLogout;
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                    app.save_config();
+                                    app.timer_seconds = app.timer_mode.duration(&app.config);
+                                }
+                                KeyCode::Enter => {
+                                    if app.selected_settings_idx == 5 {
+                                        app.mode = AppMode::ConfirmLogout;
                                     }
                                 }
                                 _ => {}
@@ -120,27 +218,55 @@ async fn main() -> Result<()> {
                                         let api = api_client.clone();
                                         let sender = events.sender();
                                         let mode = app.mode;
-                                        let parent_id = if mode == AppMode::SubtaskInput { app.tasks.get(app.selected_task).map(|t| t.id.clone()) } else { None };
+                                        let parent_id = if mode == AppMode::SubtaskInput { 
+                                            app.tasks.get(app.selected_task).map(|t| {
+                                                // Si seleccionamos una subtarea, el padre de la nueva será el mismo padre
+                                                t.parent_id.clone().unwrap_or(t.id.clone())
+                                            })
+                                        } else { None };
                                         let edit_id = app.editing_task_id.clone();
+                                        let show_comp = app.config.show_completed;
                                         app.loading = true; app.mode = AppMode::Timer; clear_inputs(&mut app);
                                         tokio::spawn(async move {
                                             let res = if mode == AppMode::Edit { api.update_task(&list_id, &edit_id.unwrap(), &title, notes, due).await } else { api.create_task(&list_id, &title, notes, due, parent_id).await };
-                                            if res.is_ok() { if let Ok(tasks) = api.fetch_tasks(&list_id, true).await { let _ = sender.send(Event::ApiUpdate(tasks)); } }
+                                            if res.is_ok() { if let Ok(tasks) = api.fetch_tasks(&list_id, show_comp).await { let _ = sender.send(Event::ApiUpdate(tasks)); } }
                                         });
                                     }
+                                }
+                                KeyCode::Left | KeyCode::Char('h') if app.focused_input == InputField::Due => {
+                                    app.selected_date_preset = match app.selected_date_preset {
+                                        DatePreset::Today => DatePreset::Custom,
+                                        DatePreset::Tomorrow => DatePreset::Today,
+                                        DatePreset::Custom => DatePreset::Tomorrow,
+                                    };
+                                    app.set_date_preset(app.selected_date_preset);
+                                }
+                                KeyCode::Right | KeyCode::Char('l') if app.focused_input == InputField::Due => {
+                                    app.selected_date_preset = match app.selected_date_preset {
+                                        DatePreset::Today => DatePreset::Tomorrow,
+                                        DatePreset::Tomorrow => DatePreset::Custom,
+                                        DatePreset::Custom => DatePreset::Today,
+                                    };
+                                    app.set_date_preset(app.selected_date_preset);
                                 }
                                 KeyCode::Char(c) => {
                                     match app.focused_input {
                                         InputField::Title => app.input_title.push(c),
                                         InputField::Notes => app.input_notes.push(c),
-                                        InputField::Due => app.input_due.push(c),
+                                        InputField::Due => {
+                                            app.selected_date_preset = DatePreset::Custom;
+                                            app.input_due.push(c);
+                                        }
                                     }
                                 }
                                 KeyCode::Backspace => {
                                     match app.focused_input {
                                         InputField::Title => { app.input_title.pop(); }
                                         InputField::Notes => { app.input_notes.pop(); }
-                                        InputField::Due => { app.input_due.pop(); }
+                                        InputField::Due => { 
+                                            app.selected_date_preset = DatePreset::Custom;
+                                            app.input_due.pop(); 
+                                        }
                                     }
                                 }
                                 _ => {}
@@ -152,11 +278,36 @@ async fn main() -> Result<()> {
                                 KeyCode::Char('q') => app.running = false,
                                 KeyCode::Char(' ') => app.toggle_timer(),
                                 KeyCode::Char('r') => app.reset_timer(),
-                                KeyCode::Char('n') => { app.mode = AppMode::Input; app.focused_input = InputField::Title; }
-                                KeyCode::Char('a') => { if !app.tasks.is_empty() { app.mode = AppMode::SubtaskInput; app.focused_input = InputField::Title; } }
+                                KeyCode::Char('n') => { 
+                                    app.mode = AppMode::Input; 
+                                    app.focused_input = InputField::Title;
+                                    app.set_date_preset(DatePreset::Today);
+                                }
+                                KeyCode::Char('a') => { 
+                                    if !app.tasks.is_empty() { 
+                                        app.mode = AppMode::SubtaskInput; 
+                                        app.focused_input = InputField::Title;
+                                        app.set_date_preset(DatePreset::Today);
+                                    } 
+                                }
                                 KeyCode::Char('e') => {
                                     if let Some(task) = app.tasks.get(app.selected_task) {
-                                        app.mode = AppMode::Edit; app.editing_task_id = Some(task.id.clone()); app.input_title = task.title.clone(); app.input_notes = task.notes.clone().unwrap_or_default(); app.input_due = task.due.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default(); app.focused_input = InputField::Title;
+                                        app.mode = AppMode::Edit; 
+                                        app.editing_task_id = Some(task.id.clone()); 
+                                        app.input_title = task.title.clone(); 
+                                        app.input_notes = task.notes.clone().unwrap_or_default(); 
+                                        
+                                        let date_str = task.due.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default();
+                                        app.input_due = date_str.clone();
+                                        
+                                        let now = Local::now().format("%Y-%m-%d").to_string();
+                                        let tomorrow = (Local::now() + chrono::Duration::days(1)).format("%Y-%m-%d").to_string();
+                                        
+                                        if date_str == now { app.selected_date_preset = DatePreset::Today; }
+                                        else if date_str == tomorrow { app.selected_date_preset = DatePreset::Tomorrow; }
+                                        else { app.selected_date_preset = DatePreset::Custom; }
+                                        
+                                        app.focused_input = InputField::Title;
                                     }
                                 }
                                 KeyCode::Char('c') => {
@@ -166,6 +317,8 @@ async fn main() -> Result<()> {
                                 }
                                 KeyCode::Char('l') => app.toggle_language(),
                                 KeyCode::Char('s') => sync_tasks(&api_client, events.sender(), &mut app).await,
+                                KeyCode::Char('?') => { app.mode = AppMode::Help; }
+                                KeyCode::Char(',') => { app.mode = AppMode::Settings; }
                                 KeyCode::Tab => { app.mode = AppMode::ListSelector; }
                                 KeyCode::Enter => {
                                     if !app.tasks.is_empty() { app.mode = AppMode::ConfirmComplete; }
@@ -222,13 +375,14 @@ async fn main() -> Result<()> {
     disable_raw_mode()?; execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?; terminal.show_cursor()?; std::process::exit(0);
 }
 
-fn is_input_mode(app: &App) -> bool { matches!(app.mode, AppMode::Input | AppMode::SubtaskInput | AppMode::Edit) }
 fn clear_inputs(app: &mut App) { app.input_title.clear(); app.input_notes.clear(); app.input_due.clear(); app.editing_task_id = None; }
 fn parse_due_date(input: &str) -> Option<DateTime<Utc>> {
     let parts: Vec<&str> = input.split('-').collect();
     if parts.len() == 3 {
         let y: i32 = parts[0].parse().ok()?; let m: u32 = parts[1].parse().ok()?; let d: u32 = parts[2].parse().ok()?;
-        Utc.with_ymd_and_hms(y, m, d, 12, 0, 0).single()
+        // Google Tasks requiere que la hora sea exactamente 00:00:00Z.
+        // Usamos UTC directamente para evitar que el desfase local mueva el día al enviar.
+        Utc.with_ymd_and_hms(y, m, d, 0, 0, 0).single()
     } else { None }
 }
 fn save_selection(app: &mut App) {

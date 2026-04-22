@@ -1,5 +1,5 @@
 use ratatui::style::Color;
-use chrono::{DateTime, Utc, Local};
+use chrono::{DateTime, Utc, Local, Datelike};
 use serde::{Serialize, Deserialize};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -8,15 +8,19 @@ use std::fs;
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum TimerMode { Focus, ShortBreak, LongBreak }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+pub enum Theme { CatppuccinMocha, Nord, Gruvbox, Dracula }
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config { 
     pub focus_duration: u32, 
     pub short_break_duration: u32, 
     pub long_break_duration: u32, 
     pub language: Language,
+    pub theme: Theme,
     pub last_list_id: Option<String>,
     pub last_task_id: Option<String>,
-    pub show_completed: bool, // Nuevo: Switch para tareas hechas
+    pub show_completed: bool, 
 }
 
 impl Default for Config { 
@@ -26,6 +30,7 @@ impl Default for Config {
             short_break_duration: 5 * 60, 
             long_break_duration: 15 * 60, 
             language: Language::Spanish,
+            theme: Theme::CatppuccinMocha,
             last_list_id: None,
             last_task_id: None,
             show_completed: false,
@@ -57,16 +62,34 @@ pub struct TaskList { pub id: String, pub title: String }
 pub enum Language { English, Spanish }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum AppMode { Loading, Timer, Auth, AuthSuccess, ListSelector, Input, SubtaskInput, Edit, ConfirmComplete }
+pub enum AppMode { Loading, Timer, Auth, AuthSuccess, ListSelector, Input, SubtaskInput, Edit, ConfirmComplete, Help, Settings, ConfirmLogout }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum InputField { Title, Notes, Due }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum DatePreset { Today, Tomorrow, Custom }
+
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Stats { 
     pub hourly_pomodoros: BTreeMap<String, u64>,
+    pub hourly_seconds: BTreeMap<String, u64>,
+    pub hourly_tasks_done: BTreeMap<String, u64>,
     pub task_pomodoros: BTreeMap<String, u64>,
     pub task_timers: BTreeMap<String, TaskTimerState>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Particle { pub x: f64, pub y: f64, pub vx: f64, pub vy: f64, pub life: f32, pub char: char }
+
+#[derive(Default)]
+pub struct AnimationState {
+    pub task_id: Option<String>,
+    pub progress: f32, // 0.0 to 1.0
+    pub particles: Vec<Particle>,
+    pub spawn_x: u16,
+    pub spawn_y: u16,
+    pub spawn_w: u16,
 }
 
 pub struct App {
@@ -85,12 +108,15 @@ pub struct App {
     pub task_lists: Vec<TaskList>,
     pub selected_list_idx: usize,
     pub selected_task: usize,
+    pub selected_settings_idx: usize,
+    pub selected_date_preset: DatePreset,
     pub loading: bool,
     pub spinner_frame: usize,
     pub session_pomodoros: u32,
     pub tick_count: u32,
     pub config: Config,
     pub stats: Stats,
+    pub animation: AnimationState,
 }
 
 impl App {
@@ -113,12 +139,15 @@ impl App {
             task_lists: Vec::new(),
             selected_list_idx: 0,
             selected_task: 0,
+            selected_settings_idx: 0,
+            selected_date_preset: DatePreset::Custom,
             loading: true,
             spinner_frame: 0,
             session_pomodoros: 0,
             tick_count: 0,
             config,
             stats,
+            animation: AnimationState::default(),
         }
     }
 
@@ -155,17 +184,6 @@ impl App {
         if let Ok(data) = serde_json::to_string_pretty(&self.stats) { let _ = fs::write(path, data); }
     }
 
-    pub fn get_sparkline_data(&self) -> Vec<u64> {
-        let now = Local::now();
-        let mut data = Vec::new();
-        for i in (0..24).rev() {
-            let hour_ago = now - chrono::Duration::hours(i);
-            let key = hour_ago.format("%Y-%m-%d %H:00").to_string();
-            data.push(*self.stats.hourly_pomodoros.get(&key).unwrap_or(&0));
-        }
-        data
-    }
-
     pub fn translate<'a>(&self, key: &'a str) -> &'a str {
         match self.config.language {
             Language::Spanish => match key {
@@ -197,7 +215,23 @@ impl App {
                 "auth_waiting" => "Esperando autorización...",
                 "auth_success_title" => "¡CONEXIÓN EXITOSA!",
                 "auth_success_msg" => "Google Tasks se ha vinculado correctamente.",
-                "auth_success_hint" => "Cierra el navegador y prepárate para ser productivo.",
+                "help_title" => " AYUDA - ATAJOS DE TECLADO ",
+                "help_hint" => " Presiona cualquier tecla para volver ",
+                "footer_hint" => " [? Ayuda | , Conf] ",
+                "sync_manual" => "Sincronizar (Manual)",
+                "help_label" => "Ayuda",
+                "timer_short" => "T:",
+                "sync_short" => "S:",
+                "pomodoro_short" => "P:",
+                "settings_title" => " CONFIGURACIÓN ",
+                "settings_focus" => "Duración Enfoque (min)",
+                "settings_short" => "Descanso Corto (min)",
+                "settings_long" => "Descanso Largo (min)",
+                "settings_lang" => "Idioma",
+                "settings_theme" => "Tema",
+                "settings_logout" => "Cerrar Sesión (Google)",
+                "settings_hint" => " ↑↓: Navegar | ←→: Ajustar | Esc: Volver ",
+                "logout_confirm" => "Sesión cerrada. Reinicia para reconectar.",
                 "change_list" => "Listas",
                 "new_task" => "Nueva",
                 "new_subtask" => "Subtarea",
@@ -208,6 +242,8 @@ impl App {
                 "confirm_msg_done" => "¿Marcar esta tarea como completada?",
                 "confirm_msg_undone" => "¿Marcar como pendiente?",
                 "confirm_hint" => " ENTER: Sí | ESC: No ",
+                "logout_confirm_msg" => "¿Estás seguro de que deseas cerrar sesión?",
+                "logout_confirm_title" => " Cerrar Sesión ",
                 "lists_title" => " Tus Listas ",
                 "input_title" => " Nueva Tarea ",
                 "subtask_title" => " Nueva Subtarea ",
@@ -215,6 +251,9 @@ impl App {
                 "input_hint" => " TAB: Sig. Campo | ESC: Cancelar | ENTER: Guardar ",
                 "due_date" => "Vencimiento",
                 "due_date_hint" => " (formato: YYYY-MM-DD) ",
+                "date_today" => "Hoy",
+                "date_tomorrow" => "Mañana",
+                "date_custom" => "Personalizado",
                 "created_date" => "Creada",
                 "notes" => "Notas",
                 "no_notes" => "Sin notas",
@@ -231,6 +270,9 @@ impl App {
                 "focus_msg_7" => "El tiempo vuela cuando te enfocas en: ",
                 "focus_msg_8" => "Un tomate a la vez... ahora toca: ",
                 "focus_msg_9" => "Tu yo del futuro te agradecerá terminar: ",
+                "month_1" => "Enero", "month_2" => "Febrero", "month_3" => "Marzo", "month_4" => "Abril",
+                "month_5" => "Mayo", "month_6" => "Junio", "month_7" => "Julio", "month_8" => "Agosto",
+                "month_9" => "Septiembre", "month_10" => "Octubre", "month_11" => "Noviembre", "month_12" => "Diciembre",
                 _ => key,
             },
             Language::English => match key {
@@ -262,7 +304,23 @@ impl App {
                 "auth_waiting" => "Waiting for authorization...",
                 "auth_success_title" => "CONNECTION SUCCESSFUL!",
                 "auth_success_msg" => "Google Tasks has been linked correctly.",
-                "auth_success_hint" => "Close your browser and get ready to be productive.",
+                "help_title" => " HELP - KEYBOARD SHORTCUTS ",
+                "help_hint" => " Press any key to return ",
+                "footer_hint" => " [? Help | , Config] ",
+                "sync_manual" => "Sync (Manual)",
+                "help_label" => "Help",
+                "timer_short" => "T:",
+                "sync_short" => "S:",
+                "pomodoro_short" => "P:",
+                "settings_title" => " CONFIGURACIÓN ",
+                "settings_focus" => "Focus Duration (min)",
+                "settings_short" => "Short Break (min)",
+                "settings_long" => "Long Break (min)",
+                "settings_lang" => "Language",
+                "settings_theme" => "Theme",
+                "settings_logout" => "Logout (Google)",
+                "settings_hint" => " ↑↓: Navigate | ←→: Adjust | Esc: Back ",
+                "logout_confirm" => "Logged out. Restart to reconnect.",
                 "change_list" => "Lists",
                 "new_task" => "New",
                 "new_subtask" => "Subtask",
@@ -273,6 +331,8 @@ impl App {
                 "confirm_msg_done" => "Mark this task as completed?",
                 "confirm_msg_undone" => "Mark as pending?",
                 "confirm_hint" => " ENTER: Yes | ESC: No ",
+                "logout_confirm_msg" => "Are you sure you want to logout?",
+                "logout_confirm_title" => " Logout ",
                 "lists_title" => " Your Lists ",
                 "input_title" => " New Task ",
                 "subtask_title" => " New Subtask ",
@@ -280,6 +340,9 @@ impl App {
                 "input_hint" => " TAB: Next Field | ESC: Cancel | ENTER: Save ",
                 "due_date" => "Due Date",
                 "due_date_hint" => " (format: YYYY-MM-DD) ",
+                "date_today" => "Today",
+                "date_tomorrow" => "Tomorrow",
+                "date_custom" => "Custom",
                 "created_date" => "Created",
                 "notes" => "Notes",
                 "no_notes" => "No notes",
@@ -296,6 +359,9 @@ impl App {
                 "focus_msg_7" => "Time flies when you focus on: ",
                 "focus_msg_8" => "One tomato at a time... now: ",
                 "focus_msg_9" => "Your future self will thank you for: ",
+                "month_1" => "January", "month_2" => "February", "month_3" => "March", "month_4" => "April",
+                "month_5" => "May", "month_6" => "June", "month_7" => "July", "month_8" => "August",
+                "month_9" => "September", "month_10" => "October", "month_11" => "November", "month_12" => "December",
                 _ => key,
             },
         }
@@ -306,13 +372,103 @@ impl App {
         self.save_config();
     }
 
+    pub fn logout(&mut self) {
+        let mut path = Self::get_config_dir();
+        path.push("pomotask_token.json");
+        if path.exists() { let _ = fs::remove_file(path); }
+    }
+
+    pub fn format_date(&self, dt: DateTime<Utc>) -> String {
+        let local_dt = dt.with_timezone(&Local);
+        let day = local_dt.day();
+        let month = local_dt.month();
+        let month_key = match month {
+            1 => "month_1", 2 => "month_2", 3 => "month_3", 4 => "month_4",
+            5 => "month_5", 6 => "month_6", 7 => "month_7", 8 => "month_8",
+            9 => "month_9", 10 => "month_10", 11 => "month_11", 12 => "month_12",
+            _ => "month_1",
+        };
+        let month_name = self.translate(month_key);
+        
+        match self.config.language {
+            Language::Spanish => format!("{} {}", day, month_name),
+            Language::English => format!("{} {}", month_name, day),
+        }
+    }
+
+    pub fn format_due_date(&self, dt: DateTime<Utc>) -> String {
+        // Para fechas de vencimiento de Google Tasks, ignoramos la zona horaria local
+        // ya que la API siempre devuelve 00:00:00Z y representa un día absoluto.
+        let day = dt.day();
+        let month = dt.month();
+        let month_key = match month {
+            1 => "month_1", 2 => "month_2", 3 => "month_3", 4 => "month_4",
+            5 => "month_5", 6 => "month_6", 7 => "month_7", 8 => "month_8",
+            9 => "month_9", 10 => "month_10", 11 => "month_11", 12 => "month_12",
+            _ => "month_1",
+        };
+        let month_name = self.translate(month_key);
+        
+        match self.config.language {
+            Language::Spanish => format!("{} {}", day, month_name),
+            Language::English => format!("{} {}", month_name, day),
+        }
+    }
+
+    pub fn start_completion_animation(&mut self, task_id: String, x: u16, y: u16, w: u16) {
+        self.animation.task_id = Some(task_id);
+        self.animation.progress = 0.0;
+        self.animation.particles.clear();
+        self.animation.spawn_x = x;
+        self.animation.spawn_y = y;
+        self.animation.spawn_w = w;
+        
+        let chars = ['✨', '⭐', '💥', '•', '·'];
+        for _ in 0..40 { // Menos partículas, más localizadas
+            let vx = (rand::random::<f64>() - 0.5) * 1.0; 
+            let vy = (rand::random::<f64>() - 0.5) * 0.5; 
+            let start_x_offset = rand::random::<f64>() * (w as f64);
+            self.animation.particles.push(Particle {
+                x: start_x_offset, y: 0.0,
+                vx, vy,
+                life: 0.5 + rand::random::<f32>() * 0.5,
+                char: chars[rand::random::<usize>() % chars.len()],
+            });
+        }
+    }
+
     pub fn tick(&mut self) {
         self.spinner_frame = self.spinner_frame.wrapping_add(1);
+        
+        // Update Animation
+        if self.animation.task_id.is_some() {
+            self.animation.progress += 0.08; // Progresión del tachado
+            for p in &mut self.animation.particles {
+                p.x += p.vx; p.y += p.vy;
+                p.vy += 0.25; // Gravedad más fuerte para efecto "snappy"
+                p.life -= 0.03; // Se desvanecen un poco más rápido
+            }
+            self.animation.particles.retain(|p| p.life > 0.0);
+            
+            if self.animation.progress >= 2.0 && self.animation.particles.is_empty() {
+                self.animation.task_id = None;
+                self.animation.progress = 0.0;
+            }
+        }
+
         if self.timer_active && self.timer_seconds > 0 {
             self.tick_count += 1;
-            if self.tick_count >= 4 { 
+            if self.tick_count >= 20 { // 20 ticks * 50ms = 1s
                 self.timer_seconds -= 1; 
                 self.tick_count = 0; 
+                
+                // Grabar tiempo de enfoque (segundos) si estamos en Focus
+                if self.timer_mode == TimerMode::Focus {
+                    let hour_key = Local::now().format("%Y-%m-%d %H:00").to_string();
+                    let entry = self.stats.hourly_seconds.entry(hour_key).or_insert(0);
+                    *entry += 1;
+                }
+
                 if self.timer_seconds % 5 == 0 {
                     if let Some(task) = self.tasks.get(self.selected_task) {
                         self.stats.task_timers.insert(task.id.clone(), TaskTimerState { remaining: self.timer_seconds, mode: self.timer_mode });
@@ -351,6 +507,30 @@ impl App {
         }
     }
 
+    pub fn record_task_done(&mut self) {
+        let hour_key = Local::now().format("%Y-%m-%d %H:00").to_string();
+        let entry = self.stats.hourly_tasks_done.entry(hour_key).or_insert(0);
+        *entry += 1;
+        self.save_stats();
+    }
+
+    pub fn set_date_preset(&mut self, preset: DatePreset) {
+        self.selected_date_preset = preset;
+        let now = Local::now();
+        match preset {
+            DatePreset::Today => {
+                self.input_due = now.format("%Y-%m-%d").to_string();
+            }
+            DatePreset::Tomorrow => {
+                let tomorrow = now + chrono::Duration::days(1);
+                self.input_due = tomorrow.format("%Y-%m-%d").to_string();
+            }
+            DatePreset::Custom => {
+                // No cambiamos input_due automáticamente para dejar que el usuario escriba
+            }
+        }
+    }
+
     pub fn toggle_timer(&mut self) { self.timer_active = !self.timer_active; }
     pub fn reset_timer(&mut self) { 
         self.timer_active = false; 
@@ -361,5 +541,92 @@ impl App {
 
 pub struct Palette;
 impl Palette {
-    pub const ROSEWATER: Color = Color::Rgb(245, 224, 220); pub const FLAMINGO: Color = Color::Rgb(242, 205, 205); pub const PINK: Color = Color::Rgb(245, 194, 231); pub const MAUVE: Color = Color::Rgb(203, 166, 247); pub const RED: Color = Color::Rgb(243, 139, 168); pub const MAROON: Color = Color::Rgb(235, 160, 172); pub const PEACH: Color = Color::Rgb(250, 179, 135); pub const YELLOW: Color = Color::Rgb(249, 226, 175); pub const GREEN: Color = Color::Rgb(166, 227, 161); pub const TEAL: Color = Color::Rgb(148, 226, 213); pub const SKY: Color = Color::Rgb(137, 220, 235); pub const SAPPHIRE: Color = Color::Rgb(116, 199, 236); pub const BLUE: Color = Color::Rgb(137, 180, 250); pub const LAVENDER: Color = Color::Rgb(180, 190, 254); pub const TEXT: Color = Color::Rgb(205, 214, 244); pub const SUBTEXT1: Color = Color::Rgb(186, 194, 222); pub const SUBTEXT0: Color = Color::Rgb(166, 173, 200); pub const OVERLAY2: Color = Color::Rgb(147, 153, 178); pub const OVERLAY1: Color = Color::Rgb(127, 132, 156); pub const OVERLAY0: Color = Color::Rgb(108, 112, 134); pub const SURFACE2: Color = Color::Rgb(88, 91, 112); pub const SURFACE1: Color = Color::Rgb(69, 71, 90); pub const SURFACE0: Color = Color::Rgb(49, 50, 68); pub const BASE: Color = Color::Rgb(30, 30, 46); pub const MANTLE: Color = Color::Rgb(24, 24, 37); pub const CRUST: Color = Color::Rgb(17, 17, 27);
+    pub fn mauve(theme: Theme) -> Color {
+        match theme {
+            Theme::CatppuccinMocha => Color::Rgb(203, 166, 247),
+            Theme::Nord => Color::Rgb(180, 142, 173),
+            Theme::Gruvbox => Color::Rgb(211, 134, 155),
+            Theme::Dracula => Color::Rgb(189, 147, 249),
+        }
+    }
+    pub fn red(theme: Theme) -> Color {
+        match theme {
+            Theme::CatppuccinMocha => Color::Rgb(243, 139, 168),
+            Theme::Nord => Color::Rgb(191, 97, 106),
+            Theme::Gruvbox => Color::Rgb(251, 73, 52),
+            Theme::Dracula => Color::Rgb(255, 85, 85),
+        }
+    }
+    pub fn green(theme: Theme) -> Color {
+        match theme {
+            Theme::CatppuccinMocha => Color::Rgb(166, 227, 161),
+            Theme::Nord => Color::Rgb(163, 190, 140),
+            Theme::Gruvbox => Color::Rgb(184, 187, 38),
+            Theme::Dracula => Color::Rgb(80, 250, 123),
+        }
+    }
+    pub fn peach(theme: Theme) -> Color {
+        match theme {
+            Theme::CatppuccinMocha => Color::Rgb(250, 179, 135),
+            Theme::Nord => Color::Rgb(208, 135, 112),
+            Theme::Gruvbox => Color::Rgb(254, 128, 25),
+            Theme::Dracula => Color::Rgb(255, 184, 108),
+        }
+    }
+    pub fn yellow(theme: Theme) -> Color {
+        match theme {
+            Theme::CatppuccinMocha => Color::Rgb(249, 226, 175),
+            Theme::Nord => Color::Rgb(235, 203, 139),
+            Theme::Gruvbox => Color::Rgb(250, 189, 47),
+            Theme::Dracula => Color::Rgb(241, 250, 140),
+        }
+    }
+    pub fn blue(theme: Theme) -> Color {
+        match theme {
+            Theme::CatppuccinMocha => Color::Rgb(137, 180, 250),
+            Theme::Nord => Color::Rgb(129, 161, 193),
+            Theme::Gruvbox => Color::Rgb(131, 165, 152),
+            Theme::Dracula => Color::Rgb(139, 233, 253),
+        }
+    }
+    pub fn text(theme: Theme) -> Color {
+        match theme {
+            Theme::CatppuccinMocha => Color::Rgb(205, 214, 244),
+            Theme::Nord => Color::Rgb(236, 239, 244),
+            Theme::Gruvbox => Color::Rgb(235, 219, 178),
+            Theme::Dracula => Color::Rgb(248, 248, 242),
+        }
+    }
+    pub fn subtext0(theme: Theme) -> Color {
+        match theme {
+            Theme::CatppuccinMocha => Color::Rgb(166, 173, 200),
+            Theme::Nord => Color::Rgb(216, 222, 233),
+            Theme::Gruvbox => Color::Rgb(168, 153, 132),
+            Theme::Dracula => Color::Rgb(98, 114, 164),
+        }
+    }
+    pub fn overlay0(theme: Theme) -> Color {
+        match theme {
+            Theme::CatppuccinMocha => Color::Rgb(108, 112, 134),
+            Theme::Nord => Color::Rgb(76, 86, 106),
+            Theme::Gruvbox => Color::Rgb(146, 131, 116),
+            Theme::Dracula => Color::Rgb(68, 71, 90),
+        }
+    }
+    pub fn surface0(theme: Theme) -> Color {
+        match theme {
+            Theme::CatppuccinMocha => Color::Rgb(49, 50, 68),
+            Theme::Nord => Color::Rgb(59, 66, 82),
+            Theme::Gruvbox => Color::Rgb(60, 56, 54),
+            Theme::Dracula => Color::Rgb(40, 42, 54),
+        }
+    }
+    pub fn base(theme: Theme) -> Color {
+        match theme {
+            Theme::CatppuccinMocha => Color::Rgb(30, 30, 46),
+            Theme::Nord => Color::Rgb(46, 52, 64),
+            Theme::Gruvbox => Color::Rgb(40, 40, 40),
+            Theme::Dracula => Color::Rgb(40, 42, 54),
+        }
+    }
 }

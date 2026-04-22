@@ -8,7 +8,9 @@ use crate::app::{Task, TaskList};
 pub enum Event {
     Tick,
     Key(KeyEvent),
+    #[allow(dead_code)]
     Mouse(MouseEvent),
+    #[allow(dead_code)]
     Resize(u16, u16),
     ApiUpdate(Vec<Task>),
     ListsUpdate(Vec<TaskList>),
