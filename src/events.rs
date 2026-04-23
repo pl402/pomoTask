@@ -15,6 +15,7 @@ pub enum Event {
     ApiUpdate(Vec<Task>),
     ListsUpdate(Vec<TaskList>),
     NeedsAuth(String),
+    Sync,
 }
 
 pub struct EventHandler {

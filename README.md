@@ -9,21 +9,23 @@
 ## ✨ Características Principales
 
 - **☁️ Sincronización Real con Google Tasks**: Gestión bidireccional de tareas y subtareas en tiempo real.
-- **🎨 Temas Visuales**: Soporte nativo para esquemas de colores **Catppuccin**, **Nord**, **Gruvbox** y **Dracula**.
-- **⚙️ Menú de Configuración**: Ajusta tiempos de pomodoro, idioma y temas directamente desde la app.
+- **🌐 Vista Consolidada "Todas"**: Lista virtual que reúne las tareas de todas tus listas reales para una visión global.
+- **🎨 Temas visuales**: Soporte nativo para esquemas de colores **Catppuccin**, **Nord**, **Gruvbox** y **Dracula**.
+- **🍅 Modo concentración inmersivo**: Pantalla completa con un **reloj digital gigante** y fecha localizada para un seguimiento claro del tiempo.
+- **📑 Gestión de subtareas**: Visualiza y marca subtareas como completadas directamente desde el modo enfoque.
 - **✨ Animación de Victoria**: Efecto de partículas localizado y tachado real al completar tareas.
 - **📊 Gráfico de Productividad 2.0**: BarChart que registra minutos enfocados y tareas completadas por hora.
-- **⏱️ Pomodoro Persistente**: Temporizador inteligente que se guarda por tarea y sobrevive a reinicios.
-- **📅 Selección de Fecha Rápida**: Presets para "Hoy", "Mañana" y fechas personalizadas con formato localizado (ej: "23 Abril").
-- **🔔 Notificaciones**: Avisos nativos de sistema al finalizar cada sesión.
+- **⏱️ Pomodoro Inteligente**: Temporizador que se guarda por tarea y se detiene automáticamente al completar la tarea principal.
+- **📅 Fechas Flexibles**: Selección rápida de fecha con presets ("Hoy", "Mañana", "Sin fecha") y formato localizado.
+- **🔔 Notificaciones**: Avisos nativos de sistema al finalizar cada sesión de trabajo o descanso.
 
 ## 🛠️ Stack Tecnológico
 
 - **Lenguaje**: Rust 🦀 (Edición 2021)
 - **TUI**: [Ratatui](https://ratatui.rs/) + `crossterm`.
-- **Async**: `tokio` para operaciones de red no bloqueantes.
+- **Async**: `tokio` para operaciones de red no bloqueantes y concurrentes.
 - **API**: Integración directa con Google Cloud Console via `google-tasks1`.
-- **Estilo**: Paletas de colores personalizadas basadas en temas populares de la comunidad.
+- **Estilo**: Paletas de colores dinámicas y soporte para ajuste de línea (`wrap`) en textos largos.
 
 ## 🚀 Instalación y Compilación
 
@@ -32,50 +34,43 @@
 - Un archivo `client_secret.json` de Google Cloud Console (Desktop App).
 
 ### 2. Compilar e Instalar
-Para compilar y dejar la aplicación disponible globalmente en tu sistema:
-
 ```bash
 # Clonar el repositorio
 git clone https://github.com/pl402/pomoTask.git
 cd pomoTask
 
-# Compilar en modo Release para máximo rendimiento
-cargo build --release
-
-# Instalar en tu PATH local (generalmente ~/.cargo/bin/)
+# Compilar e Instalar en tu PATH local
 cargo install --path .
 ```
-
-Una vez instalado, simplemente puedes ejecutar `pomotask-cli` desde cualquier terminal.
 
 ### 3. Configuración Inicial
 La primera vez que la ejecutes:
 1. Se abrirá tu navegador para autorizar la conexión con Google Tasks.
-2. Selecciona ambos permisos (lectura y gestión) para que la app funcione correctamente.
-3. ¡Listo! Tus preferencias se guardarán en `~/.config/pomotask/`.
+2. ¡Listo! Tus preferencias se guardarán en `~/.config/pomotask/`.
 
 ## ⌨️ Atajos de Teclado (Hotkeys)
 
 | Tecla | Acción |
 | :--- | :--- |
 | `Espacio` | Iniciar / Pausar Temporizador |
-| `Enter` | Completar Tarea / Guardar Formulario |
+| `Enter` | Completar Tarea / Guardar (con confirmación de seguridad) |
+| `j` / `k` | Navegar entre tareas y subtareas (incluso en modo enfoque) |
+| `h` / `l` | Cambiar rápidamente entre listas de tareas (← / →) |
+| `Tab` | Abrir selector de listas o saltar campos en formularios |
 | `,` (Coma) | **Abrir Menú de Configuración** |
-| `?` | Ver Ayuda de Teclado |
-| `N` / `A` | Nueva Tarea / Nueva Subtarea |
-| `E` | Editar Tarea (incluye presets de fecha) |
+| `N` / `A` | Nueva Tarea / Nueva Subtarea (con selector de lista destino) |
+| `E` | Editar Tarea seleccionada |
 | `C` | Mostrar/Ocultar tareas completadas |
-| `Tab` | Cambiar entre listas de tareas |
-| `L` | Cambiar idioma rápidamente |
-| `S` | Sincronización forzada |
+| `S` | Sincronización manual forzada |
+| `?` | Ver Ayuda de Teclado |
 | `Q` / `Esc` | Salir / Cerrar Modales |
 
 ## 📂 Estructura de Datos
 
 La aplicación utiliza JSON para la persistencia en `~/.config/pomotask/`:
-- `config.json`: Ajustes de usuario, temas y estado de la interfaz.
-- `stats.json`: Datos históricos de enfoque (minutos y tareas) por hora.
+- `config.json`: Ajustes de usuario, temas e idioma.
+- `stats.json`: Datos históricos de enfoque por hora.
 - `pomotask_token.json`: Token de autenticación seguro de Google.
 
 ---
-Desarrollado con ❤️ por un humano que sobrevive a base de agua, té y papitas con mucho chile. 🍵🔥🌶️
+Desarrollado con ❤️ desde **México** 🇲🇽 por un humano que sobrevive a base de agua, té y papitas con mucho chile. 🍵🔥🌶️

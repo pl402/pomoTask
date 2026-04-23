@@ -65,10 +65,10 @@ pub enum Language { English, Spanish }
 pub enum AppMode { Loading, Timer, Auth, AuthSuccess, ListSelector, Input, SubtaskInput, Edit, ConfirmComplete, Help, Settings, ConfirmLogout }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum InputField { Title, Notes, Due }
+pub enum InputField { Title, Notes, Due, List }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum DatePreset { Today, Tomorrow, Custom }
+pub enum DatePreset { Today, Tomorrow, Custom, None }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Stats { 
@@ -117,6 +117,9 @@ pub struct App {
     pub config: Config,
     pub stats: Stats,
     pub animation: AnimationState,
+    pub focus_subtask_idx: usize,
+    pub input_list_idx: usize,
+    pub confirming_task_id: Option<String>,
 }
 
 impl App {
@@ -148,6 +151,9 @@ impl App {
             config,
             stats,
             animation: AnimationState::default(),
+            focus_subtask_idx: 0,
+            input_list_idx: 0,
+            confirming_task_id: None,
         }
     }
 
@@ -184,8 +190,8 @@ impl App {
         if let Ok(data) = serde_json::to_string_pretty(&self.stats) { let _ = fs::write(path, data); }
     }
 
-    pub fn translate<'a>(&self, key: &'a str) -> &'a str {
-        match self.config.language {
+    pub fn translate(&self, key: &str) -> String {
+        let res = match self.config.language {
             Language::Spanish => match key {
                 "title" => " 🍅 PomoTask-CLI ",
                 "loading_app" => "Cargando PomoTask...",
@@ -196,26 +202,26 @@ impl App {
                 "productivity" => " Productividad (24h) ",
                 "info" => " Información de Tarea ",
                 "status" => "Estado: ",
-                "running" => "CORRIENDO",
-                "paused" => "PAUSADO",
-                "current_task" => "Tarea Actual:",
+                "running" => "Corriendo",
+                "paused" => "Pausado",
+                "current_task" => "Tarea actual:",
                 "no_task" => "Ninguna seleccionada",
-                "focus" => "ENFOQUE",
-                "break" => "DESCANSO",
-                "long_break" => "DESCANSO LARGO",
+                "focus" => "Enfoque",
+                "break" => "Un relax de: ",
+                "long_break" => "Descanso largo de: ",
                 "start_pause" => "Inic/Pausa",
                 "reset" => "Reiniciar",
-                "switch_mode" => "Cambiar Modo",
+                "switch_mode" => "Cambiar modo",
                 "lang" => "Idioma",
                 "quit" => "Salir",
                 "welcome" => "¡Bienvenido a PomoTask!",
                 "login_msg" => "Inicia sesión para sincronizar con Google Tasks.",
-                "login_btn" => "Presiona ENTER para conectar",
+                "login_btn" => "Presiona Enter para conectar",
                 "auth_instructions" => "Abre el link en tu navegador:",
                 "auth_waiting" => "Esperando autorización...",
-                "auth_success_title" => "¡CONEXIÓN EXITOSA!",
+                "auth_success_title" => "¡Conexión exitosa!",
                 "auth_success_msg" => "Google Tasks se ha vinculado correctamente.",
-                "help_title" => " AYUDA - ATAJOS DE TECLADO ",
+                "help_title" => " Ayuda - Atajos de teclado ",
                 "help_hint" => " Presiona cualquier tecla para volver ",
                 "footer_hint" => " [? Ayuda | , Conf] ",
                 "sync_manual" => "Sincronizar (Manual)",
@@ -223,28 +229,32 @@ impl App {
                 "timer_short" => "T:",
                 "sync_short" => "S:",
                 "pomodoro_short" => "P:",
-                "settings_title" => " CONFIGURACIÓN ",
-                "settings_focus" => "Duración Enfoque (min)",
-                "settings_short" => "Descanso Corto (min)",
-                "settings_long" => "Descanso Largo (min)",
+                "settings_title" => " Configuración ",
+                "settings_focus" => "Duración enfoque (min)",
+                "settings_short" => "Descanso corto (min)",
+                "settings_long" => "Descanso largo (min)",
                 "settings_lang" => "Idioma",
                 "settings_theme" => "Tema",
-                "settings_logout" => "Cerrar Sesión (Google)",
+                "settings_logout" => "Cerrar sesión (Google)",
                 "settings_hint" => " ↑↓: Navegar | ←→: Ajustar | Esc: Volver ",
                 "logout_confirm" => "Sesión cerrada. Reinicia para reconectar.",
-                "change_list" => "Listas",
+                "change_list" => "Listas (Tab)",
+                "h_l_change_list" => "Cambiar lista (←/→)",
+                "j_k_navigate_timer" => "Navegar focus (j/k)",
                 "new_task" => "Nueva",
                 "new_subtask" => "Subtarea",
                 "edit_task" => "Editar",
                 "toggle_completed" => "Hechas",
                 "complete_task_hotkey" => "Hecho/Pendiente",
-                "confirm_title" => " Confirmar Acción ",
-                "confirm_msg_done" => "¿Marcar esta tarea como completada?",
-                "confirm_msg_undone" => "¿Marcar como pendiente?",
-                "confirm_hint" => " ENTER: Sí | ESC: No ",
+                "confirm_title" => " Confirmar acción ",
+                "confirm_msg_done" => "¿Marcar como completada la tarea: {}?",
+                "confirm_msg_undone" => "¿Marcar como pendiente la tarea: {}?",
+                "confirm_hint" => " Enter: Sí | Esc: No ",
                 "logout_confirm_msg" => "¿Estás seguro de que deseas cerrar sesión?",
-                "logout_confirm_title" => " Cerrar Sesión ",
-                "lists_title" => " Tus Listas ",
+                "logout_confirm_title" => " Cerrar sesión ",
+                "lists_title" => " Tus listas ",
+                "list_all" => " Todas ",
+                "list_selection" => " Lista de Destino ",
                 "input_title" => " Nueva Tarea ",
                 "subtask_title" => " Nueva Subtarea ",
                 "edit_title" => " Editar Tarea ",
@@ -254,18 +264,20 @@ impl App {
                 "date_today" => "Hoy",
                 "date_tomorrow" => "Mañana",
                 "date_custom" => "Personalizado",
+                "date_none" => "Sin fecha",
                 "created_date" => "Creada",
                 "notes" => "Notas",
                 "no_notes" => "Sin notas",
                 "pomodoro_label" => "Pomodoros",
+                "focus_completed_today" => "completados hoy en esta tarea",
                 "notify_focus_end" => "¡Tiempo de enfoque terminado! Toma un descanso.",
                 "notify_break_end" => "¡El descanso terminó! A trabajar.",
-                "focus_msg_0" => "Estás en la zona, ignorando el mundo por: ",
+                "focus_msg_0" => "En la zona, ignorando al mundo por: ",
                 "focus_msg_1" => "Shhh... estás concentrado en: ",
                 "focus_msg_2" => "Haciendo magia con: ",
                 "focus_msg_3" => "Nadie te molesta mientras trabajas en: ",
                 "focus_msg_4" => "Modo bestia activado para: ",
-                "focus_msg_5" => "Eres una máquina de productividad enfocada en: ",
+                "focus_msg_5" => "Eres una máquina de productividad en: ",
                 "focus_msg_6" => "Picando código (o lo que sea) en: ",
                 "focus_msg_7" => "El tiempo vuela cuando te enfocas en: ",
                 "focus_msg_8" => "Un tomate a la vez... ahora toca: ",
@@ -273,6 +285,8 @@ impl App {
                 "month_1" => "Enero", "month_2" => "Febrero", "month_3" => "Marzo", "month_4" => "Abril",
                 "month_5" => "Mayo", "month_6" => "Junio", "month_7" => "Julio", "month_8" => "Agosto",
                 "month_9" => "Septiembre", "month_10" => "Octubre", "month_11" => "Noviembre", "month_12" => "Diciembre",
+                "day_0" => "Domingo", "day_1" => "Lunes", "day_2" => "Martes", "day_3" => "Miércoles",
+                "day_4" => "Jueves", "day_5" => "Viernes", "day_6" => "Sábado",
                 _ => key,
             },
             Language::English => match key {
@@ -285,26 +299,26 @@ impl App {
                 "productivity" => " Productivity (24h) ",
                 "info" => " Task Information ",
                 "status" => "Status: ",
-                "running" => "RUNNING",
-                "paused" => "PAUSED",
-                "current_task" => "Current Task:",
+                "running" => "Running",
+                "paused" => "Paused",
+                "current_task" => "Current task:",
                 "no_task" => "None selected",
-                "focus" => "FOCUS",
-                "break" => "BREAK",
-                "long_break" => "LONG BREAK",
+                "focus" => "Focus",
+                "break" => "Break",
+                "long_break" => "Long break",
                 "start_pause" => "Start/Pause",
                 "reset" => "Reset",
-                "switch_mode" => "Switch Mode",
+                "switch_mode" => "Switch mode",
                 "lang" => "Language",
                 "quit" => "Quit",
                 "welcome" => "Welcome to PomoTask!",
                 "login_msg" => "Log in to sync with Google Tasks.",
-                "login_btn" => "Press ENTER to connect",
+                "login_btn" => "Press Enter to connect",
                 "auth_instructions" => "Open the link in your browser:",
                 "auth_waiting" => "Waiting for authorization...",
-                "auth_success_title" => "CONNECTION SUCCESSFUL!",
+                "auth_success_title" => "Connection successful!",
                 "auth_success_msg" => "Google Tasks has been linked correctly.",
-                "help_title" => " HELP - KEYBOARD SHORTCUTS ",
+                "help_title" => " Help - Keyboard shortcuts ",
                 "help_hint" => " Press any key to return ",
                 "footer_hint" => " [? Help | , Config] ",
                 "sync_manual" => "Sync (Manual)",
@@ -312,28 +326,32 @@ impl App {
                 "timer_short" => "T:",
                 "sync_short" => "S:",
                 "pomodoro_short" => "P:",
-                "settings_title" => " CONFIGURACIÓN ",
-                "settings_focus" => "Focus Duration (min)",
-                "settings_short" => "Short Break (min)",
-                "settings_long" => "Long Break (min)",
+                "settings_title" => " Configuration ",
+                "settings_focus" => "Focus duration (min)",
+                "settings_short" => "Short break (min)",
+                "settings_long" => "Long break (min)",
                 "settings_lang" => "Language",
                 "settings_theme" => "Theme",
                 "settings_logout" => "Logout (Google)",
                 "settings_hint" => " ↑↓: Navigate | ←→: Adjust | Esc: Back ",
                 "logout_confirm" => "Logged out. Restart to reconnect.",
-                "change_list" => "Lists",
+                "change_list" => "Lists (Tab)",
+                "h_l_change_list" => "Switch list (←/→)",
+                "j_k_navigate_timer" => "Timer nav (j/k)",
                 "new_task" => "New",
                 "new_subtask" => "Subtask",
                 "edit_task" => "Edit",
                 "toggle_completed" => "Done",
                 "complete_task_hotkey" => "Done/Pending",
-                "confirm_title" => " Confirm Action ",
-                "confirm_msg_done" => "Mark this task as completed?",
-                "confirm_msg_undone" => "Mark as pending?",
-                "confirm_hint" => " ENTER: Yes | ESC: No ",
+                "confirm_title" => " Confirm action ",
+                "confirm_msg_done" => "Mark task as completed: {}?",
+                "confirm_msg_undone" => "Mark task as pending: {}?",
+                "confirm_hint" => " Enter: Yes | Esc: No ",
                 "logout_confirm_msg" => "Are you sure you want to logout?",
                 "logout_confirm_title" => " Logout ",
-                "lists_title" => " Your Lists ",
+                "lists_title" => " Your lists ",
+                "list_all" => " All ",
+                "list_selection" => " Target List ",
                 "input_title" => " New Task ",
                 "subtask_title" => " New Subtask ",
                 "edit_title" => " Edit Task ",
@@ -343,10 +361,12 @@ impl App {
                 "date_today" => "Today",
                 "date_tomorrow" => "Tomorrow",
                 "date_custom" => "Custom",
+                "date_none" => "No date",
                 "created_date" => "Created",
                 "notes" => "Notes",
                 "no_notes" => "No notes",
                 "pomodoro_label" => "Pomodoros",
+                "focus_completed_today" => "completed today in this task",
                 "notify_focus_end" => "Focus session complete! Take a break.",
                 "notify_break_end" => "Break is over! Time to work.",
                 "focus_msg_0" => "In the zone, ignoring the world for: ",
@@ -362,9 +382,12 @@ impl App {
                 "month_1" => "January", "month_2" => "February", "month_3" => "March", "month_4" => "April",
                 "month_5" => "May", "month_6" => "June", "month_7" => "July", "month_8" => "August",
                 "month_9" => "September", "month_10" => "October", "month_11" => "November", "month_12" => "December",
+                "day_0" => "Sunday", "day_1" => "Monday", "day_2" => "Tuesday", "day_3" => "Wednesday",
+                "day_4" => "Thursday", "day_5" => "Friday", "day_6" => "Saturday",
                 _ => key,
             },
-        }
+        };
+        res.to_string()
     }
 
     pub fn toggle_language(&mut self) {
@@ -376,6 +399,24 @@ impl App {
         let mut path = Self::get_config_dir();
         path.push("pomotask_token.json");
         if path.exists() { let _ = fs::remove_file(path); }
+    }
+
+    pub fn format_full_date(&self, dt: DateTime<Utc>) -> String {
+        let local_dt = dt.with_timezone(&Local);
+        let day = local_dt.day();
+        let month = local_dt.month();
+        let weekday = local_dt.weekday().num_days_from_sunday() as usize;
+
+        let month_key = format!("month_{}", month);
+        let day_key = format!("day_{}", weekday);
+        
+        let month_name = self.translate(&month_key);
+        let day_name = self.translate(&day_key);
+
+        match self.config.language {
+            Language::Spanish => format!("{}, {} de {}", day_name, day, month_name),
+            Language::English => format!("{}, {} {}", day_name, month_name, day),
+        }
     }
 
     pub fn format_date(&self, dt: DateTime<Utc>) -> String {
@@ -499,7 +540,7 @@ impl App {
             self.timer_mode = TimerMode::Focus;
             ("PomoTask", self.translate("notify_break_end"))
         };
-        let _ = notify_rust::Notification::new().summary(title).body(msg).icon("alarm-clock").timeout(notify_rust::Timeout::Milliseconds(5000)).show();
+        let _ = notify_rust::Notification::new().summary(title).body(&msg).icon("alarm-clock").timeout(notify_rust::Timeout::Milliseconds(5000)).show();
         self.timer_seconds = self.timer_mode.duration(&self.config);
         if let Some(task) = self.tasks.get(self.selected_task) {
             self.stats.task_timers.insert(task.id.clone(), TaskTimerState { remaining: self.timer_seconds, mode: self.timer_mode });
@@ -527,6 +568,9 @@ impl App {
             }
             DatePreset::Custom => {
                 // No cambiamos input_due automáticamente para dejar que el usuario escriba
+            }
+            DatePreset::None => {
+                self.input_due = String::new();
             }
         }
     }
@@ -630,3 +674,4 @@ impl Palette {
         }
     }
 }
+
