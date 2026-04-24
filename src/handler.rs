@@ -379,11 +379,6 @@ pub async fn handle_key_events(
                         }
                     } else if !app.tasks.is_empty() {
                         app.selected_task = (app.selected_task + 1) % app.tasks.len();
-                        if let Some(task) = app.tasks.get(app.selected_task) {
-                            if let Some(due) = task.due {
-                                app.calendar_date = due.date_naive();
-                            }
-                        }
                         app.sync_active_timer_to_task();
                         app.save_selection();
                     }
@@ -398,11 +393,6 @@ pub async fn handle_key_events(
                     } else if !app.tasks.is_empty() {
                         if app.selected_task == 0 { app.selected_task = app.tasks.len() - 1; }
                         else { app.selected_task -= 1; }
-                        if let Some(task) = app.tasks.get(app.selected_task) {
-                            if let Some(due) = task.due {
-                                app.calendar_date = due.date_naive();
-                            }
-                        }
                         app.sync_active_timer_to_task();
                         app.save_selection();
                     }

@@ -6,6 +6,12 @@
 ![Lenguaje](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white)
 ![Interfaz](https://img.shields.io/badge/Ratatui-flat?style=for-the-badge&color=f38ba8)
 
+## 📸 Capturas de Pantalla
+
+| Vista Principal (Calendario) | Modo Enfoque (Reloj Gigante) |
+| :---: | :---: |
+| ![Main View](assets/main_view.png) | ![Focus Mode](assets/focus_mode.png) |
+
 ## 🧠 ¿Qué es la Técnica Pomodoro?
 
 La **Técnica Pomodoro** es un método de gestión del tiempo desarrollado por Francesco Cirillo a fines de la década de 1980. Se basa en el uso de un temporizador para dividir el trabajo en intervalos (llamados "pomodoros"), tradicionalmente de **25 minutos**, separados por breves descansos.
