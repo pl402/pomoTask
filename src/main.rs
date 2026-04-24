@@ -20,6 +20,12 @@ use crate::handler::{handle_key_events, sync_tasks};
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let args: Vec<String> = std::env::args().collect();
+    if args.contains(&"--version".to_string()) || args.contains(&"-v".to_string()) {
+        println!("PomoTask-CLI Version: {}", env!("APP_VERSION"));
+        return Ok(());
+    }
+
     color_eyre::install()?;
     enable_raw_mode()?;
     let mut stdout = io::stdout();
