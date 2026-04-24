@@ -1,5 +1,5 @@
 use ratatui::style::Color;
-use chrono::{DateTime, Utc, Local, Datelike};
+use chrono::{DateTime, Utc, Local, Datelike, TimeZone};
 use serde::{Serialize, Deserialize};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -46,10 +46,12 @@ pub struct TaskTimerState { pub remaining: u32, pub mode: TimerMode }
 #[derive(Debug, Clone)]
 pub struct Task { 
     pub id: String, 
+    pub list_id: String, // Nuevo campo
     pub title: String, 
     pub completed: bool, 
     pub due: Option<DateTime<Utc>>, 
     pub updated: DateTime<Utc>, // Nuevo campo
+    pub completed_at: Option<DateTime<Utc>>, // Nuevo campo
     pub notes: Option<String>, 
     pub parent_id: Option<String>,
     pub pomodoros: u64,
@@ -105,6 +107,7 @@ pub struct App {
     pub timer_seconds: u32,
     pub timer_mode: TimerMode,
     pub tasks: Vec<Task>,
+    pub all_tasks: Vec<Task>, // Nuevo campo para el calendario
     pub task_lists: Vec<TaskList>,
     pub selected_list_idx: usize,
     pub selected_task: usize,
@@ -120,6 +123,7 @@ pub struct App {
     pub focus_subtask_idx: usize,
     pub input_list_idx: usize,
     pub confirming_task_id: Option<String>,
+    pub calendar_date: chrono::NaiveDate,
 }
 
 impl App {
@@ -139,6 +143,7 @@ impl App {
             timer_seconds: TimerMode::Focus.duration(&config),
             timer_mode: TimerMode::Focus,
             tasks: Vec::new(),
+            all_tasks: Vec::new(),
             task_lists: Vec::new(),
             selected_list_idx: 0,
             selected_task: 0,
@@ -154,7 +159,30 @@ impl App {
             focus_subtask_idx: 0,
             input_list_idx: 0,
             confirming_task_id: None,
+            calendar_date: Local::now().date_naive(),
         }
+    }
+
+    pub fn calendar_next_month(&mut self) {
+        let (mut year, mut month) = (self.calendar_date.year(), self.calendar_date.month());
+        if month == 12 {
+            year += 1;
+            month = 1;
+        } else {
+            month += 1;
+        }
+        self.calendar_date = chrono::NaiveDate::from_ymd_opt(year, month, 1).unwrap();
+    }
+
+    pub fn calendar_prev_month(&mut self) {
+        let (mut year, mut month) = (self.calendar_date.year(), self.calendar_date.month());
+        if month == 1 {
+            year -= 1;
+            month = 12;
+        } else {
+            month -= 1;
+        }
+        self.calendar_date = chrono::NaiveDate::from_ymd_opt(year, month, 1).unwrap();
     }
 
     pub fn get_config_dir() -> PathBuf {
@@ -269,6 +297,7 @@ impl App {
                 "notes" => "Notas",
                 "no_notes" => "Sin notas",
                 "pomodoro_label" => "Pomodoros",
+                "calendar_nav" => "Navegar calendario ([/])",
                 "focus_completed_today" => "completados hoy en esta tarea",
                 "notify_focus_end" => "¡Tiempo de enfoque terminado! Toma un descanso.",
                 "notify_break_end" => "¡El descanso terminó! A trabajar.",
@@ -366,7 +395,8 @@ impl App {
                 "notes" => "Notes",
                 "no_notes" => "No notes",
                 "pomodoro_label" => "Pomodoros",
-                "focus_completed_today" => "completed today in this task",
+                "calendar_nav" => "Navigate calendar ([/])",
+                "focus_completed_today" => "completed today on this task",
                 "notify_focus_end" => "Focus session complete! Take a break.",
                 "notify_break_end" => "Break is over! Time to work.",
                 "focus_msg_0" => "In the zone, ignoring the world for: ",
@@ -580,6 +610,79 @@ impl App {
         self.timer_active = false; 
         if let Some(task) = self.tasks.get(self.selected_task) { self.stats.task_timers.remove(&task.id); self.save_stats(); }
         self.timer_seconds = self.timer_mode.duration(&self.config); 
+    }
+
+    pub fn clear_inputs(&mut self) { 
+        self.input_title.clear(); 
+        self.input_notes.clear(); 
+        self.input_due.clear(); 
+        self.editing_task_id = None; 
+        self.input_list_idx = 0; 
+        self.confirming_task_id = None; 
+    }
+
+    pub fn parse_due_date(&self, input: &str) -> Option<DateTime<Utc>> {
+        let parts: Vec<&str> = input.split('-').collect();
+        if parts.len() == 3 {
+            let y: i32 = parts[0].parse().ok()?; 
+            let m: u32 = parts[1].parse().ok()?; 
+            let d: u32 = parts[2].parse().ok()?;
+            // Google Tasks requiere que la hora sea exactamente 00:00:00Z.
+            Utc.with_ymd_and_hms(y, m, d, 0, 0, 0).single()
+        } else { None }
+    }
+
+    pub fn save_selection(&mut self) {
+        if let Some(list) = self.task_lists.get(self.selected_list_idx) { 
+            self.config.last_list_id = Some(list.id.clone()); 
+        }
+        if let Some(task) = self.tasks.get(self.selected_task) { 
+            self.config.last_task_id = Some(task.id.clone()); 
+        }
+        self.save_config();
+    }
+
+    pub fn sync_active_timer_to_task(&mut self) {
+        if self.timer_active { return; }
+        if let Some(task) = self.tasks.get(self.selected_task) {
+            if let Some(state) = self.stats.task_timers.get(&task.id) { 
+                self.timer_seconds = state.remaining; 
+                self.timer_mode = state.mode; 
+            } else { 
+                self.timer_mode = TimerMode::Focus; 
+                self.timer_seconds = self.timer_mode.duration(&self.config); 
+            }
+        }
+    }
+
+    pub fn organize_tasks_hierarchical(&self, tasks: Vec<Task>) -> Vec<Task> {
+        let mut organized = Vec::new();
+        let sort_criteria = |a: &Task, b: &Task| {
+            if a.completed != b.completed { return a.completed.cmp(&b.completed); }
+            if a.due != b.due {
+                match (a.due, b.due) {
+                    (Some(da), Some(db)) => {
+                        let da: DateTime<Utc> = da;
+                        let db: DateTime<Utc> = db;
+                        return da.cmp(&db);
+                    },
+                    (Some(_), None) => return std::cmp::Ordering::Less,
+                    (None, Some(_)) => return std::cmp::Ordering::Greater,
+                    (None, None) => (),
+                }
+            }
+            b.updated.cmp(&a.updated)
+        };
+        let mut top_level: Vec<_> = tasks.iter()
+            .filter(|t| t.parent_id.is_none() || !tasks.iter().any(|p| Some(&p.id) == t.parent_id.as_ref()))
+            .cloned().collect();
+        top_level.sort_by(sort_criteria);
+        for parent in top_level {
+            let pid = parent.id.clone(); organized.push(parent);
+            let mut children: Vec<_> = tasks.iter().filter(|t| t.parent_id.as_ref() == Some(&pid)).cloned().collect();
+            children.sort_by(sort_criteria); organized.extend(children);
+        }
+        organized
     }
 }
 

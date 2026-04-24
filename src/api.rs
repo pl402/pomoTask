@@ -80,7 +80,19 @@ impl ApiClient {
         Ok(task_list.items.unwrap_or_default().into_iter().filter(|t| t.title.is_some()).map(|t| {
             let due = t.due.and_then(|d| DateTime::parse_from_rfc3339(&d).ok().map(|dt| dt.with_timezone(&Utc)));
             let updated = t.updated.and_then(|d| DateTime::parse_from_rfc3339(&d).ok().map(|dt| dt.with_timezone(&Utc))).unwrap_or_else(Utc::now);
-            Task { id: t.id.unwrap_or_default(), title: t.title.unwrap_or_else(|| "Untitled".to_string()), completed: t.status == Some("completed".to_string()), due, updated, notes: t.notes, parent_id: t.parent, pomodoros: 0 }
+            let completed_at = t.completed.and_then(|d| DateTime::parse_from_rfc3339(&d).ok().map(|dt| dt.with_timezone(&Utc)));
+            Task { 
+                id: t.id.unwrap_or_default(), 
+                list_id: list_id.to_string(),
+                title: t.title.unwrap_or_else(|| "Untitled".to_string()), 
+                completed: t.status == Some("completed".to_string()), 
+                due, 
+                updated, 
+                completed_at,
+                notes: t.notes, 
+                parent_id: t.parent, 
+                pomodoros: 0 
+            }
         }).collect())
     }
 
@@ -129,5 +141,5 @@ impl ApiClient {
         Ok(())
     }
 
-    fn mock_tasks(&self) -> Vec<Task> { vec![Task { id: "1".to_string(), title: "Modo Simulado".to_string(), completed: false, due: None, updated: Utc::now(), notes: None, parent_id: None, pomodoros: 0 }] }
+    fn mock_tasks(&self) -> Vec<Task> { vec![Task { id: "1".to_string(), list_id: "@default".to_string(), title: "Modo Simulado".to_string(), completed: false, due: None, updated: Utc::now(), completed_at: None, notes: None, parent_id: None, pomodoros: 0 }] }
 }
