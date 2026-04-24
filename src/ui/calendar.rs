@@ -7,7 +7,7 @@ use ratatui::{
     },
     Frame,
 };
-use chrono::{Local, Datelike, NaiveDate, NaiveDateTime};
+use chrono::{Local, NaiveDate, NaiveDateTime};
 use ratatui::layout::Constraint;
 
 use crate::app::{App, Palette};

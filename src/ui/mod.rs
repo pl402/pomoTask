@@ -14,7 +14,7 @@ use ratatui::{
 };
 use chrono::Local;
 
-use crate::app::{App, Palette, AppMode, TimerMode};
+use crate::app::{App, Palette, AppMode};
 use self::calendar::render_calendar;
 use self::timer::{render_timer_mode, render_timer_screen};
 use self::modals::{

@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use std::time::Duration;
-use crate::app::{App, AppMode, InputField, TimerMode, DatePreset, TaskList, Language, Theme};
+use crate::app::{App, AppMode, InputField, DatePreset, Theme};
 use crate::events::Event;
 use crate::api::ApiClient;
 use std::sync::Arc;
