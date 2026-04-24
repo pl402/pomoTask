@@ -344,10 +344,14 @@ fn render_input_modal(app: &App, frame: &mut Frame) {
     let chunks = Layout::default().direction(Direction::Vertical).constraints(constraints).margin(2).split(area);
 
     let title_style = if app.focused_input == InputField::Title { Style::default().fg(Palette::yellow(app.config.theme)) } else { Style::default().fg(Palette::subtext0(app.config.theme)) };
-    frame.render_widget(Paragraph::new(app.input_title.as_str()).block(Block::default().title(" Título ").borders(Borders::ALL).border_style(title_style)), chunks[0]);
+    let title_width = chunks[0].width.max(3) - 2;
+    let title_scroll = (app.input_title.chars().count() as u16).saturating_sub(title_width);
+    frame.render_widget(Paragraph::new(app.input_title.as_str()).scroll((0, title_scroll)).block(Block::default().title(" Título ").borders(Borders::ALL).border_style(title_style)), chunks[0]);
 
     let notes_style = if app.focused_input == InputField::Notes { Style::default().fg(Palette::yellow(app.config.theme)) } else { Style::default().fg(Palette::subtext0(app.config.theme)) };
-    frame.render_widget(Paragraph::new(app.input_notes.as_str()).block(Block::default().title(" Notas ").borders(Borders::ALL).border_style(notes_style)), chunks[1]);
+    let notes_width = chunks[1].width.max(3) - 2;
+    let notes_scroll = (app.input_notes.chars().count() as u16).saturating_sub(notes_width);
+    frame.render_widget(Paragraph::new(app.input_notes.as_str()).scroll((0, notes_scroll)).block(Block::default().title(" Notas ").borders(Borders::ALL).border_style(notes_style)), chunks[1]);
 
     let mut next_idx = 2;
     if app.mode == AppMode::Input {
@@ -385,9 +389,11 @@ fn render_input_modal(app: &App, frame: &mut Frame) {
     }
 
     let due_style = if app.focused_input == InputField::Due { Style::default().fg(Palette::yellow(app.config.theme)) } else { Style::default().fg(Palette::subtext0(app.config.theme)) };
-    let date_input_text = if app.selected_date_preset == DatePreset::Custom { app.input_due.as_str() } else { app.input_due.as_str() }; // Mostrar siempre para feedback
+    let date_input_text = if app.selected_date_preset == DatePreset::Custom { app.input_due.as_str() } else { app.input_due.as_str() }; 
+    let due_width = chunks[next_idx].width.max(3) - 2;
+    let due_scroll = (date_input_text.chars().count() as u16).saturating_sub(due_width);
     
-    frame.render_widget(Paragraph::new(date_input_text).block(Block::default().title(format!(" {} {} ", app.translate("due_date"), app.translate("due_date_hint"))).borders(Borders::ALL).border_style(due_style)), chunks[next_idx]);
+    frame.render_widget(Paragraph::new(date_input_text).scroll((0, due_scroll)).block(Block::default().title(format!(" {} {} ", app.translate("due_date"), app.translate("due_date_hint"))).borders(Borders::ALL).border_style(due_style)), chunks[next_idx]);
     next_idx += 1;
     
     let input_hint = if app.focused_input == InputField::Due {
