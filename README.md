@@ -6,6 +6,14 @@
 ![Lenguaje](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white)
 ![Interfaz](https://img.shields.io/badge/Ratatui-flat?style=for-the-badge&color=f38ba8)
 
+## 🧠 ¿Qué es la Técnica Pomodoro?
+
+La **Técnica Pomodoro** es un método de gestión del tiempo desarrollado por Francesco Cirillo a fines de la década de 1980. Se basa en el uso de un temporizador para dividir el trabajo en intervalos (llamados "pomodoros"), tradicionalmente de **25 minutos**, separados por breves descansos.
+
+Este método se fundamenta en la idea de que las pausas frecuentes pueden mejorar la agilidad mental y la concentración. PomoTask-CLI facilita este flujo integrando tus tareas reales de Google directamente en el temporizador.
+
+> [Más información en Wikipedia](https://es.wikipedia.org/wiki/T%C3%A9cnica_Pomodoro)
+
 ## ✨ Características Principales
 
 - **☁️ Sincronización Real con Google Tasks**: Gestión bidireccional de tareas y subtareas en tiempo real.
@@ -61,6 +69,7 @@ El script compilará el proyecto en modo `release` e instalará el binario en `~
 | `S` | Sincronización manual |
 | `?` | Ver Ayuda |
 | `Q` / `Esc` | Salir |
+| `--version` / `-v` | Ver versión instalada (CLI) |
 
 ## 📂 Estructura del Código
 
