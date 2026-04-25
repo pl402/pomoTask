@@ -215,6 +215,7 @@ pub async fn handle_key_events(
                 KeyCode::Esc => { app.mode = AppMode::Timer; }
                 KeyCode::Enter => {
                     app.mode = AppMode::Timer;
+                    app.tasks.clear();
                     app.save_selection();
                     sync_tasks(api_client, sender.clone(), app).await;
                 }
@@ -426,11 +427,13 @@ pub async fn handle_key_events(
                 KeyCode::Left | KeyCode::Char('h') if !app.timer_active => {
                     if app.selected_list_idx == 0 { app.selected_list_idx = app.task_lists.len() - 1; }
                     else { app.selected_list_idx -= 1; }
+                    app.tasks.clear();
                     app.save_selection();
                     sync_tasks(api_client, sender.clone(), app).await;
                 }
                 KeyCode::Right | KeyCode::Char('l') if !app.timer_active => {
                     app.selected_list_idx = (app.selected_list_idx + 1) % app.task_lists.len();
+                    app.tasks.clear();
                     app.save_selection();
                     sync_tasks(api_client, sender.clone(), app).await;
                 }
@@ -485,8 +488,7 @@ pub async fn handle_key_events(
 }
 
 pub async fn sync_tasks(api: &Arc<ApiClient>, sender: UnboundedSender<Event>, app: &mut App) {
-    app.loading = true; 
-    app.tasks.clear(); 
+    app.loading = true;
     let api = api.clone();
     if app.task_lists.is_empty() {
         tokio::spawn(async move {

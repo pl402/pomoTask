@@ -69,7 +69,7 @@ pub fn render_left_panel(app: &App, frame: &mut Frame, area: Rect) {
         format!(" {} - {} ", app.translate("tasks"), l.title) 
     } else { format!(" {} ", app.translate("tasks")) };
 
-    if app.loading && app.marking_done_task_id.is_none() && app.creating_task_temp_id.is_none() {
+    if app.loading && app.tasks.is_empty() && app.marking_done_task_id.is_none() && app.creating_task_temp_id.is_none() {
         let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
         let spinner = frames[app.spinner_frame % frames.len()];
         let loading_widget = Paragraph::new(format!("\n\n\n{} {}", spinner, app.translate("loading_app")))
