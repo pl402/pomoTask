@@ -18,7 +18,7 @@ pub fn render_left_panel(app: &App, frame: &mut Frame, area: Rect) {
     let total = app.timer_mode.duration(&app.config);
     let progress = ((total - app.timer_seconds) as f64 / total as f64).min(1.0);
     let label = format!("{} - {:02}:{:02}", match app.timer_mode { TimerMode::Focus => app.translate("focus"), _ => app.translate("break") }, app.timer_seconds / 60, app.timer_seconds % 60);
-    frame.render_widget(Gauge::default().block(Block::default().title(app.translate("timer")).borders(Borders::ALL).border_type(BorderType::Rounded)).gauge_style(Style::default().fg(if app.timer_mode == TimerMode::Focus { Palette::red(app.config.theme) } else { Palette::green(app.config.theme) }).bg(Palette::surface0(app.config.theme))).ratio(progress).label(label), chunks[0]);
+    frame.render_widget(Gauge::default().block(Block::default().title(format!(" {} ", app.translate("timer"))).borders(Borders::ALL).border_type(BorderType::Rounded)).gauge_style(Style::default().fg(if app.timer_mode == TimerMode::Focus { Palette::red(app.config.theme) } else { Palette::green(app.config.theme) }).bg(Palette::surface0(app.config.theme))).ratio(progress).label(label), chunks[0]);
 
     let header_cells = [" Tarea ", " 🕒 Creada ", " 📅 Venc. ", " 🍅 "].into_iter().map(|h| Cell::from(h).style(Style::default().fg(Palette::mauve(app.config.theme)).add_modifier(Modifier::BOLD)));
     let header = Row::new(header_cells).height(1).bottom_margin(0);
@@ -55,7 +55,7 @@ pub fn render_left_panel(app: &App, frame: &mut Frame, area: Rect) {
 
     let list_title = if let Some(l) = app.task_lists.get(app.selected_list_idx) { 
         format!(" {} - {} ", app.translate("tasks"), l.title) 
-    } else { app.translate("tasks") };
+    } else { format!(" {} ", app.translate("tasks")) };
 
     let table = Table::new(
         rows,

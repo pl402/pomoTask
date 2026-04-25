@@ -62,7 +62,7 @@ pub fn render_timer_mode(app: &App, frame: &mut Frame) {
 
         let focus_text = vec![
             Line::from(vec![
-                Span::styled(msg, Style::default().fg(Palette::text(app.config.theme))),
+                Span::styled(format!("{}: ", msg), Style::default().fg(Palette::text(app.config.theme))),
                 Span::styled(task.title.clone(), Style::default().fg(Palette::mauve(app.config.theme)).add_modifier(Modifier::BOLD))
             ]),
             Line::from(vec![
@@ -138,16 +138,16 @@ pub fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     let timer_label = format!("{:02}:{:02}", app.timer_seconds / 60, app.timer_seconds % 60);
 
     let left_spans = vec![
-        Span::styled(app.translate("title").to_string(), Style::default().fg(Palette::mauve(app.config.theme)).add_modifier(Modifier::BOLD)),
+        Span::styled(format!(" {} ", app.translate("title")), Style::default().fg(Palette::mauve(app.config.theme)).add_modifier(Modifier::BOLD)),
         Span::styled(format!(" {} ", app.translate("footer_hint")), Style::default().fg(Palette::yellow(app.config.theme))),
     ];
 
     let right_spans = vec![
-        Span::styled(format!(" {} ", app.translate("timer_short")), Style::default().fg(Palette::subtext0(app.config.theme))),
+        Span::styled(format!(" {}: ", app.translate("timer_short")), Style::default().fg(Palette::subtext0(app.config.theme))),
         Span::styled(format!("{} ", timer_label), Style::default().fg(if app.timer_mode == TimerMode::Focus { Palette::red(app.config.theme) } else { Palette::green(app.config.theme) })),
-        Span::styled(format!(" {} ", app.translate("sync_short")), Style::default().fg(Palette::subtext0(app.config.theme))),
+        Span::styled(format!(" {}: ", app.translate("sync_short")), Style::default().fg(Palette::subtext0(app.config.theme))),
         Span::styled(format!("{} ", spinner), Style::default().fg(Palette::blue(app.config.theme))),
-        Span::styled(format!(" {} ", app.translate("pomodoro_short")), Style::default().fg(Palette::subtext0(app.config.theme))),
+        Span::styled(format!(" {}: ", app.translate("pomodoro_short")), Style::default().fg(Palette::subtext0(app.config.theme))),
         Span::styled(format!("{} ", app.session_pomodoros), Style::default().fg(Palette::peach(app.config.theme))),
         Span::styled(format!(" {} | {} ", date_str, time_str), Style::default().fg(Palette::text(app.config.theme))),
     ];

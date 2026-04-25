@@ -15,7 +15,7 @@ pub fn render_input_modal(app: &App, frame: &mut Frame) {
     let area = centered_rect(70, 70, frame.size());
     frame.render_widget(Clear, area);
     let title_key = match app.mode { AppMode::SubtaskInput => "subtask_title", AppMode::Edit => "edit_title", _ => "input_title" };
-    let mut modal_title = app.translate(title_key).to_string();
+    let mut modal_title = format!(" {} ", app.translate(title_key));
     if app.mode == AppMode::SubtaskInput {
         if let Some(parent) = app.tasks.get(app.selected_task) {
             modal_title = format!(" {} para {} ", app.translate("new_subtask"), parent.title);
@@ -53,7 +53,7 @@ pub fn render_input_modal(app: &App, frame: &mut Frame) {
         let list_style = if app.focused_input == InputField::List { Style::default().fg(Palette::yellow(app.config.theme)) } else { Style::default().fg(Palette::subtext0(app.config.theme)) };
         let list_name = app.task_lists.get(app.input_list_idx).map(|l| l.title.as_str()).unwrap_or("---");
         let list_text = format!(" ← {} → ", list_name);
-        frame.render_widget(Paragraph::new(list_text).alignment(Alignment::Center).block(Block::default().title(app.translate("list_selection")).borders(Borders::ALL).border_style(list_style)), chunks[next_idx]);
+        frame.render_widget(Paragraph::new(list_text).alignment(Alignment::Center).block(Block::default().title(format!(" {} ", app.translate("list_selection"))).borders(Borders::ALL).border_style(list_style)), chunks[next_idx]);
         next_idx += 1;
     }
 
@@ -106,7 +106,7 @@ pub fn render_help_modal(app: &App, frame: &mut Frame) {
     frame.render_widget(Clear, area);
     
     let block = Block::default()
-        .title(app.translate("help_title"))
+        .title(format!(" {} ", app.translate("help_title")))
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(Palette::mauve(app.config.theme)));
@@ -143,7 +143,7 @@ pub fn render_settings_modal(app: &App, frame: &mut Frame) {
     let area = centered_rect(60, 50, frame.size());
     frame.render_widget(Clear, area);
     
-    let block = Block::default().title(app.translate("settings_title")).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::yellow(app.config.theme)));
+    let block = Block::default().title(format!(" {} ", app.translate("settings_title"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::yellow(app.config.theme)));
     frame.render_widget(block, area);
 
     let chunks = Layout::default().direction(Direction::Vertical).constraints([Constraint::Min(0), Constraint::Length(1)]).margin(2).split(area);
@@ -171,7 +171,7 @@ pub fn render_settings_modal(app: &App, frame: &mut Frame) {
 pub fn render_logout_confirm_modal(app: &App, frame: &mut Frame) {
     let area = centered_rect(50, 20, frame.size());
     frame.render_widget(Clear, area);
-    frame.render_widget(Block::default().title(app.translate("logout_confirm_title")).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::red(app.config.theme))), area);
+    frame.render_widget(Block::default().title(format!(" {} ", app.translate("logout_confirm_title"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::red(app.config.theme))), area);
     let chunks = Layout::default().direction(Direction::Vertical).constraints([Constraint::Length(2), Constraint::Min(0), Constraint::Length(1)]).margin(1).split(area);
     frame.render_widget(Paragraph::new(app.translate("logout_confirm_msg")).alignment(Alignment::Center), chunks[1]);
     frame.render_widget(Paragraph::new(app.translate("confirm_hint")).alignment(Alignment::Center).style(Style::default().fg(Palette::overlay0(app.config.theme))), chunks[2]);
@@ -192,7 +192,7 @@ pub fn render_confirm_modal(app: &App, frame: &mut Frame) {
         let msg_key = if is_done { "confirm_msg_undone" } else { "confirm_msg_done" };
         let msg = app.translate(msg_key).replace("{}", &t.title);
         
-        frame.render_widget(Block::default().title(app.translate("confirm_title")).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::mauve(app.config.theme))), area);
+        frame.render_widget(Block::default().title(format!(" {} ", app.translate("confirm_title"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::mauve(app.config.theme))), area);
         let chunks = Layout::default().direction(Direction::Vertical).constraints([Constraint::Length(2), Constraint::Min(0), Constraint::Length(1)]).margin(1).split(area);
         frame.render_widget(Paragraph::new(msg).alignment(Alignment::Center).wrap(ratatui::widgets::Wrap { trim: true }), chunks[1]);
         frame.render_widget(Paragraph::new(app.translate("confirm_hint")).alignment(Alignment::Center).style(Style::default().fg(Palette::overlay0(app.config.theme))), chunks[2]);
@@ -206,5 +206,5 @@ pub fn render_list_selector(app: &App, frame: &mut Frame) {
         let s = if i == app.selected_list_idx { Style::default().fg(Palette::base(app.config.theme)).bg(Palette::mauve(app.config.theme)) } else { Style::default().fg(Palette::text(app.config.theme)) };
         ListItem::new(format!("  {}  ", l.title)).style(s)
     }).collect();
-    frame.render_widget(List::new(items).block(Block::default().title(app.translate("lists_title")).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::mauve(app.config.theme)))), area);
+    frame.render_widget(List::new(items).block(Block::default().title(format!(" {} ", app.translate("lists_title"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::mauve(app.config.theme)))), area);
 }

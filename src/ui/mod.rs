@@ -96,7 +96,7 @@ pub fn render_right_panel(app: &App, frame: &mut Frame, area: Rect) {
         let notes = task.notes.as_deref().unwrap_or(&no_notes);
         for line in notes.lines() { info_lines.push(Line::from(vec![Span::raw(format!("  {}", line))])); }
     } else { info_lines.push(Line::from(app.translate("no_task"))); }
-    frame.render_widget(Paragraph::new(info_lines).wrap(ratatui::widgets::Wrap { trim: true }).block(Block::default().title(app.translate("info")).borders(Borders::ALL).border_type(BorderType::Rounded)), chunks[1]);
+    frame.render_widget(Paragraph::new(info_lines).wrap(ratatui::widgets::Wrap { trim: true }).block(Block::default().title(format!(" {} ", app.translate("info"))).borders(Borders::ALL).border_type(BorderType::Rounded)), chunks[1]);
 }
 
 fn render_loading_screen(app: &App, frame: &mut Frame) {
@@ -142,7 +142,7 @@ fn render_auth_screen(app: &App, frame: &mut Frame) {
 
     if let Some(url) = &app.auth_url {
         let foot = if app.config.language == crate::app::Language::Spanish { "¡Link copiado al portapapeles!" } else { "Link copied to clipboard!" };
-        frame.render_widget(Paragraph::new(app.translate("auth_instructions")).alignment(Alignment::Center).style(Style::default().fg(Palette::subtext0(app.config.theme))), content[1]);
+        frame.render_widget(Paragraph::new(format!("{}:", app.translate("auth_instructions"))).alignment(Alignment::Center).style(Style::default().fg(Palette::subtext0(app.config.theme))), content[1]);
         frame.render_widget(Paragraph::new(url.as_str()).alignment(Alignment::Center).wrap(ratatui::widgets::Wrap { trim: true }).style(Style::default().fg(Palette::blue(app.config.theme)).add_modifier(Modifier::UNDERLINED)).block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded)), content[2]);
         frame.render_widget(Paragraph::new(vec![Line::from(vec![Span::styled(foot, Style::default().fg(Palette::green(app.config.theme)))]), Line::from(""), Line::from(vec![Span::styled(app.translate("auth_waiting"), Style::default().fg(Palette::peach(app.config.theme)))])]).alignment(Alignment::Center), content[3]);
     } else { frame.render_widget(Paragraph::new(app.translate("login_btn")).alignment(Alignment::Center).style(Style::default().fg(Palette::green(app.config.theme)).add_modifier(Modifier::REVERSED)), content[2]); }
