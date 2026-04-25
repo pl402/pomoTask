@@ -45,11 +45,29 @@ Este método se fundamenta en la idea de que las pausas frecuentes pueden mejora
 
 ## 🚀 Instalación y Compilación
 
-### 1. Requisitos Previos
-- Tener instalado [Rust y Cargo](https://rustup.rs/).
-- Un archivo `client_secret.json` de Google Cloud Console.
+### 1. Configuración de la API de Google (client_secret.json)
+Para que PomoTask-CLI pueda sincronizarse con tus tareas, necesitas tus propias credenciales de Google Cloud:
 
-### 2. Instalación Rápida (Linux/macOS)
+1. Ve a [Google Cloud Console](https://console.cloud.google.com/).
+2. Crea un nuevo proyecto (ej. "PomoTask").
+3. En el buscador superior, busca **"Google Tasks API"** y haz clic en **Habilitar**.
+4. Ve a **"Pantalla de consentimiento de OAuth"**:
+    - Selecciona tipo de usuario **Externo**.
+    - Rellena los datos obligatorios (nombre de app, email).
+    - En **Permisos (Scopes)**, añade: `https://www.googleapis.com/auth/tasks`.
+    - En **Usuarios de prueba**, añade tu propio correo electrónico de Google.
+5. Ve a **"Credenciales"**:
+    - Haz clic en **Crear credenciales** -> **ID de cliente de OAuth**.
+    - Tipo de aplicación: **App de escritorio**.
+    - Nombre: PomoTask-CLI.
+6. Una vez creado, descarga el archivo JSON.
+7. Renombra el archivo descargado a `client_secret.json` y colócalo en la raíz del proyecto `pomoTask/`.
+
+### 2. Requisitos Previos
+- Tener instalado [Rust y Cargo](https://rustup.rs/).
+- El archivo `client_secret.json` configurado en el paso anterior.
+
+### 3. Instalación Rápida (Linux/macOS)
 ```bash
 git clone https://github.com/pl402/pomoTask.git
 cd pomoTask

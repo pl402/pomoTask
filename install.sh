@@ -13,6 +13,14 @@ NC='\033[0m' # No Color
 
 echo -e "${BLUE}==>${NC} Iniciando instalación de ${GREEN}PomoTask-CLI${NC}..."
 
+# 0. Verificar si existe client_secret.json
+if [ ! -f "client_secret.json" ]; then
+    echo -e "${YELLOW}Error:${NC} No se encontró el archivo ${BLUE}client_secret.json${NC} en la raíz del proyecto."
+    echo -e "Este archivo es obligatorio para la sincronización con Google Tasks."
+    echo -e "Por favor, sigue las instrucciones en el README para obtenerlo."
+    exit 1
+fi
+
 # 1. Verificar si Rust/Cargo está instalado
 if ! command -v cargo &> /dev/null; then
     echo -e "${YELLOW}Error:${NC} No se encontró 'cargo'. Por favor, instala Rust desde https://rustup.rs/"
@@ -49,7 +57,25 @@ BINARY_NAME="pomotask-cli"
 echo -e "${BLUE}==>${NC} Instalando binario en ${GREEN}${INSTALL_DIR}/${BINARY_NAME}${NC}"
 cp "target/release/${BINARY_NAME}" "${INSTALL_DIR}/"
 
-# 6. Finalización
+# 6. Crear archivo .desktop
+DESKTOP_DIR="$HOME/.local/share/applications"
+if [ -d "$DESKTOP_DIR" ]; then
+    echo -e "${BLUE}==>${NC} Creando acceso directo en el menú de aplicaciones..."
+    cat > "${DESKTOP_DIR}/pomotask.desktop" <<EOF
+[Desktop Entry]
+Name=pomoTask-CLI
+Comment=Gestión de tareas Pomodoro con Google Tasks
+Exec=${INSTALL_DIR}/${BINARY_NAME}
+Icon=utilities-terminal
+Terminal=true
+Type=Application
+StartupWMClass=pomotask-cli
+Categories=Utility;Office;
+EOF
+    chmod +x "${DESKTOP_DIR}/pomotask.desktop"
+fi
+
+# 7. Finalización
 echo -e "\n${GREEN}¡Instalación completada con éxito!${NC}"
 echo -e "Asegúrate de que ${BLUE}${INSTALL_DIR}${NC} esté en tu variable ${YELLOW}PATH${NC}."
 echo -e "Ahora puedes ejecutar la aplicación simplemente escribiendo: ${GREEN}${BINARY_NAME}${NC}\n"
