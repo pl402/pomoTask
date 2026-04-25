@@ -65,6 +65,7 @@ async fn main() -> Result<()> {
                     sync_tasks(&api_client, events.sender(), &mut app).await;
                 }
                 Event::ApiUpdate(tasks) => {
+                    app.creating_task_temp_id = None;
                     let old_mode = app.mode;
                     let mut tasks_with_stats = Vec::new();
                     for mut t in tasks { 
@@ -97,6 +98,20 @@ async fn main() -> Result<()> {
                             let _ = notify_rust::Notification::new().summary("PomoTask").body(&app.translate("auth_success_msg")).icon("emblem-success").show();
                             let sender = events.sender(); tokio::spawn(async move { tokio::time::sleep(Duration::from_secs(3)).await; let _ = sender.send(Event::Tick); });
                         } else { app.mode = AppMode::Timer; }
+                    }
+                }
+                Event::ApiTaskCompleted(id, x, y, w) => {
+                    if app.marking_done_task_id.as_ref() == Some(&id) {
+                        app.marking_done_task_id = None;
+                        app.start_completion_animation(id, x, y, w);
+                    }
+                }
+                Event::ApiTaskFailed(id) => {
+                    if app.marking_done_task_id.as_ref() == Some(&id) {
+                        app.marking_done_task_id = None;
+                    }
+                    if app.creating_task_temp_id.as_ref() == Some(&id) {
+                        app.creating_task_temp_id = None;
                     }
                 }
                 _ => { if app.mode == AppMode::AuthSuccess && !app.task_lists.is_empty() { app.mode = AppMode::Timer; } }

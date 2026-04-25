@@ -15,6 +15,8 @@ pub enum Event {
     ApiUpdate(Vec<Task>),
     ListsUpdate(Vec<TaskList>),
     NeedsAuth(String),
+    ApiTaskCompleted(String, u16, u16, u16),
+    ApiTaskFailed(String),
     Sync,
 }
 
