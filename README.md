@@ -23,25 +23,30 @@ Este método se fundamenta en la idea de que las pausas frecuentes pueden mejora
 ## ✨ Características Principales
 
 - **☁️ Sincronización Real con Google Tasks**: Gestión bidireccional de tareas y subtareas en tiempo real.
-- **📅 Calendario Mensual con Semáforo**: Visualización mensual interactiva con indicadores de color:
-    - 🔴 **Rojo**: Tareas pendientes (vencimiento).
-    - 🟢 **Verde**: Tareas completadas (historial).
-    - 🔵 **Azul**: Tareas creadas o actualizadas.
-- **🚀 Navegación Inteligente**: El calendario salta automáticamente al mes de la tarea seleccionada.
-- **🌐 Vista Consolidada "Todas"**: Lista virtual que reúne las tareas de todas tus listas reales para una visión global.
-- **🎨 Temas visuales**: Soporte nativo para esquemas de colores **Catppuccin**, **Nord**, **Gruvbox** y **Dracula**.
-- **🍅 Modo concentración inmersivo**: Pantalla completa con un **reloj digital gigante** y fecha localizada.
-- **📑 Gestión de subtareas**: Visualiza y marca subtareas directamente desde el modo enfoque.
-- **✨ Animación de Victoria**: Efecto de partículas y tachado visual al completar tareas.
-- **⏱️ Pomodoro Inteligente**: Temporizador que se guarda por tarea y se detiene automáticamente al terminar.
-- **🔔 Notificaciones**: Avisos nativos de sistema al finalizar sesiones.
+- **🔗 Conexión Automática**: Servidor local temporal para capturar credenciales OAuth sin copiar/pegar códigos.
+- **📅 Vistas de Calendario Personalizables**:
+    - **Semáforo**: Indicadores clásicos de Pendiente (🔴), Hecho (🟢) y Actividad (🔵).
+    - **Mapa de Calor**: Intensidad de color basada en tareas completadas por día (estilo GitHub).
+    - **Progreso Diario**: Visualización de porcentaje de cumplimiento mediante iconos dinámicos.
+- **⏱️ Análisis Horario**: Vistas por **Mes**, **Semana** (cuadrícula horaria) y **Día** (detalle por hora) con soporte de zona horaria local.
+- **🎨 Personalización Estética Avanzada**:
+    - **Temas Expandidos**: Soporte nativo para Catppuccin, Nord, Gruvbox, Dracula, Monokai, Solarized Dark y Ocean.
+    - **Temas Custom**: Posibilidad de definir paletas RGB propias en `config.json`.
+- **🚀 Interfaz Ultrarrápida (Optimistic UI)**:
+    - **Feedback Inmediato**: Inserción instantánea de tareas y spinners animados mientras se sincroniza con la nube.
+    - **Animación de Victoria**: Efecto de partículas y tachado visual tras confirmación de la API.
+- **🌐 Multilingüe**: Soporte completo para Español e Inglés con mensajes motivacionales dinámicos en listas vacías.
+- **🍅 Modo Concentración Inmersivo**: Pantalla completa con reloj digital gigante y gestión de subtareas.
+- **🔔 Notificaciones**: Avisos nativos del sistema al finalizar sesiones.
 
-## 🛠️ Stack Tecnológico
+## 🛠️ Stack Tecnológico y Arquitectura
 
-- **Lenguaje**: Rust 🦀 (Edición 2021) - Código modularizado para alta mantenibilidad.
-- **TUI**: [Ratatui](https://ratatui.rs/) + `crossterm`.
-- **Async**: `tokio` para operaciones de red no bloqueantes.
-- **API**: Integración con Google Cloud via `google-tasks1`.
+- **Rust 🦀 (Edición 2021)**: Código optimizado para alto rendimiento y seguridad de memoria.
+- **Arquitectura Modular**:
+    - `src/ui/palette.rs`: Lógica de temas y colores totalmente desacoplada.
+    - `src/app/i18n.rs`: Sistema de internacionalización centralizado.
+    - `src/api.rs`: Comunicación asíncrona robusta con Google Cloud.
+- **Ratatui + Tokio**: Interfaz de terminal reactiva con procesamiento de red no bloqueante.
 
 ## 🚀 Instalación y Compilación
 
