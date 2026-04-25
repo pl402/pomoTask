@@ -102,11 +102,13 @@ El script compilará el proyecto en modo `release` e instalará el binario en `~
 
 ## 📂 Estructura del Código
 
-El proyecto ha sido refactorizado para ser altamente mantenible:
-- `src/ui/`: Componentes modulares de la interfaz (Calendario, Listas, Modales, Temporizador).
-- `src/handler.rs`: Lógica centralizada de eventos de teclado.
-- `src/app.rs`: Estado de la aplicación y lógica de negocio.
-- `src/api.rs`: Comunicación con la API de Google.
+Arquitectura diseñada para ser modular, legible y fácil de extender:
+- `src/ui/`: Componentes de interfaz (Calendario, Listas, Modales, Temporizador).
+- `src/ui/palette.rs`: Sistema dinámico de temas y colores.
+- `src/app/`: Lógica de negocio y estado global de la aplicación.
+- `src/app/i18n.rs`: Motor de internacionalización (Español/Inglés).
+- `src/handler.rs`: Lógica centralizada para la gestión de eventos de teclado.
+- `src/api.rs`: Integración asíncrona con Google Tasks API.
 
 ---
 Desarrollado con ❤️ desde **México** 🇲🇽 por un humano que sobrevive a base de agua, té y papitas con mucho chile. 🍵🔥🌶️
