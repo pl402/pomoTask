@@ -27,7 +27,7 @@ impl ApiClient {
         let mut secret_path = App::get_config_dir();
         secret_path.push("client_secret.json");
 
-        let secret = if secret_path.exists() {
+        let secret: Option<yup_oauth2::ApplicationSecret> = if secret_path.exists() {
             yup_oauth2::read_application_secret(&secret_path).await.ok()
         } else {
             let local_path = PathBuf::from("client_secret.json");
