@@ -1,11 +1,12 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use std::time::Duration;
-use crate::app::{App, AppMode, InputField, DatePreset, Theme};
+use crate::app::{App, AppMode, InputField, DatePreset, Task};
+use crate::ui::palette::Theme;
 use crate::events::Event;
 use crate::api::ApiClient;
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
-use chrono::{Local, Duration as ChronoDuration};
+use chrono::{Local, Utc, DateTime, Duration as ChronoDuration};
 
 pub async fn handle_key_events(
     key: KeyEvent,
@@ -58,29 +59,37 @@ pub async fn handle_key_events(
 
                         if !is_completed && !app.timer_active {
                             task.completed = true;
-                            let x = 3; 
-                            let y = 1 + 5 + 1 + app.selected_task as u16; 
-                            let w = task.title.len() as u16 + 5;
-                            app.start_completion_animation(task_id.clone(), x, y, w);
-                            app.record_task_done();
+                            if !is_completed {
+                                app.record_task_done();
+                            }
                         }
+
+                        let x = 3; 
+                        let y = 1 + 5 + 1 + app.selected_task as u16; 
+                        let w = task.title.len() as u16 + 5;
 
                         app.loading = true;
                         app.mode = AppMode::Timer;
                         app.confirming_task_id = None;
+                        app.marking_done_task_id = Some(task_id.clone());
+
                         tokio::spawn(async move {
                             if !is_completed && !timer_active { tokio::time::sleep(Duration::from_millis(1500)).await; }
                             if api.toggle_task_completion(&task_list_id, &task_id, !is_completed).await.is_ok() {
+                                let _ = sender_clone.send(Event::ApiTaskCompleted(task_id, x, y, w));
                                 if selected_list_id == "@all" {
                                     let _ = sender_clone.send(Event::Sync);
                                 } else {
-                                    let tasks = api.fetch_tasks(&selected_list_id, show_comp).await.unwrap_or_default(); 
+                                    let tasks: Vec<Task> = api.fetch_tasks(&selected_list_id, show_comp).await.unwrap_or_default();
                                     let _ = sender_clone.send(Event::ApiUpdate(tasks));
                                 }
+
                             } else {
+                                let _ = sender_clone.send(Event::ApiTaskFailed(task_id));
                                 let _ = sender_clone.send(Event::Sync);
                             }
                         });
+
                     }
                 }
                 _ => {}
@@ -107,10 +116,10 @@ pub async fn handle_key_events(
                 KeyCode::Esc => { app.mode = AppMode::Timer; }
                 KeyCode::Up | KeyCode::Char('k') => {
                     if app.selected_settings_idx > 0 { app.selected_settings_idx -= 1; }
-                    else { app.selected_settings_idx = 5; }
+                    else { app.selected_settings_idx = 7; }
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
-                    if app.selected_settings_idx < 5 { app.selected_settings_idx += 1; }
+                    if app.selected_settings_idx < 7 { app.selected_settings_idx += 1; }
                     else { app.selected_settings_idx = 0; }
                 }
                 KeyCode::Left | KeyCode::Char('h') => {
@@ -121,10 +130,28 @@ pub async fn handle_key_events(
                         3 => { app.toggle_language(); }
                         4 => {
                             app.config.theme = match app.config.theme {
-                                Theme::CatppuccinMocha => Theme::Dracula,
+                                Theme::CatppuccinMocha => Theme::Custom,
                                 Theme::Nord => Theme::CatppuccinMocha,
                                 Theme::Gruvbox => Theme::Nord,
                                 Theme::Dracula => Theme::Gruvbox,
+                                Theme::Monokai => Theme::Dracula,
+                                Theme::SolarizedDark => Theme::Monokai,
+                                Theme::Ocean => Theme::SolarizedDark,
+                                Theme::Custom => Theme::Ocean,
+                            };
+                        }
+                        5 => {
+                            app.config.calendar_view = match app.config.calendar_view {
+                                crate::app::CalendarView::Standard => crate::app::CalendarView::Progress,
+                                crate::app::CalendarView::Heatmap => crate::app::CalendarView::Standard,
+                                crate::app::CalendarView::Progress => crate::app::CalendarView::Heatmap,
+                            };
+                        }
+                        6 => {
+                            app.config.calendar_range = match app.config.calendar_range {
+                                crate::app::CalendarRange::Month => crate::app::CalendarRange::Day,
+                                crate::app::CalendarRange::Week => crate::app::CalendarRange::Month,
+                                crate::app::CalendarRange::Day => crate::app::CalendarRange::Week,
                             };
                         }
                         _ => {}
@@ -143,11 +170,28 @@ pub async fn handle_key_events(
                                 Theme::CatppuccinMocha => Theme::Nord,
                                 Theme::Nord => Theme::Gruvbox,
                                 Theme::Gruvbox => Theme::Dracula,
-                                Theme::Dracula => Theme::CatppuccinMocha,
+                                Theme::Dracula => Theme::Monokai,
+                                Theme::Monokai => Theme::SolarizedDark,
+                                Theme::SolarizedDark => Theme::Ocean,
+                                Theme::Ocean => Theme::Custom,
+                                Theme::Custom => Theme::CatppuccinMocha,
                             };
-                            app.save_config();
                         }
                         5 => {
+                            app.config.calendar_view = match app.config.calendar_view {
+                                crate::app::CalendarView::Standard => crate::app::CalendarView::Heatmap,
+                                crate::app::CalendarView::Heatmap => crate::app::CalendarView::Progress,
+                                crate::app::CalendarView::Progress => crate::app::CalendarView::Standard,
+                            };
+                        }
+                        6 => {
+                            app.config.calendar_range = match app.config.calendar_range {
+                                crate::app::CalendarRange::Month => crate::app::CalendarRange::Week,
+                                crate::app::CalendarRange::Week => crate::app::CalendarRange::Day,
+                                crate::app::CalendarRange::Day => crate::app::CalendarRange::Month,
+                            };
+                        }
+                        7 => {
                             if key.code == KeyCode::Enter || key.code == KeyCode::Right || key.code == KeyCode::Char('l') {
                                 app.mode = AppMode::ConfirmLogout;
                             }
@@ -158,7 +202,7 @@ pub async fn handle_key_events(
                     app.timer_seconds = app.timer_mode.duration(&app.config);
                 }
                 KeyCode::Enter => {
-                    if app.selected_settings_idx == 5 {
+                    if app.selected_settings_idx == 7 {
                         app.mode = AppMode::ConfirmLogout;
                     }
                 }
@@ -224,10 +268,47 @@ pub async fn handle_key_events(
                             })
                         } else { None };
                         let edit_id = app.editing_task_id.clone();
+                        
+                        let temp_id = if mode != AppMode::Edit {
+                            let tid = format!("temp_{}", rand::random::<u32>());
+                            app.creating_task_temp_id = Some(tid.clone());
+                            let temp_task = Task {
+                                id: tid.clone(),
+                                list_id: target_list_id.clone(),
+                                title: title.clone(),
+                                completed: false,
+                                due,
+                                updated: Utc::now(),
+                                completed_at: None,
+                                notes: notes.clone(),
+                                parent_id: parent_id.clone(),
+                                pomodoros: 0,
+                            };
+                            
+                            // Insertar en la lista visual inmediatamente
+                            if let Some(pos) = parent_id.as_ref().and_then(|pid| app.tasks.iter().position(|t| &t.id == pid)) {
+                                app.tasks.insert(pos + 1, temp_task);
+                            } else {
+                                app.tasks.insert(0, temp_task);
+                            }
+                            Some(tid)
+                        } else {
+                            None
+                        };
+
                         app.loading = true; app.mode = AppMode::Timer; app.clear_inputs();
                         tokio::spawn(async move {
-                            let res = if mode == AppMode::Edit { api.update_task(&target_list_id, &edit_id.unwrap(), &title, notes, due).await } else { api.create_task(&target_list_id, &title, notes, due, parent_id).await };
-                            if res.is_ok() { let _ = sender_clone.send(Event::Sync); }
+                            let res = if mode == AppMode::Edit { 
+                                api.update_task(&target_list_id, &edit_id.unwrap(), &title, notes, due).await 
+                            } else { 
+                                api.create_task(&target_list_id, &title, notes, due, parent_id).await 
+                            };
+                            
+                            if res.is_ok() { 
+                                let _ = sender_clone.send(Event::Sync); 
+                            } else if let Some(tid) = temp_id {
+                                let _ = sender_clone.send(Event::ApiTaskFailed(tid));
+                            }
                         });
                     }
                 }
@@ -317,7 +398,7 @@ pub async fn handle_key_events(
                         app.input_title = task.title.clone(); 
                         app.input_notes = task.notes.clone().unwrap_or_default(); 
                         
-                        let date_str = task.due.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default();
+                        let date_str = task.due.map(|d: DateTime<Utc>| d.format("%Y-%m-%d").to_string()).unwrap_or_default();
                         app.input_due = date_str.clone();
                         
                         let now = Local::now().format("%Y-%m-%d").to_string();
@@ -404,7 +485,9 @@ pub async fn handle_key_events(
 }
 
 pub async fn sync_tasks(api: &Arc<ApiClient>, sender: UnboundedSender<Event>, app: &mut App) {
-    app.loading = true; let api = api.clone();
+    app.loading = true; 
+    app.tasks.clear(); 
+    let api = api.clone();
     if app.task_lists.is_empty() {
         tokio::spawn(async move {
             match api.fetch_task_lists().await {

@@ -8,7 +8,8 @@ use ratatui::{
     Frame,
 };
 
-use crate::app::{App, Palette, AppMode, InputField, DatePreset};
+use crate::app::{App, AppMode, InputField, DatePreset};
+use crate::ui::palette::Palette;
 use crate::ui::centered_rect;
 
 pub fn render_input_modal(app: &App, frame: &mut Frame) {
@@ -21,7 +22,7 @@ pub fn render_input_modal(app: &App, frame: &mut Frame) {
             modal_title = format!(" {} para {} ", app.translate("new_subtask"), parent.title);
         }
     }
-    frame.render_widget(Block::default().title(modal_title).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::yellow(app.config.theme))), area);
+    frame.render_widget(Block::default().title(modal_title).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::yellow(app))), area);
 
     let mut constraints = vec![
         Constraint::Length(3), // Título
@@ -38,19 +39,19 @@ pub fn render_input_modal(app: &App, frame: &mut Frame) {
 
     let chunks = Layout::default().direction(Direction::Vertical).constraints(constraints).margin(2).split(area);
 
-    let title_style = if app.focused_input == InputField::Title { Style::default().fg(Palette::yellow(app.config.theme)) } else { Style::default().fg(Palette::subtext0(app.config.theme)) };
+    let title_style = if app.focused_input == InputField::Title { Style::default().fg(Palette::yellow(app)) } else { Style::default().fg(Palette::subtext0(app)) };
     let title_width = chunks[0].width.max(3) - 2;
     let title_scroll = (app.input_title.chars().count() as u16).saturating_sub(title_width);
     frame.render_widget(Paragraph::new(app.input_title.as_str()).scroll((0, title_scroll)).block(Block::default().title(" Título ").borders(Borders::ALL).border_style(title_style)), chunks[0]);
 
-    let notes_style = if app.focused_input == InputField::Notes { Style::default().fg(Palette::yellow(app.config.theme)) } else { Style::default().fg(Palette::subtext0(app.config.theme)) };
+    let notes_style = if app.focused_input == InputField::Notes { Style::default().fg(Palette::yellow(app)) } else { Style::default().fg(Palette::subtext0(app)) };
     let notes_width = chunks[1].width.max(3) - 2;
     let notes_scroll = (app.input_notes.chars().count() as u16).saturating_sub(notes_width);
     frame.render_widget(Paragraph::new(app.input_notes.as_str()).scroll((0, notes_scroll)).block(Block::default().title(" Notas ").borders(Borders::ALL).border_style(notes_style)), chunks[1]);
 
     let mut next_idx = 2;
     if app.mode == AppMode::Input {
-        let list_style = if app.focused_input == InputField::List { Style::default().fg(Palette::yellow(app.config.theme)) } else { Style::default().fg(Palette::subtext0(app.config.theme)) };
+        let list_style = if app.focused_input == InputField::List { Style::default().fg(Palette::yellow(app)) } else { Style::default().fg(Palette::subtext0(app)) };
         let list_name = app.task_lists.get(app.input_list_idx).map(|l| l.title.as_str()).unwrap_or("---");
         let list_text = format!(" ← {} → ", list_name);
         frame.render_widget(Paragraph::new(list_text).alignment(Alignment::Center).block(Block::default().title(format!(" {} ", app.translate("list_selection"))).borders(Borders::ALL).border_style(list_style)), chunks[next_idx]);
@@ -66,24 +67,25 @@ pub fn render_input_modal(app: &App, frame: &mut Frame) {
     ]).split(chunks[next_idx]);
     next_idx += 1;
 
-    let presets = [
+    let presets: Vec<(DatePreset, String)> = vec![
         (DatePreset::Today, app.translate("date_today")),
         (DatePreset::Tomorrow, app.translate("date_tomorrow")),
         (DatePreset::Custom, app.translate("date_custom")),
         (DatePreset::None, app.translate("date_none")),
     ];
 
+
     for (idx, (preset, label)) in presets.iter().enumerate() {
         let is_selected = app.selected_date_preset == *preset;
-        let mut style = Style::default().fg(Palette::text(app.config.theme));
+        let mut style = Style::default().fg(Palette::text(app));
         if is_selected {
-            style = Style::default().fg(Palette::base(app.config.theme)).bg(Palette::yellow(app.config.theme));
+            style = Style::default().fg(Palette::base(app)).bg(Palette::yellow(app));
         }
-        let block = Block::default().borders(Borders::ALL).border_type(BorderType::Rounded).border_style(if is_selected && app.focused_input == InputField::Due { Style::default().fg(Palette::yellow(app.config.theme)) } else { Style::default().fg(Palette::surface0(app.config.theme)) });
+        let block = Block::default().borders(Borders::ALL).border_type(BorderType::Rounded).border_style(if is_selected && app.focused_input == InputField::Due { Style::default().fg(Palette::yellow(app)) } else { Style::default().fg(Palette::surface0(app)) });
         frame.render_widget(Paragraph::new(label.as_str()).alignment(Alignment::Center).style(style).block(block), preset_chunks[idx]);
     }
 
-    let due_style = if app.focused_input == InputField::Due { Style::default().fg(Palette::yellow(app.config.theme)) } else { Style::default().fg(Palette::subtext0(app.config.theme)) };
+    let due_style = if app.focused_input == InputField::Due { Style::default().fg(Palette::yellow(app)) } else { Style::default().fg(Palette::subtext0(app)) };
     let date_input_text = if app.selected_date_preset == DatePreset::Custom { app.input_due.as_str() } else { app.input_due.as_str() }; 
     let due_width = chunks[next_idx].width.max(3) - 2;
     let due_scroll = (date_input_text.chars().count() as u16).saturating_sub(due_width);
@@ -98,7 +100,7 @@ pub fn render_input_modal(app: &App, frame: &mut Frame) {
     } else {
         app.translate("input_hint")
     };
-    frame.render_widget(Paragraph::new(input_hint).alignment(Alignment::Center).style(Style::default().fg(Palette::overlay0(app.config.theme))), chunks[next_idx]);
+    frame.render_widget(Paragraph::new(input_hint).alignment(Alignment::Center).style(Style::default().fg(Palette::overlay0(app))), chunks[next_idx]);
 }
 
 pub fn render_help_modal(app: &App, frame: &mut Frame) {
@@ -109,7 +111,7 @@ pub fn render_help_modal(app: &App, frame: &mut Frame) {
         .title(format!(" {} ", app.translate("help_title")))
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(Palette::mauve(app.config.theme)));
+        .border_style(Style::default().fg(Palette::mauve(app)));
     
     let keys = vec![
         ("SPACE", app.translate("start_pause")),
@@ -130,8 +132,8 @@ pub fn render_help_modal(app: &App, frame: &mut Frame) {
 
     let rows: Vec<Row> = keys.iter().map(|(k, v)| {
         Row::new(vec![
-            Cell::from(*k).style(Style::default().fg(Palette::yellow(app.config.theme)).add_modifier(Modifier::BOLD)),
-            Cell::from(v.clone()).style(Style::default().fg(Palette::text(app.config.theme))),
+            Cell::from(*k).style(Style::default().fg(Palette::yellow(app)).add_modifier(Modifier::BOLD)),
+            Cell::from(v.clone()).style(Style::default().fg(Palette::text(app))),
         ])
     }).collect();
 
@@ -143,7 +145,7 @@ pub fn render_settings_modal(app: &App, frame: &mut Frame) {
     let area = centered_rect(60, 50, frame.size());
     frame.render_widget(Clear, area);
     
-    let block = Block::default().title(format!(" {} ", app.translate("settings_title"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::yellow(app.config.theme)));
+    let block = Block::default().title(format!(" {} ", app.translate("settings_title"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::yellow(app)));
     frame.render_widget(block, area);
 
     let chunks = Layout::default().direction(Direction::Vertical).constraints([Constraint::Min(0), Constraint::Length(1)]).margin(2).split(area);
@@ -153,28 +155,38 @@ pub fn render_settings_modal(app: &App, frame: &mut Frame) {
         (app.translate("settings_short"), format!("{} min", app.config.short_break_duration / 60)),
         (app.translate("settings_long"), format!("{} min", app.config.long_break_duration / 60)),
         (app.translate("settings_lang"), match app.config.language { crate::app::Language::Spanish => "Español".to_string(), crate::app::Language::English => "English".to_string() }),
-        (app.translate("settings_theme"), format!("{:?}", app.config.theme)),
+        (app.translate("settings_theme"), app.config.theme.name().to_string()),
+        (app.translate("settings_calendar_view"), match app.config.calendar_view {
+            crate::app::CalendarView::Standard => app.translate("calendar_view_standard"),
+            crate::app::CalendarView::Heatmap => app.translate("calendar_view_heatmap"),
+            crate::app::CalendarView::Progress => app.translate("calendar_view_progress"),
+        }),
+        (app.translate("settings_calendar_range"), match app.config.calendar_range {
+            crate::app::CalendarRange::Month => app.translate("calendar_range_month"),
+            crate::app::CalendarRange::Week => app.translate("calendar_range_week"),
+            crate::app::CalendarRange::Day => app.translate("calendar_range_day"),
+        }),
         (app.translate("settings_logout"), "".to_string()),
     ];
 
     let rows: Vec<Row> = settings.iter().enumerate().map(|(i, (k, v))| {
-        let style = if i == app.selected_settings_idx { Style::default().fg(Palette::base(app.config.theme)).bg(Palette::yellow(app.config.theme)) } else { Style::default().fg(Palette::text(app.config.theme)) };
+        let style = if i == app.selected_settings_idx { Style::default().fg(Palette::base(app)).bg(Palette::yellow(app)) } else { Style::default().fg(Palette::text(app)) };
         Row::new(vec![Cell::from(k.clone()), Cell::from(v.clone())]).style(style)
     }).collect();
 
     let table = Table::new(rows, [Constraint::Percentage(60), Constraint::Percentage(40)]);
     frame.render_widget(table, chunks[0]);
 
-    frame.render_widget(Paragraph::new(app.translate("settings_hint")).alignment(Alignment::Center).style(Style::default().fg(Palette::overlay0(app.config.theme))), chunks[1]);
+    frame.render_widget(Paragraph::new(app.translate("settings_hint")).alignment(Alignment::Center).style(Style::default().fg(Palette::overlay0(app))), chunks[1]);
 }
 
 pub fn render_logout_confirm_modal(app: &App, frame: &mut Frame) {
     let area = centered_rect(50, 20, frame.size());
     frame.render_widget(Clear, area);
-    frame.render_widget(Block::default().title(format!(" {} ", app.translate("logout_confirm_title"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::red(app.config.theme))), area);
+    frame.render_widget(Block::default().title(format!(" {} ", app.translate("logout_confirm_title"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::red(app))), area);
     let chunks = Layout::default().direction(Direction::Vertical).constraints([Constraint::Length(2), Constraint::Min(0), Constraint::Length(1)]).margin(1).split(area);
     frame.render_widget(Paragraph::new(app.translate("logout_confirm_msg")).alignment(Alignment::Center), chunks[1]);
-    frame.render_widget(Paragraph::new(app.translate("confirm_hint")).alignment(Alignment::Center).style(Style::default().fg(Palette::overlay0(app.config.theme))), chunks[2]);
+    frame.render_widget(Paragraph::new(app.translate("confirm_hint")).alignment(Alignment::Center).style(Style::default().fg(Palette::overlay0(app))), chunks[2]);
 }
 
 pub fn render_confirm_modal(app: &App, frame: &mut Frame) {
@@ -192,10 +204,10 @@ pub fn render_confirm_modal(app: &App, frame: &mut Frame) {
         let msg_key = if is_done { "confirm_msg_undone" } else { "confirm_msg_done" };
         let msg = app.translate(msg_key).replace("{}", &t.title);
         
-        frame.render_widget(Block::default().title(format!(" {} ", app.translate("confirm_title"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::mauve(app.config.theme))), area);
+        frame.render_widget(Block::default().title(format!(" {} ", app.translate("confirm_title"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::mauve(app))), area);
         let chunks = Layout::default().direction(Direction::Vertical).constraints([Constraint::Length(2), Constraint::Min(0), Constraint::Length(1)]).margin(1).split(area);
         frame.render_widget(Paragraph::new(msg).alignment(Alignment::Center).wrap(ratatui::widgets::Wrap { trim: true }), chunks[1]);
-        frame.render_widget(Paragraph::new(app.translate("confirm_hint")).alignment(Alignment::Center).style(Style::default().fg(Palette::overlay0(app.config.theme))), chunks[2]);
+        frame.render_widget(Paragraph::new(app.translate("confirm_hint")).alignment(Alignment::Center).style(Style::default().fg(Palette::overlay0(app))), chunks[2]);
     }
 }
 
@@ -203,8 +215,8 @@ pub fn render_list_selector(app: &App, frame: &mut Frame) {
     let area = centered_rect(60, 40, frame.size());
     frame.render_widget(Clear, area);
     let items: Vec<ListItem> = app.task_lists.iter().enumerate().map(|(i, l)| {
-        let s = if i == app.selected_list_idx { Style::default().fg(Palette::base(app.config.theme)).bg(Palette::mauve(app.config.theme)) } else { Style::default().fg(Palette::text(app.config.theme)) };
+        let s = if i == app.selected_list_idx { Style::default().fg(Palette::base(app)).bg(Palette::mauve(app)) } else { Style::default().fg(Palette::text(app)) };
         ListItem::new(format!("  {}  ", l.title)).style(s)
     }).collect();
-    frame.render_widget(List::new(items).block(Block::default().title(format!(" {} ", app.translate("lists_title"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::mauve(app.config.theme)))), area);
+    frame.render_widget(List::new(items).block(Block::default().title(format!(" {} ", app.translate("lists_title"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::mauve(app)))), area);
 }

@@ -2,6 +2,7 @@ pub mod calendar;
 pub mod list;
 pub mod timer;
 pub mod modals;
+pub mod palette;
 
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect, Alignment},
@@ -14,7 +15,8 @@ use ratatui::{
 };
 use chrono::Local;
 
-use crate::app::{App, Palette, AppMode};
+use crate::app::{App, AppMode};
+use crate::ui::palette::Palette;
 use self::calendar::render_calendar;
 use self::timer::{render_timer_mode, render_timer_screen};
 use self::modals::{
@@ -79,19 +81,19 @@ pub fn render_right_panel(app: &App, frame: &mut Frame, area: Rect) {
 
     let mut info_lines = vec![];
     if let Some(task) = app.tasks.get(app.selected_task) {
-        info_lines.push(Line::from(vec![Span::styled(task.title.clone(), Style::default().fg(Palette::mauve(app.config.theme)).add_modifier(Modifier::BOLD))]));
-        info_lines.push(Line::from(vec![Span::styled(format!("🍅 Pomodoros: {}", task.pomodoros), Style::default().fg(Palette::peach(app.config.theme)))]));
+        info_lines.push(Line::from(vec![Span::styled(task.title.clone(), Style::default().fg(Palette::mauve(app)).add_modifier(Modifier::BOLD))]));
+        info_lines.push(Line::from(vec![Span::styled(format!("🍅 Pomodoros: {}", task.pomodoros), Style::default().fg(Palette::peach(app)))]));
         info_lines.push(Line::from(""));
 
         // CONVERSIÓN A TIEMPO LOCAL
         let due_str = task.due.map(|d| app.format_due_date(d)).unwrap_or_else(|| "---".to_string());
-        info_lines.push(Line::from(vec![Span::styled(format!("{}: ", app.translate("due_date")), Style::default().fg(Palette::subtext0(app.config.theme))), Span::raw(due_str)]));
+        info_lines.push(Line::from(vec![Span::styled(format!("{}: ", app.translate("due_date")), Style::default().fg(Palette::subtext0(app))), Span::raw(due_str)]));
 
         let created_str = task.updated.with_timezone(&Local).format("%Y-%m-%d %H:%M").to_string();
-        info_lines.push(Line::from(vec![Span::styled(format!("{}: ", app.translate("created_date")), Style::default().fg(Palette::subtext0(app.config.theme))), Span::raw(created_str)]));
+        info_lines.push(Line::from(vec![Span::styled(format!("{}: ", app.translate("created_date")), Style::default().fg(Palette::subtext0(app))), Span::raw(created_str)]));
 
         info_lines.push(Line::from(""));
-        info_lines.push(Line::from(vec![Span::styled(format!("{}:", app.translate("notes")), Style::default().fg(Palette::subtext0(app.config.theme)))]));
+        info_lines.push(Line::from(vec![Span::styled(format!("{}:", app.translate("notes")), Style::default().fg(Palette::subtext0(app)))]));
         let no_notes = app.translate("no_notes");
         let notes = task.notes.as_deref().unwrap_or(&no_notes);
         for line in notes.lines() { info_lines.push(Line::from(vec![Span::raw(format!("  {}", line))])); }
@@ -103,23 +105,23 @@ fn render_loading_screen(app: &App, frame: &mut Frame) {
     let area = centered_rect(40, 20, frame.size());
     let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
     let spinner = frames[app.spinner_frame % frames.len()];
-    let loading = Paragraph::new(format!("{} {}", spinner, app.translate("loading_app"))).alignment(Alignment::Center).style(Style::default().fg(Palette::mauve(app.config.theme))).block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded));
+    let loading = Paragraph::new(format!("{} {}", spinner, app.translate("loading_app"))).alignment(Alignment::Center).style(Style::default().fg(Palette::mauve(app))).block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded));
     frame.render_widget(loading, area);
 }
 
 fn render_success_screen(app: &App, frame: &mut Frame) {
     let area = centered_rect(60, 40, frame.size());
-    let block = Block::default().borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::green(app.config.theme)));
+    let block = Block::default().borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::green(app)));
     let chunks = Layout::default().direction(Direction::Vertical).constraints([Constraint::Length(1), Constraint::Length(3), Constraint::Length(2), Constraint::Length(2)]).margin(2).split(area);
     frame.render_widget(block, area);
-    frame.render_widget(Paragraph::new(app.translate("auth_success_title")).alignment(Alignment::Center).style(Style::default().fg(Palette::green(app.config.theme)).add_modifier(Modifier::BOLD)), chunks[1]);
+    frame.render_widget(Paragraph::new(app.translate("auth_success_title")).alignment(Alignment::Center).style(Style::default().fg(Palette::green(app)).add_modifier(Modifier::BOLD)), chunks[1]);
     frame.render_widget(Paragraph::new(app.translate("auth_success_msg")).alignment(Alignment::Center), chunks[2]);
-    frame.render_widget(Paragraph::new(app.translate("auth_success_hint")).alignment(Alignment::Center).style(Style::default().fg(Palette::subtext0(app.config.theme)).add_modifier(Modifier::ITALIC)), chunks[3]);
+    frame.render_widget(Paragraph::new(app.translate("auth_success_hint")).alignment(Alignment::Center).style(Style::default().fg(Palette::subtext0(app)).add_modifier(Modifier::ITALIC)), chunks[3]);
 }
 
 fn render_auth_screen(app: &App, frame: &mut Frame) {
     let area = centered_rect(70, 70, frame.size());
-    let block = Block::default().borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::mauve(app.config.theme)));
+    let block = Block::default().borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::mauve(app)));
     frame.render_widget(block, area);
 
     let chunks = Layout::default().direction(Direction::Vertical).constraints([
@@ -129,7 +131,7 @@ fn render_auth_screen(app: &App, frame: &mut Frame) {
         Constraint::Length(1), // Salir
     ]).margin(2).split(area);
 
-    frame.render_widget(Paragraph::new(app.translate("welcome")).alignment(Alignment::Center).style(Style::default().fg(Palette::mauve(app.config.theme)).add_modifier(Modifier::BOLD)), chunks[0]);
+    frame.render_widget(Paragraph::new(app.translate("welcome")).alignment(Alignment::Center).style(Style::default().fg(Palette::mauve(app)).add_modifier(Modifier::BOLD)), chunks[0]);
 
     let content = Layout::default().direction(Direction::Vertical).constraints([
         Constraint::Length(2),
@@ -141,12 +143,13 @@ fn render_auth_screen(app: &App, frame: &mut Frame) {
     frame.render_widget(Paragraph::new(app.translate("login_msg")).alignment(Alignment::Center), content[0]);
 
     if let Some(url) = &app.auth_url {
+        let url_str: String = url.as_str().to_string();
         let foot = if app.config.language == crate::app::Language::Spanish { "¡Link copiado al portapapeles!" } else { "Link copied to clipboard!" };
-        frame.render_widget(Paragraph::new(format!("{}:", app.translate("auth_instructions"))).alignment(Alignment::Center).style(Style::default().fg(Palette::subtext0(app.config.theme))), content[1]);
-        frame.render_widget(Paragraph::new(url.as_str()).alignment(Alignment::Center).wrap(ratatui::widgets::Wrap { trim: true }).style(Style::default().fg(Palette::blue(app.config.theme)).add_modifier(Modifier::UNDERLINED)).block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded)), content[2]);
-        frame.render_widget(Paragraph::new(vec![Line::from(vec![Span::styled(foot, Style::default().fg(Palette::green(app.config.theme)))]), Line::from(""), Line::from(vec![Span::styled(app.translate("auth_waiting"), Style::default().fg(Palette::peach(app.config.theme)))])]).alignment(Alignment::Center), content[3]);
-    } else { frame.render_widget(Paragraph::new(app.translate("login_btn")).alignment(Alignment::Center).style(Style::default().fg(Palette::green(app.config.theme)).add_modifier(Modifier::REVERSED)), content[2]); }
-    frame.render_widget(Paragraph::new(format!("'Q' -> {}", app.translate("quit"))).alignment(Alignment::Center).style(Style::default().fg(Palette::overlay0(app.config.theme))), chunks[2]);
+        frame.render_widget(Paragraph::new(format!("{}:", app.translate("auth_instructions"))).alignment(Alignment::Center).style(Style::default().fg(Palette::subtext0(app))), content[1]);
+        frame.render_widget(Paragraph::new(url_str.as_str()).alignment(Alignment::Center).wrap(ratatui::widgets::Wrap { trim: true }).style(Style::default().fg(Palette::blue(app)).add_modifier(Modifier::UNDERLINED)).block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded)), content[2]);
+        frame.render_widget(Paragraph::new(vec![Line::from(vec![Span::styled(foot, Style::default().fg(Palette::green(app)))]), Line::from(""), Line::from(vec![Span::styled(app.translate("auth_waiting"), Style::default().fg(Palette::peach(app)))])]).alignment(Alignment::Center), content[3]);
+    } else { frame.render_widget(Paragraph::new(app.translate("login_btn")).alignment(Alignment::Center).style(Style::default().fg(Palette::green(app)).add_modifier(Modifier::REVERSED)), content[2]); }
+    frame.render_widget(Paragraph::new(format!("'Q' -> {}", app.translate("quit"))).alignment(Alignment::Center).style(Style::default().fg(Palette::overlay0(app))), chunks[2]);
 }
 
 pub fn centered_rect(p_x: u16, p_y: u16, r: Rect) -> Rect {
@@ -168,7 +171,7 @@ fn render_animation_layer(app: &mut App, frame: &mut Frame) {
         else {
             for p in &app.animation.particles {
                 let (px, py) = (p.x as u16, p.y as u16);
-                let style = Style::default().fg(Palette::mauve(app.config.theme)).add_modifier(Modifier::BOLD);
+                let style = Style::default().fg(Palette::mauve(app)).add_modifier(Modifier::BOLD);
                 if px < frame.size().width && py < frame.size().height {
                     frame.render_widget(Paragraph::new(p.char.to_string()).style(style), Rect { x: px as u16, y: py as u16, width: 1, height: 1 });
                 }

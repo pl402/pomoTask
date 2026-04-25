@@ -9,7 +9,8 @@ use ratatui::{
 };
 use chrono::{Local, Timelike, Utc};
 
-use crate::app::{App, Palette, TimerMode};
+use crate::app::{App, TimerMode};
+use crate::ui::palette::Palette;
 use crate::ui::list::render_left_panel;
 use crate::ui::render_right_panel;
 
@@ -24,7 +25,7 @@ pub fn render_timer_screen(app: &mut App, frame: &mut Frame) {
 pub fn render_timer_mode(app: &App, frame: &mut Frame) {
     let area = frame.size();
     let is_focus = app.timer_mode == TimerMode::Focus;
-    let color = if is_focus { Palette::red(app.config.theme) } else { Palette::green(app.config.theme) };
+    let color = if is_focus { Palette::red(app) } else { Palette::green(app) };
 
     let block = Block::default().borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(color));
     frame.render_widget(block, area);
@@ -42,7 +43,7 @@ pub fn render_timer_mode(app: &App, frame: &mut Frame) {
     let progress = ((total - app.timer_seconds) as f64 / total as f64).min(1.0);
     let time_label = format!("{:02}:{:02}", app.timer_seconds / 60, app.timer_seconds % 60);
 
-    frame.render_widget(Gauge::default().block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded)).gauge_style(Style::default().fg(color).bg(Palette::surface0(app.config.theme))).ratio(progress).label(time_label), chunks[1]);
+    frame.render_widget(Gauge::default().block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded)).gauge_style(Style::default().fg(color).bg(Palette::surface0(app))).ratio(progress).label(time_label), chunks[1]);
 
     if let Some(task) = app.tasks.get(app.selected_task) {
         let is_main_selected = app.focus_subtask_idx == 0;
@@ -57,16 +58,16 @@ pub fn render_timer_mode(app: &App, frame: &mut Frame) {
 
         let mut main_style = Style::default();
         if is_main_selected {
-            main_style = main_style.bg(Palette::surface0(app.config.theme));
+            main_style = main_style.bg(Palette::surface0(app));
         }
 
         let focus_text = vec![
             Line::from(vec![
-                Span::styled(format!("{}: ", msg), Style::default().fg(Palette::text(app.config.theme))),
-                Span::styled(task.title.clone(), Style::default().fg(Palette::mauve(app.config.theme)).add_modifier(Modifier::BOLD))
+                Span::styled(format!("{}: ", msg), Style::default().fg(Palette::text(app))),
+                Span::styled(task.title.clone(), Style::default().fg(Palette::mauve(app)).add_modifier(Modifier::BOLD))
             ]),
             Line::from(vec![
-                Span::styled(format!("🍅 {} {}", task.pomodoros, app.translate("focus_completed_today")), Style::default().fg(Palette::peach(app.config.theme)))
+                Span::styled(format!("🍅 {} {}", task.pomodoros, app.translate("focus_completed_today")), Style::default().fg(Palette::peach(app)))
             ])
         ];
         frame.render_widget(Paragraph::new(focus_text).alignment(Alignment::Center).wrap(ratatui::widgets::Wrap { trim: true }).style(main_style), chunks[2]);
@@ -78,9 +79,9 @@ pub fn render_timer_mode(app: &App, frame: &mut Frame) {
                  let is_selected = app.focus_subtask_idx == idx + 1;
                  let symbol = if st.completed { "✅" } else { "☐" };
                  let style = if is_selected { 
-                     Style::default().fg(Palette::base(app.config.theme)).bg(Palette::yellow(app.config.theme))
+                     Style::default().fg(Palette::base(app)).bg(Palette::yellow(app))
                  } else { 
-                     Style::default().fg(Palette::text(app.config.theme)) 
+                     Style::default().fg(Palette::text(app)) 
                  };
                  items.push(ListItem::new(format!(" {} {}", symbol, st.title)).style(style));
              }
@@ -138,22 +139,22 @@ pub fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     let timer_label = format!("{:02}:{:02}", app.timer_seconds / 60, app.timer_seconds % 60);
 
     let left_spans = vec![
-        Span::styled(format!(" {} ", app.translate("title")), Style::default().fg(Palette::mauve(app.config.theme)).add_modifier(Modifier::BOLD)),
-        Span::styled(format!(" {} ", app.translate("footer_hint")), Style::default().fg(Palette::yellow(app.config.theme))),
+        Span::styled(format!(" {} ", app.translate("title")), Style::default().fg(Palette::mauve(app)).add_modifier(Modifier::BOLD)),
+        Span::styled(format!(" {} ", app.translate("footer_hint")), Style::default().fg(Palette::yellow(app))),
     ];
 
     let right_spans = vec![
-        Span::styled(format!(" {}: ", app.translate("timer_short")), Style::default().fg(Palette::subtext0(app.config.theme))),
-        Span::styled(format!("{} ", timer_label), Style::default().fg(if app.timer_mode == TimerMode::Focus { Palette::red(app.config.theme) } else { Palette::green(app.config.theme) })),
-        Span::styled(format!(" {}: ", app.translate("sync_short")), Style::default().fg(Palette::subtext0(app.config.theme))),
-        Span::styled(format!("{} ", spinner), Style::default().fg(Palette::blue(app.config.theme))),
-        Span::styled(format!(" {}: ", app.translate("pomodoro_short")), Style::default().fg(Palette::subtext0(app.config.theme))),
-        Span::styled(format!("{} ", app.session_pomodoros), Style::default().fg(Palette::peach(app.config.theme))),
-        Span::styled(format!(" {} | {} ", date_str, time_str), Style::default().fg(Palette::text(app.config.theme))),
+        Span::styled(format!(" {}: ", app.translate("timer_short")), Style::default().fg(Palette::subtext0(app))),
+        Span::styled(format!("{} ", timer_label), Style::default().fg(if app.timer_mode == TimerMode::Focus { Palette::red(app) } else { Palette::green(app) })),
+        Span::styled(format!(" {}: ", app.translate("sync_short")), Style::default().fg(Palette::subtext0(app))),
+        Span::styled(format!("{} ", spinner), Style::default().fg(Palette::blue(app))),
+        Span::styled(format!(" {}: ", app.translate("pomodoro_short")), Style::default().fg(Palette::subtext0(app))),
+        Span::styled(format!("{} ", app.session_pomodoros), Style::default().fg(Palette::peach(app))),
+        Span::styled(format!(" {} | {} ", date_str, time_str), Style::default().fg(Palette::text(app))),
     ];
 
     let footer_line = Line::from(left_spans);
-    frame.render_widget(Paragraph::new(footer_line).alignment(Alignment::Left).style(Style::default().bg(Palette::surface0(app.config.theme))), area);
+    frame.render_widget(Paragraph::new(footer_line).alignment(Alignment::Left).style(Style::default().bg(Palette::surface0(app))), area);
     
     let status_line = Line::from(right_spans);
     frame.render_widget(Paragraph::new(status_line).alignment(Alignment::Right), area);
