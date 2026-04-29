@@ -2,7 +2,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     widgets::{
-        Block, BorderType, Borders, Gauge, Table, Row, Cell, Paragraph,
+        Block, BorderType, Borders, Gauge, Table, Row, Cell, Paragraph, TableState,
     },
     Frame,
 };
@@ -91,6 +91,9 @@ pub fn render_left_panel(app: &App, frame: &mut Frame, area: Rect) {
         return;
     }
 
+    let mut state = TableState::default();
+    state.select(Some(app.selected_task));
+
     let table = Table::new(
         rows,
         [
@@ -104,5 +107,5 @@ pub fn render_left_panel(app: &App, frame: &mut Frame, area: Rect) {
     .block(Block::default().title(list_title).borders(Borders::ALL).border_type(BorderType::Rounded))
     .highlight_symbol(">> ");
 
-    frame.render_widget(table, chunks[1]);
+    frame.render_stateful_widget(table, chunks[1], &mut state);
 }

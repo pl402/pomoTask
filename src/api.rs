@@ -72,12 +72,30 @@ impl ApiClient {
         self.ensure_full_permissions().await?;
         let hub = match &self.hub { Some(h) => h, None => return Ok(self.mock_tasks()) };
         
-        let (_, task_list) = hub.tasks().list(list_id)
-            .show_completed(show_completed)
-            .show_hidden(show_completed)
-            .doit().await?;
+        let mut all_raw_tasks = Vec::new();
+        let mut page_token: Option<String> = None;
+
+        loop {
+            let mut call = hub.tasks().list(list_id)
+                .show_completed(show_completed)
+                .show_hidden(show_completed);
+            
+            if let Some(token) = &page_token {
+                call = call.page_token(token);
+            }
+
+            let (_, task_list) = call.doit().await?;
+            if let Some(items) = task_list.items {
+                all_raw_tasks.extend(items);
+            }
+
+            page_token = task_list.next_page_token;
+            if page_token.is_none() {
+                break;
+            }
+        }
         
-        Ok(task_list.items.unwrap_or_default().into_iter().filter(|t| t.title.is_some()).map(|t| {
+        Ok(all_raw_tasks.into_iter().filter(|t| t.title.is_some()).map(|t| {
             let due = t.due.and_then(|d| DateTime::parse_from_rfc3339(&d).ok().map(|dt| dt.with_timezone(&Utc)));
             let updated = t.updated.and_then(|d| DateTime::parse_from_rfc3339(&d).ok().map(|dt| dt.with_timezone(&Utc))).unwrap_or_else(Utc::now);
             let completed_at = t.completed.and_then(|d| DateTime::parse_from_rfc3339(&d).ok().map(|dt| dt.with_timezone(&Utc)));

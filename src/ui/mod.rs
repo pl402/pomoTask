@@ -82,7 +82,7 @@ pub fn render_right_panel(app: &App, frame: &mut Frame, area: Rect) {
     let mut info_lines = vec![];
     if let Some(task) = app.tasks.get(app.selected_task) {
         info_lines.push(Line::from(vec![Span::styled(task.title.clone(), Style::default().fg(Palette::mauve(app)).add_modifier(Modifier::BOLD))]));
-        info_lines.push(Line::from(vec![Span::styled(format!("🍅 Pomodoros: {}", task.pomodoros), Style::default().fg(Palette::peach(app)))]));
+        info_lines.push(Line::from(vec![Span::styled(format!("🍅 {}: {}", app.translate("pomodoro_label"), task.pomodoros), Style::default().fg(Palette::peach(app)))]));
         info_lines.push(Line::from(""));
 
         // CONVERSIÓN A TIEMPO LOCAL
