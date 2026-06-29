@@ -48,6 +48,10 @@ async fn main() -> Result<()> {
                 Event::Tick => app.tick(),
                 Event::Key(key) => {
                     handle_key_events(key, &mut app, &api_client, &events.sender()).await;
+                    // Si el handler solicitó copiar texto, lo volcamos con el portapapeles persistente.
+                    if let Some(text) = app.clipboard_request.take() {
+                        if let Some(ref mut cb) = clipboard { let _ = cb.set_text(text); }
+                    }
                 },
                 Event::NeedsAuth(url) => {
                     app.mode = AppMode::Auth; app.auth_url = Some(url.clone()); app.loading = false;

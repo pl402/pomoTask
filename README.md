@@ -33,6 +33,7 @@ Este método se fundamenta en la idea de que las pausas frecuentes pueden mejora
 - **🔍 Búsqueda Instantánea** (`/`): Filtrado de tareas por texto en tiempo real mientras escribes.
 - **📴 Modo Offline**: Las tareas se cachean localmente; si no hay conexión al arrancar, se muestran las últimas sincronizadas en lugar de una pantalla vacía.
 - **🔀 Mover entre Listas** (`M`): Reubica una tarea (con sus subtareas) en otra lista de forma segura (recrea en destino y luego borra el origen).
+- **📋 Copiar al Portapapeles** (`y`): Copia la tarea seleccionada como texto markdown, incluyendo su descripción, fecha y todas sus subtareas con sus notas.
 - **🎨 Personalización Estética Avanzada**:
     - **Temas Expandidos**: Soporte nativo para Catppuccin, Nord, Gruvbox, Dracula, Monokai, Solarized Dark y Ocean.
     - **Temas Custom**: Posibilidad de definir paletas RGB propias en `config.json`.
@@ -100,6 +101,7 @@ El script compilará el proyecto en modo `release` e instalará el binario en `~
 | `,` (Coma) | Configuración (Tiempos, Idioma, Temas) |
 | `N` / `A` | Nueva Tarea / Nueva Subtarea |
 | `E` | Editar Tarea (disponible en todas las vistas) |
+| `y` | Copiar Tarea al portapapeles (con notas y subtareas) |
 | `M` | Mover Tarea (y sus subtareas) a otra lista |
 | `C` | Mostrar/Ocultar completadas en la lista |
 | `S` | Sincronización manual |

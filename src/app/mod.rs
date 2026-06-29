@@ -142,6 +142,8 @@ pub struct App {
     pub calendar_date: chrono::NaiveDate,
     pub task_filter: String,
     pub moving_task_id: Option<String>,
+    pub clipboard_request: Option<String>,
+    pub copy_feedback_frames: u32,
 }
 
 impl App {
@@ -183,6 +185,8 @@ impl App {
             calendar_date: Local::now().date_naive(),
             task_filter: String::new(),
             moving_task_id: None,
+            clipboard_request: None,
+            copy_feedback_frames: 0,
         };
         // Mostrar las tareas cacheadas de inmediato (se reemplazan al primer sync exitoso).
         app.rebuild_visible_tasks();
@@ -378,6 +382,7 @@ impl App {
 
     pub fn tick(&mut self) {
         self.spinner_frame = self.spinner_frame.wrapping_add(1);
+        if self.copy_feedback_frames > 0 { self.copy_feedback_frames -= 1; }
         
         // Update Animation
         if self.animation.task_id.is_some() {
@@ -479,6 +484,45 @@ impl App {
         let total_tasks = self.stats.hourly_tasks_done.values().sum();
         let total_focus = self.stats.hourly_seconds.values().sum();
         (total_pomodoros, total_tasks, total_focus)
+    }
+
+    /// Arma el texto de una tarea (con su descripción, fecha y todas sus subtareas) en formato
+    /// markdown listo para pegar. Usa `all_tasks` para incluir subtareas completadas aunque la
+    /// vista las oculte.
+    pub fn build_task_clipboard_text(&self, task_id: &str) -> String {
+        let check = |c: bool| if c { "[x]" } else { "[ ]" };
+        let mut out = String::new();
+
+        let task = match self.all_tasks.iter().find(|t| t.id == task_id) {
+            Some(t) => t,
+            None => return out,
+        };
+
+        out.push_str(&format!("- {} {}\n", check(task.completed), task.title));
+        if let Some(due) = task.due {
+            out.push_str(&format!("    📅 {}\n", self.format_due_date(due)));
+        }
+        if let Some(notes) = &task.notes {
+            for line in notes.lines() { out.push_str(&format!("    {}\n", line)); }
+        }
+
+        let mut children: Vec<&Task> = self.all_tasks.iter()
+            .filter(|t| t.parent_id.as_deref() == Some(task_id))
+            .collect();
+        // Pendientes primero; dentro de cada grupo, las más recientes al final.
+        children.sort_by(|a, b| a.completed.cmp(&b.completed).then(a.updated.cmp(&b.updated)));
+
+        for child in children {
+            out.push_str(&format!("  - {} {}\n", check(child.completed), child.title));
+            if let Some(due) = child.due {
+                out.push_str(&format!("      📅 {}\n", self.format_due_date(due)));
+            }
+            if let Some(notes) = &child.notes {
+                for line in notes.lines() { out.push_str(&format!("      {}\n", line)); }
+            }
+        }
+
+        out
     }
 
     pub fn set_date_preset(&mut self, preset: DatePreset) {

@@ -475,6 +475,16 @@ pub async fn handle_key_events(
                         }
                     }
                 }
+                KeyCode::Char('y') => {
+                    // Copiar la tarea seleccionada (con descripción y subtareas) al portapapeles.
+                    if let Some(id) = app.tasks.get(app.selected_task).map(|t| t.id.clone()) {
+                        let text = app.build_task_clipboard_text(&id);
+                        if !text.is_empty() {
+                            app.clipboard_request = Some(text);
+                            app.copy_feedback_frames = 40; // ~2 s de aviso
+                        }
+                    }
+                }
                 KeyCode::Char('/') if !app.timer_active => { app.mode = AppMode::Search; }
                 KeyCode::Char('?') => { app.mode = AppMode::Help; }
                 KeyCode::Char('t') => { app.mode = AppMode::Stats; }

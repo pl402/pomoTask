@@ -182,8 +182,12 @@ cargo test               # tests unitarios (lógica pura: parseo de fechas, jera
 
 Ver la tabla completa en `README.md`. Resumen: `Espacio` (timer), `m` (cambiar modo del timer),
 `Enter` (completar/guardar), `j/k` (navegar tareas), `h/l` (cambiar lista), `[`/`]` (navegar calendario),
-`N/A` (nueva tarea/subtarea), `E` (editar), `M` (mover a otra lista), `C` (toggle completadas),
-`S` (sync), `/` (buscar), `T` (estadísticas), `,` (ajustes), `?` (ayuda), `Q`/`Esc` (salir).
+`N/A` (nueva tarea/subtarea), `E` (editar), `y` (copiar al portapapeles), `M` (mover a otra lista),
+`C` (toggle completadas), `S` (sync), `/` (buscar), `T` (estadísticas), `,` (ajustes), `?` (ayuda), `Q`/`Esc` (salir).
+
+Copiar (`y`): `App::build_task_clipboard_text()` arma el markdown (tarea + fecha + notas + subtareas) desde
+`all_tasks`; el handler lo deja en `App::clipboard_request` y `main.rs` lo vuelca con el `arboard::Clipboard`
+persistente tras procesar la tecla (no se crea un Clipboard efímero, que en X11 perdería el contenido al soltarse).
 
 Mover entre listas (`M`) reutiliza el `ListSelector` con `App::moving_task_id` activo; el movimiento es
 `api.move_task_tree()` con orden seguro **insertar-en-destino → borrar-origen** (peor caso: duplicado,

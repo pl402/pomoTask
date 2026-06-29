@@ -152,7 +152,11 @@ pub fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         Span::styled(format!(" {} ", app.translate("footer_hint")), Style::default().fg(Palette::yellow(app))),
     ];
 
-    let right_spans = vec![
+    let mut right_spans = vec![];
+    if app.copy_feedback_frames > 0 {
+        right_spans.push(Span::styled(format!(" {} ", app.translate("copied_clipboard")), Style::default().fg(Palette::green(app)).add_modifier(Modifier::BOLD)));
+    }
+    right_spans.extend(vec![
         Span::styled(format!(" {}: ", app.translate("timer_short")), Style::default().fg(Palette::subtext0(app))),
         Span::styled(format!("{} ", timer_label), Style::default().fg(if app.timer_mode == TimerMode::Focus { Palette::red(app) } else { Palette::green(app) })),
         Span::styled(format!(" {}: ", app.translate("sync_short")), Style::default().fg(Palette::subtext0(app))),
@@ -160,7 +164,7 @@ pub fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
         Span::styled(format!(" {}: ", app.translate("pomodoro_short")), Style::default().fg(Palette::subtext0(app))),
         Span::styled(format!("{} ", app.session_pomodoros), Style::default().fg(Palette::peach(app))),
         Span::styled(format!(" {} | {} ", date_str, time_str), Style::default().fg(Palette::text(app))),
-    ];
+    ]);
 
     let footer_line = Line::from(left_spans);
     frame.render_widget(Paragraph::new(footer_line).alignment(Alignment::Left).style(Style::default().bg(Palette::surface0(app))), area);

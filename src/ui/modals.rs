@@ -124,6 +124,7 @@ pub fn render_help_modal(app: &App, frame: &mut Frame) {
         ("N", app.translate("new_task")),
         ("A", app.translate("new_subtask")),
         ("E", app.translate("edit_task")),
+        ("y", app.translate("copy_task_label")),
         ("M", app.translate("move_task_label")),
         ("C", app.translate("toggle_completed")),
         ("S", app.translate("sync_manual")),
