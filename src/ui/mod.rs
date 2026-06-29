@@ -26,6 +26,11 @@ use self::modals::{
 };
 
 pub fn render(app: &mut App, frame: &mut Frame) {
+    // Splash inicial con el logo: se muestra un instante por encima de todo (la carga sigue de fondo).
+    if app.splash_frames > 0 {
+        render_splash(app, frame);
+        return;
+    }
     match app.mode {
         AppMode::Loading => render_loading_screen(app, frame),
         AppMode::Timer => {
@@ -162,6 +167,42 @@ fn render_auth_screen(app: &App, frame: &mut Frame) {
         frame.render_widget(Paragraph::new(vec![Line::from(vec![Span::styled(foot, Style::default().fg(Palette::green(app)))]), Line::from(""), Line::from(vec![Span::styled(app.translate("auth_waiting"), Style::default().fg(Palette::peach(app)))])]).alignment(Alignment::Center), content[3]);
     } else { frame.render_widget(Paragraph::new(app.translate("login_btn")).alignment(Alignment::Center).style(Style::default().fg(Palette::green(app)).add_modifier(Modifier::REVERSED)), content[2]); }
     frame.render_widget(Paragraph::new(format!("'Q' -> {}", app.translate("quit"))).alignment(Alignment::Center).style(Style::default().fg(Palette::overlay0(app))), chunks[2]);
+}
+
+fn render_splash(app: &App, frame: &mut Frame) {
+    // Logo "PomoTask" en ASCII art (figlet Standard).
+    let art = [
+        r#" ____                    _____         _    "#,
+        r#"|  _ \ ___  _ __ ___   __|_   _|_ _ ___| | __"#,
+        r#"| |_) / _ \| '_ ` _ \ / _ \| |/ _` / __| |/ /"#,
+        r#"|  __/ (_) | | | | | | (_) | | (_| \__ \   < "#,
+        r#"|_|   \___/|_| |_| |_|\___/|_|\__,_|___/_|\_\"#,
+    ];
+    let width = art.iter().map(|l| l.chars().count()).max().unwrap_or(0);
+
+    let mut lines: Vec<Line> = vec![
+        Line::from(Span::styled("🍅", Style::default().fg(Palette::red(app)))),
+        Line::from(""),
+    ];
+    for l in art {
+        let pad = width - l.chars().count();
+        lines.push(Line::from(Span::styled(
+            format!("{}{}", l, " ".repeat(pad)),
+            Style::default().fg(Palette::red(app)).add_modifier(Modifier::BOLD),
+        )));
+    }
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        app.translate("splash_tagline"),
+        Style::default().fg(Palette::subtext0(app)).add_modifier(Modifier::ITALIC),
+    )));
+
+    // Centrado vertical: colocamos el bloque en un Rect a media altura.
+    let screen = frame.size();
+    let h = lines.len() as u16;
+    let y = screen.y + screen.height.saturating_sub(h) / 2;
+    let area = Rect { x: screen.x, y, width: screen.width, height: h.min(screen.height) };
+    frame.render_widget(Paragraph::new(lines).alignment(Alignment::Center), area);
 }
 
 fn render_search_bar(app: &App, frame: &mut Frame) {

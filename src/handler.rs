@@ -14,6 +14,12 @@ pub async fn handle_key_events(
     api_client: &Arc<ApiClient>,
     sender: &UnboundedSender<Event>,
 ) {
+    // Cualquier tecla salta la splash inicial.
+    if app.splash_frames > 0 {
+        app.splash_frames = 0;
+        return;
+    }
+
     match app.mode {
         AppMode::Loading => {},
         

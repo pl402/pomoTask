@@ -169,6 +169,7 @@ pub struct App {
     pub clipboard_request: Option<String>,
     pub copy_feedback_frames: u32,
     pub cleaning_frames: u32,
+    pub splash_frames: u32,
 }
 
 impl App {
@@ -213,6 +214,7 @@ impl App {
             clipboard_request: None,
             copy_feedback_frames: 0,
             cleaning_frames: 0,
+            splash_frames: 32, // ~1.6 s de splash con el logo al arrancar (saltable con cualquier tecla)
         };
         // Mostrar las tareas cacheadas de inmediato (se reemplazan al primer sync exitoso).
         app.rebuild_visible_tasks();
@@ -460,6 +462,7 @@ impl App {
         self.spinner_frame = self.spinner_frame.wrapping_add(1);
         if self.copy_feedback_frames > 0 { self.copy_feedback_frames -= 1; }
         if self.cleaning_frames > 0 { self.cleaning_frames -= 1; }
+        if self.splash_frames > 0 { self.splash_frames -= 1; }
         
         // Update Animation
         if self.animation.task_id.is_some() {

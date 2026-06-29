@@ -132,6 +132,9 @@ Todo se guarda en `~/.config/pomotask/` (vía `dirs::config_dir()` + `App::get_c
   Si hay caché, la app arranca directamente en `AppMode::Timer` (no en la pantalla de carga a pantalla
   completa) con un indicador "⠋ Cargando…" en el pie mientras sincroniza; la pantalla `Loading` completa
   solo se usa en el primer arranque sin caché.
+- Splash inicial: `App::splash_frames` (~1.6 s) hace que `ui::render` dibuje el logo ASCII (`render_splash`)
+  por encima de todo al arrancar; la sincronización corre de fondo y cualquier tecla la salta. No es un
+  `AppMode`, es un overlay que decrementa en `tick()`.
 - `pomotask_token.json` — token OAuth. `logout()` lo borra.
 
 ### Archivos que NUNCA debes commitear
