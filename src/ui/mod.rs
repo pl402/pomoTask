@@ -255,7 +255,15 @@ fn render_animation_layer(app: &mut App, frame: &mut Frame) {
         else {
             for p in &app.animation.particles {
                 let (px, py) = (p.x as u16, p.y as u16);
-                let style = Style::default().fg(Palette::mauve(app)).add_modifier(Modifier::BOLD);
+                // Color variado por tipo de partícula para un efecto más vivo.
+                let color = match p.char {
+                    '✨' => Palette::yellow(app),
+                    '⭐' => Palette::peach(app),
+                    '💥' => Palette::red(app),
+                    '•' => Palette::mauve(app),
+                    _ => Palette::green(app),
+                };
+                let style = Style::default().fg(color).add_modifier(Modifier::BOLD);
                 if px < frame.size().width && py < frame.size().height {
                     frame.render_widget(Paragraph::new(p.char.to_string()).style(style), Rect { x: px, y: py, width: 1, height: 1 });
                 }

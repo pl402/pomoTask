@@ -126,7 +126,7 @@ pub fn render_input_modal(app: &App, frame: &mut Frame) {
 }
 
 pub fn render_help_modal(app: &App, frame: &mut Frame) {
-    let area = centered_rect(60, 70, frame.size());
+    let area = centered_rect(64, 90, frame.size());
     frame.render_widget(Clear, area);
     
     let block = Block::default()
@@ -135,36 +135,54 @@ pub fn render_help_modal(app: &App, frame: &mut Frame) {
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(Palette::mauve(app)));
     
-    let keys = vec![
-        ("SPACE", app.translate("start_pause")),
-        ("m", app.translate("switch_mode")),
-        ("ENTER", app.translate("complete_task_hotkey")),
-        ("j/k", app.translate("j_k_navigate_timer")),
-        ("h/l", app.translate("h_l_change_list")),
-        ("Tab", app.translate("change_list")),
-        ("[ / ]", app.translate("calendar_nav")),
-        ("N", app.translate("new_task")),
-        ("A", app.translate("new_subtask")),
-        ("E", app.translate("edit_task")),
-        ("y", app.translate("copy_task_label")),
-        ("M", app.translate("move_task_label")),
-        ("C", app.translate("toggle_completed")),
-        ("S", app.translate("sync_manual")),
-        ("/", app.translate("search_label")),
-        ("T", app.translate("stats_title")),
-        (",", app.translate("settings_title")),
-        ("Q", app.translate("quit")),
-        ("?", app.translate("help_label")),
+    // Atajos agrupados por categoría (encabezado, [(tecla, descripción)]).
+    let groups: [(String, Vec<(&str, String)>); 5] = [
+        (app.translate("help_group_timer"), vec![
+            ("SPACE", app.translate("start_pause")),
+            ("m", app.translate("switch_mode")),
+            ("ENTER", app.translate("complete_task_hotkey")),
+        ]),
+        (app.translate("help_group_tasks"), vec![
+            ("N", app.translate("new_task")),
+            ("A", app.translate("new_subtask")),
+            ("E", app.translate("edit_task")),
+            ("y", app.translate("copy_task_label")),
+            ("M", app.translate("move_task_label")),
+            ("C", app.translate("toggle_completed")),
+        ]),
+        (app.translate("help_group_nav"), vec![
+            ("j/k", app.translate("j_k_navigate_timer")),
+            ("h/l", app.translate("h_l_change_list")),
+            ("Tab", app.translate("change_list")),
+            ("[ / ]", app.translate("calendar_nav")),
+        ]),
+        (app.translate("help_group_views"), vec![
+            ("/", app.translate("search_label")),
+            ("T", app.translate("stats_title")),
+            ("S", app.translate("sync_manual")),
+            (",", app.translate("settings_title")),
+        ]),
+        (app.translate("help_group_general"), vec![
+            ("?", app.translate("help_label")),
+            ("Q", app.translate("quit")),
+        ]),
     ];
 
-    let rows: Vec<Row> = keys.iter().map(|(k, v)| {
-        Row::new(vec![
-            Cell::from(*k).style(Style::default().fg(Palette::yellow(app)).add_modifier(Modifier::BOLD)),
-            Cell::from(v.clone()).style(Style::default().fg(Palette::text(app))),
-        ])
-    }).collect();
+    let mut rows: Vec<Row> = Vec::new();
+    for (gname, keys) in groups.iter() {
+        rows.push(Row::new(vec![
+            Cell::from(""),
+            Cell::from(format!("─ {} ─", gname)).style(Style::default().fg(Palette::overlay0(app)).add_modifier(Modifier::BOLD)),
+        ]));
+        for (k, v) in keys {
+            rows.push(Row::new(vec![
+                Cell::from(*k).style(Style::default().fg(Palette::yellow(app)).add_modifier(Modifier::BOLD)),
+                Cell::from(v.clone()).style(Style::default().fg(Palette::text(app))),
+            ]));
+        }
+    }
 
-    let table = Table::new(rows, [Constraint::Percentage(30), Constraint::Percentage(70)]).block(block);
+    let table = Table::new(rows, [Constraint::Percentage(20), Constraint::Percentage(80)]).block(block);
     frame.render_widget(table, area);
 }
 

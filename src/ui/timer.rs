@@ -74,6 +74,21 @@ pub fn render_timer_mode(app: &App, frame: &mut Frame) {
             ])
         ];
 
+        // Puntos del ciclo Pomodoro: progreso hacia el descanso largo (cada 4).
+        if is_focus {
+            let done = if app.session_pomodoros > 0 && app.session_pomodoros.is_multiple_of(4) { 4 } else { (app.session_pomodoros % 4) as usize };
+            let mut dot_spans = vec![];
+            for i in 0..4 {
+                if i < done {
+                    dot_spans.push(Span::styled("● ", Style::default().fg(Palette::red(app))));
+                } else {
+                    dot_spans.push(Span::styled("○ ", Style::default().fg(Palette::overlay0(app))));
+                }
+            }
+            focus_text.push(Line::from(""));
+            focus_text.push(Line::from(dot_spans));
+        }
+
         // En la vista "Todas" mostramos la lista de origen de la tarea enfocada.
         if app.is_all_view() {
             let list_name = app.list_title_for(&task.list_id);
