@@ -37,6 +37,7 @@ Este método se fundamenta en la idea de que las pausas frecuentes pueden mejora
     - **Animación de Victoria**: Efecto de partículas y tachado visual tras confirmación de la API.
 - **🌐 Multilingüe**: Soporte completo para Español e Inglés con mensajes motivacionales dinámicos en listas vacías.
 - **🍅 Modo Concentración Inmersivo**: Pantalla completa con reloj digital gigante y gestión de subtareas.
+- **⏳ Ciclo Pomodoro Completo**: Descanso corto tras cada enfoque y **descanso largo automático cada 4 pomodoros** (o cambio manual de modo con `m`).
 - **🔔 Notificaciones**: Avisos nativos del sistema al finalizar sesiones.
 
 ## 🛠️ Stack Tecnológico y Arquitectura
@@ -86,6 +87,7 @@ El script compilará el proyecto en modo `release` e instalará el binario en `~
 | Tecla | Acción |
 | :--- | :--- |
 | `Espacio` | Iniciar / Pausar Temporizador |
+| `m` | Cambiar modo del temporizador (Enfoque → Descanso corto → Descanso largo) |
 | `Enter` | Completar Tarea / Guardar |
 | `j` / `k` | Navegar tareas (el calendario sigue tu selección) |
 | `h` / `l` | Cambiar entre listas de tareas (← / →) |

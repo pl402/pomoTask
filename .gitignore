@@ -1,6 +1,6 @@
 # --- Rust ---
 /target
-Cargo.lock
+# Cargo.lock SÍ se versiona: es un binario/aplicación y queremos builds reproducibles.
 
 # --- Google API Credentials ---
 # Este archivo contiene tu Client ID y Client Secret

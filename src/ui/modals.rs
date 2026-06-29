@@ -86,7 +86,7 @@ pub fn render_input_modal(app: &App, frame: &mut Frame) {
     }
 
     let due_style = if app.focused_input == InputField::Due { Style::default().fg(Palette::yellow(app)) } else { Style::default().fg(Palette::subtext0(app)) };
-    let date_input_text = if app.selected_date_preset == DatePreset::Custom { app.input_due.as_str() } else { app.input_due.as_str() }; 
+    let date_input_text = app.input_due.as_str();
     let due_width = chunks[next_idx].width.max(3) - 2;
     let due_scroll = (date_input_text.chars().count() as u16).saturating_sub(due_width);
     
@@ -150,8 +150,7 @@ pub fn render_settings_modal(app: &App, frame: &mut Frame) {
 
     let chunks = Layout::default().direction(Direction::Vertical).constraints([Constraint::Min(0), Constraint::Length(1)]).margin(2).split(area);
 
-    let settings = vec![
-        (app.translate("settings_focus"), format!("{} min", app.config.focus_duration / 60)),
+    let settings = [(app.translate("settings_focus"), format!("{} min", app.config.focus_duration / 60)),
         (app.translate("settings_short"), format!("{} min", app.config.short_break_duration / 60)),
         (app.translate("settings_long"), format!("{} min", app.config.long_break_duration / 60)),
         (app.translate("settings_lang"), match app.config.language { crate::app::Language::Spanish => "Español".to_string(), crate::app::Language::English => "English".to_string() }),
@@ -166,8 +165,7 @@ pub fn render_settings_modal(app: &App, frame: &mut Frame) {
             crate::app::CalendarRange::Week => app.translate("calendar_range_week"),
             crate::app::CalendarRange::Day => app.translate("calendar_range_day"),
         }),
-        (app.translate("settings_logout"), "".to_string()),
-    ];
+        (app.translate("settings_logout"), "".to_string())];
 
     let rows: Vec<Row> = settings.iter().enumerate().map(|(i, (k, v))| {
         let style = if i == app.selected_settings_idx { Style::default().fg(Palette::base(app)).bg(Palette::yellow(app)) } else { Style::default().fg(Palette::text(app)) };

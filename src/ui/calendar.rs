@@ -114,7 +114,7 @@ pub fn render_calendar(app: &App, frame: &mut Frame, area: Rect) {
                 let mut cells = vec![Cell::from(format!("{:02}:00", h)).style(Style::default().fg(Palette::overlay0(app)))];
                 for i in 0..7 {
                     let date = start_of_week + chrono::Duration::days(i as i64);
-                    let count = hourly_done.get(&(date, h as u32)).unwrap_or(&0);
+                    let count = hourly_done.get(&(date, h)).unwrap_or(&0);
                     let symbol = if *count > 0 { "█" } else { "·" };
                     let style = if *count > 0 { Style::default().fg(Palette::green(app)) } else { Style::default().fg(Palette::surface0(app)) };
                     cells.push(Cell::from(Line::from(symbol).alignment(Alignment::Center)).style(style));
@@ -132,7 +132,7 @@ pub fn render_calendar(app: &App, frame: &mut Frame, area: Rect) {
             let start_h = current_hour.saturating_sub(5).min(14);
             
             for h in start_h..start_h+10 {
-                let count = hourly_done.get(&(date, h as u32)).unwrap_or(&0);
+                let count = hourly_done.get(&(date, h)).unwrap_or(&0);
                 let mut spans = vec![
                     Span::styled(format!("{:02}:00  ", h), Style::default().fg(Palette::subtext0(app))),
                 ];

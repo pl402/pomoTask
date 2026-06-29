@@ -21,7 +21,15 @@ pub fn render_left_panel(app: &App, frame: &mut Frame, area: Rect) {
     let label = format!("{} - {:02}:{:02}", match app.timer_mode { TimerMode::Focus => app.translate("focus"), _ => app.translate("break") }, app.timer_seconds / 60, app.timer_seconds % 60);
     frame.render_widget(Gauge::default().block(Block::default().title(format!(" {} ", app.translate("timer"))).borders(Borders::ALL).border_type(BorderType::Rounded)).gauge_style(Style::default().fg(if app.timer_mode == TimerMode::Focus { Palette::red(app) } else { Palette::green(app) }).bg(Palette::surface0(app))).ratio(progress).label(label), chunks[0]);
 
-    let header_cells = [" Tarea ", " 🕒 Creada ", " 📅 Venc. ", " 🍅 "].into_iter().map(|h| Cell::from(h).style(Style::default().fg(Palette::mauve(app)).add_modifier(Modifier::BOLD)));
+    // En la vista "Todas" (@all) añadimos una columna que indica la lista de origen de cada tarea.
+    let is_all_view = app.is_all_view();
+
+    let header_titles: Vec<&str> = if is_all_view {
+        vec![" Tarea ", " 📋 Lista ", " 🕒 Creada ", " 📅 Venc. ", " 🍅 "]
+    } else {
+        vec![" Tarea ", " 🕒 Creada ", " 📅 Venc. ", " 🍅 "]
+    };
+    let header_cells = header_titles.into_iter().map(|h| Cell::from(h).style(Style::default().fg(Palette::mauve(app)).add_modifier(Modifier::BOLD)));
     let header = Row::new(header_cells).height(1).bottom_margin(0);
 
     let rows: Vec<Row> = app.tasks.iter().enumerate().map(|(i, task)| {
@@ -57,12 +65,15 @@ pub fn render_left_panel(app: &App, frame: &mut Frame, area: Rect) {
         let due_str = task.due.map(|d| app.format_due_date(d)).unwrap_or_else(|| "---".to_string());
         let pomodoros_str = if task.pomodoros > 0 { format!("{}", task.pomodoros) } else { "".to_string() };
 
-        Row::new(vec![
-            Cell::from(title_content),
-            Cell::from(created_str),
-            Cell::from(due_str),
-            Cell::from(pomodoros_str),
-        ]).style(style)
+        let mut cells = vec![Cell::from(title_content)];
+        if is_all_view {
+            cells.push(Cell::from(app.list_title_for(&task.list_id)));
+        }
+        cells.push(Cell::from(created_str));
+        cells.push(Cell::from(due_str));
+        cells.push(Cell::from(pomodoros_str));
+
+        Row::new(cells).style(style)
     }).collect();
 
     let list_title = if let Some(l) = app.task_lists.get(app.selected_list_idx) { 
@@ -81,7 +92,7 @@ pub fn render_left_panel(app: &App, frame: &mut Frame, area: Rect) {
     }
 
     if app.tasks.is_empty() {
-        let msg_idx = (app.spinner_frame / 100) as usize % 5;
+        let msg_idx = (app.spinner_frame / 100) % 5;
         let empty_msg = app.translate(&format!("empty_list_{}", msg_idx));
         let empty_widget = Paragraph::new(format!("\n\n\n{}", empty_msg))
             .alignment(ratatui::layout::Alignment::Center)
@@ -94,15 +105,24 @@ pub fn render_left_panel(app: &App, frame: &mut Frame, area: Rect) {
     let mut state = TableState::default();
     state.select(Some(app.selected_task));
 
-    let table = Table::new(
-        rows,
-        [
+    let widths: Vec<Constraint> = if is_all_view {
+        vec![
+            Constraint::Percentage(40),
+            Constraint::Percentage(20),
+            Constraint::Percentage(15),
+            Constraint::Percentage(15),
+            Constraint::Percentage(10),
+        ]
+    } else {
+        vec![
             Constraint::Percentage(55),
             Constraint::Percentage(15),
             Constraint::Percentage(15),
             Constraint::Percentage(15),
         ]
-    )
+    };
+
+    let table = Table::new(rows, widths)
     .header(header)
     .block(Block::default().title(list_title).borders(Borders::ALL).border_type(BorderType::Rounded))
     .highlight_symbol(">> ");

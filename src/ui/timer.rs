@@ -61,7 +61,7 @@ pub fn render_timer_mode(app: &App, frame: &mut Frame) {
             main_style = main_style.bg(Palette::surface0(app));
         }
 
-        let focus_text = vec![
+        let mut focus_text = vec![
             Line::from(vec![
                 Span::styled(format!("{}: ", msg), Style::default().fg(Palette::text(app))),
                 Span::styled(task.title.clone(), Style::default().fg(Palette::mauve(app)).add_modifier(Modifier::BOLD))
@@ -70,6 +70,14 @@ pub fn render_timer_mode(app: &App, frame: &mut Frame) {
                 Span::styled(format!("🍅 {} {}", task.pomodoros, app.translate("focus_completed_today")), Style::default().fg(Palette::peach(app)))
             ])
         ];
+
+        // En la vista "Todas" mostramos la lista de origen de la tarea enfocada.
+        if app.is_all_view() {
+            let list_name = app.list_title_for(&task.list_id);
+            focus_text.push(Line::from(vec![
+                Span::styled(format!("📋 {}", list_name), Style::default().fg(Palette::subtext0(app)).add_modifier(Modifier::ITALIC))
+            ]));
+        }
         frame.render_widget(Paragraph::new(focus_text).alignment(Alignment::Center).wrap(ratatui::widgets::Wrap { trim: true }).style(main_style), chunks[2]);
 
         let subtasks: Vec<_> = app.tasks.iter().filter(|t| t.parent_id.as_ref() == Some(&task.id)).collect();

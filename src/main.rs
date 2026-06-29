@@ -7,7 +7,6 @@ mod handler;
 use std::{io, time::Duration};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use crossterm::{
-    event::{DisableMouseCapture, EnableMouseCapture},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -29,7 +28,8 @@ async fn main() -> Result<()> {
     color_eyre::install()?;
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    // No capturamos el mouse: así el usuario conserva la selección/copiado nativo de su terminal.
+    execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -83,7 +83,7 @@ async fn main() -> Result<()> {
                         tasks_with_stats.into_iter().filter(|t| !t.completed).collect()
                     };
                     
-                    app.tasks = app.organize_tasks_hierarchical(filtered_tasks);
+                    app.tasks = App::organize_tasks_hierarchical(filtered_tasks);
                     if let Some(last_id) = &app.config.last_task_id { 
                         if let Some(idx) = app.tasks.iter().position(|t| &t.id == last_id) { 
                             app.selected_task = idx; 
@@ -118,5 +118,5 @@ async fn main() -> Result<()> {
             }
         }
     }
-    disable_raw_mode()?; execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?; terminal.show_cursor()?; std::process::exit(0);
+    disable_raw_mode()?; execute!(terminal.backend_mut(), LeaveAlternateScreen)?; terminal.show_cursor()?; std::process::exit(0);
 }

@@ -34,8 +34,8 @@ impl ApiClient {
             if local_path.exists() {
                 yup_oauth2::read_application_secret(&local_path).await.ok()
             } else {
-                // Fallback: Credenciales incrustadas en el binario
-                let embedded_json = include_str!("../client_secret.json");
+                // Fallback: Credenciales incrustadas en el binario en tiempo de compilación (ver build.rs).
+                let embedded_json = include_str!(concat!(env!("OUT_DIR"), "/embedded_secret.json"));
                 parse_application_secret(embedded_json).ok()
             }
         };
@@ -117,8 +117,10 @@ impl ApiClient {
     pub async fn toggle_task_completion(&self, list_id: &str, task_id: &str, completed: bool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.ensure_full_permissions().await?;
         let hub = match &self.hub { Some(h) => h, None => return Ok(()) };
-        let mut task = api::Task::default();
-        task.status = Some(if completed { "completed".to_string() } else { "needsAction".to_string() });
+        let task = api::Task {
+            status: Some(if completed { "completed".to_string() } else { "needsAction".to_string() }),
+            ..Default::default()
+        };
         hub.tasks().patch(task, list_id, task_id).doit().await?;
         Ok(())
     }
@@ -126,35 +128,33 @@ impl ApiClient {
     pub async fn create_task(&self, list_id: &str, title: &str, notes: Option<String>, due: Option<DateTime<Utc>>, parent_id: Option<String>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.ensure_full_permissions().await?;
         let hub = match &self.hub { Some(h) => h, None => return Ok(()) };
-        let mut task = api::Task::default();
-        task.title = Some(title.to_string()); 
-        task.notes = notes; 
-        task.due = due.map(|d| d.to_rfc3339());
-        
-        if let Some(ref pid) = parent_id {
-            task.parent = Some(pid.clone());
-        }
+        let task = api::Task {
+            title: Some(title.to_string()),
+            notes,
+            due: due.map(|d| d.to_rfc3339()),
+            parent: parent_id.clone(),
+            ..Default::default()
+        };
 
         let mut call = hub.tasks().insert(task, list_id);
         if let Some(ref pid) = parent_id {
             call = call.parent(pid);
         }
 
-        let res = call.doit().await;
-        match res {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                eprintln!("Error creating task: {:?}", e);
-                Err(Box::new(e))
-            }
-        }
+        // No usamos eprintln! aquí: corrompería la pantalla en modo raw de la TUI.
+        // El error se propaga y la UI revierte la tarea optimista (Event::ApiTaskFailed).
+        call.doit().await.map(|_| ()).map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
     }
 
     pub async fn update_task(&self, list_id: &str, task_id: &str, title: &str, notes: Option<String>, due: Option<DateTime<Utc>>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.ensure_full_permissions().await?;
         let hub = match &self.hub { Some(h) => h, None => return Ok(()) };
-        let mut task = api::Task::default();
-        task.title = Some(title.to_string()); task.notes = notes; task.due = due.map(|d| d.to_rfc3339());
+        let task = api::Task {
+            title: Some(title.to_string()),
+            notes,
+            due: due.map(|d| d.to_rfc3339()),
+            ..Default::default()
+        };
         hub.tasks().patch(task, list_id, task_id).doit().await?;
         Ok(())
     }

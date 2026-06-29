@@ -46,7 +46,7 @@ pub async fn handle_key_events(
                         let task_id = task.id.clone();
                         let is_completed = task.completed;
                         let task_list_id = task.list_id.clone();
-                        let selected_list_id = app.task_lists[app.selected_list_idx].id.clone();
+                        let selected_list_id = app.task_lists.get(app.selected_list_idx).map(|l| l.id.clone()).unwrap_or_default();
                         let api = api_client.clone();
                         let sender_clone = sender.clone();
                         let show_comp = app.config.show_completed;
@@ -57,11 +57,11 @@ pub async fn handle_key_events(
                             app.reset_timer();
                         }
 
-                        if !is_completed && !app.timer_active {
-                            task.completed = true;
-                            if !is_completed {
-                                app.record_task_done();
-                            }
+                        if !is_completed {
+                            // La estadística se registra al completar, con o sin temporizador activo.
+                            app.record_task_done();
+                            // Solo marcamos visualmente de inmediato si no hay un pomodoro en curso.
+                            if !app.timer_active { task.completed = true; }
                         }
 
                         let x = 3; 
@@ -124,9 +124,9 @@ pub async fn handle_key_events(
                 }
                 KeyCode::Left | KeyCode::Char('h') => {
                     match app.selected_settings_idx {
-                        0 => { if app.config.focus_duration > 60 { app.config.focus_duration -= 60; } }
-                        1 => { if app.config.short_break_duration > 60 { app.config.short_break_duration -= 60; } }
-                        2 => { if app.config.long_break_duration > 60 { app.config.long_break_duration -= 60; } }
+                        0 if app.config.focus_duration > 60 => { app.config.focus_duration -= 60; }
+                        1 if app.config.short_break_duration > 60 => { app.config.short_break_duration -= 60; }
+                        2 if app.config.long_break_duration > 60 => { app.config.long_break_duration -= 60; }
                         3 => { app.toggle_language(); }
                         4 => {
                             app.config.theme = match app.config.theme {
@@ -191,21 +191,19 @@ pub async fn handle_key_events(
                                 crate::app::CalendarRange::Day => crate::app::CalendarRange::Month,
                             };
                         }
-                        7 => {
-                            if key.code == KeyCode::Enter || key.code == KeyCode::Right || key.code == KeyCode::Char('l') {
+                        7
+                            if (key.code == KeyCode::Enter || key.code == KeyCode::Right || key.code == KeyCode::Char('l')) => {
                                 app.mode = AppMode::ConfirmLogout;
                             }
-                        }
                         _ => {}
                     }
                     app.save_config();
                     app.timer_seconds = app.timer_mode.duration(&app.config);
                 }
-                KeyCode::Enter => {
-                    if app.selected_settings_idx == 7 {
+                KeyCode::Enter
+                    if app.selected_settings_idx == 7 => {
                         app.mode = AppMode::ConfirmLogout;
                     }
-                }
                 _ => {}
             }
         },
@@ -219,17 +217,15 @@ pub async fn handle_key_events(
                     app.save_selection();
                     sync_tasks(api_client, sender.clone(), app).await;
                 }
-                KeyCode::Down | KeyCode::Char('j') => {
-                    if !app.task_lists.is_empty() {
+                KeyCode::Down | KeyCode::Char('j')
+                    if !app.task_lists.is_empty() => {
                         app.selected_list_idx = (app.selected_list_idx + 1) % app.task_lists.len();
                     }
-                }
-                KeyCode::Up | KeyCode::Char('k') => {
-                    if !app.task_lists.is_empty() {
+                KeyCode::Up | KeyCode::Char('k')
+                    if !app.task_lists.is_empty() => {
                         if app.selected_list_idx == 0 { app.selected_list_idx = app.task_lists.len() - 1; }
                         else { app.selected_list_idx -= 1; }
                     }
-                }
                 _ => {}
             }
         },
@@ -248,11 +244,11 @@ pub async fn handle_key_events(
                     };
                 }
                 KeyCode::Esc => { app.mode = AppMode::Timer; app.clear_inputs(); }
-                KeyCode::Enter => {
-                    if !app.input_title.is_empty() && !app.task_lists.is_empty() {
+                KeyCode::Enter
+                    if !app.input_title.is_empty() && !app.task_lists.is_empty() => {
                         let title = app.input_title.clone();
                         let notes = if app.input_notes.is_empty() { None } else { Some(app.input_notes.clone()) };
-                        let due = app.parse_due_date(&app.input_due);
+                        let due = App::parse_due_date(&app.input_due);
                         let target_list_id = if app.mode == AppMode::Input {
                             app.task_lists[app.input_list_idx].id.clone()
                         } else if app.mode == AppMode::Edit {
@@ -312,7 +308,6 @@ pub async fn handle_key_events(
                             }
                         });
                     }
-                }
                 KeyCode::Left | KeyCode::Char('h') if app.focused_input == InputField::Due => {
                     app.selected_date_preset = match app.selected_date_preset {
                         DatePreset::Today => DatePreset::None,
@@ -375,8 +370,10 @@ pub async fn handle_key_events(
                 KeyCode::Char('q') => app.running = false,
                 KeyCode::Char(' ') => app.toggle_timer(),
                 KeyCode::Char('r') => app.reset_timer(),
-                KeyCode::Char('n') => { 
-                    app.mode = AppMode::Input; 
+                KeyCode::Char('m') if !app.timer_active => app.cycle_timer_mode(),
+                KeyCode::Char('n') => {
+                    if app.task_lists.is_empty() { return; }
+                    app.mode = AppMode::Input;
                     app.focused_input = InputField::Title;
                     app.set_date_preset(DatePreset::Today);
                     if app.task_lists[app.selected_list_idx].id == "@all" {
@@ -385,13 +382,12 @@ pub async fn handle_key_events(
                         app.input_list_idx = app.selected_list_idx;
                     }
                 }
-                KeyCode::Char('a') => { 
-                    if !app.tasks.is_empty() && app.task_lists[app.selected_list_idx].id != "@all" { 
+                KeyCode::Char('a') 
+                    if !app.tasks.is_empty() && app.task_lists[app.selected_list_idx].id != "@all" => { 
                         app.mode = AppMode::SubtaskInput; 
                         app.focused_input = InputField::Title;
                         app.set_date_preset(DatePreset::Today);
-                    } 
-                }
+                    }
                 KeyCode::Char('e') if !app.timer_active => {
                     if let Some(task) = app.tasks.get(app.selected_task) {
                         app.mode = AppMode::Edit; 
@@ -425,6 +421,7 @@ pub async fn handle_key_events(
                 KeyCode::Char(']') => app.calendar_next_month(),
                 KeyCode::Tab if !app.timer_active => { app.mode = AppMode::ListSelector; }
                 KeyCode::Left | KeyCode::Char('h') if !app.timer_active => {
+                    if app.task_lists.is_empty() { return; }
                     if app.selected_list_idx == 0 { app.selected_list_idx = app.task_lists.len() - 1; }
                     else { app.selected_list_idx -= 1; }
                     app.tasks.clear();
@@ -432,6 +429,7 @@ pub async fn handle_key_events(
                     sync_tasks(api_client, sender.clone(), app).await;
                 }
                 KeyCode::Right | KeyCode::Char('l') if !app.timer_active => {
+                    if app.task_lists.is_empty() { return; }
                     app.selected_list_idx = (app.selected_list_idx + 1) % app.task_lists.len();
                     app.tasks.clear();
                     app.save_selection();

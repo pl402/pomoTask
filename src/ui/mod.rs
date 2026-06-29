@@ -92,6 +92,12 @@ pub fn render_right_panel(app: &App, frame: &mut Frame, area: Rect) {
         let created_str = task.updated.with_timezone(&Local).format("%Y-%m-%d %H:%M").to_string();
         info_lines.push(Line::from(vec![Span::styled(format!("{}: ", app.translate("created_date")), Style::default().fg(Palette::subtext0(app))), Span::raw(created_str)]));
 
+        // En la vista "Todas" mostramos la lista de origen de la tarea.
+        if app.is_all_view() {
+            let list_name = app.list_title_for(&task.list_id);
+            info_lines.push(Line::from(vec![Span::styled(format!("{}: ", app.translate("list_origin")), Style::default().fg(Palette::subtext0(app))), Span::raw(format!("📋 {}", list_name))]));
+        }
+
         info_lines.push(Line::from(""));
         info_lines.push(Line::from(vec![Span::styled(format!("{}:", app.translate("notes")), Style::default().fg(Palette::subtext0(app)))]));
         let no_notes = app.translate("no_notes");
@@ -173,7 +179,7 @@ fn render_animation_layer(app: &mut App, frame: &mut Frame) {
                 let (px, py) = (p.x as u16, p.y as u16);
                 let style = Style::default().fg(Palette::mauve(app)).add_modifier(Modifier::BOLD);
                 if px < frame.size().width && py < frame.size().height {
-                    frame.render_widget(Paragraph::new(p.char.to_string()).style(style), Rect { x: px as u16, y: py as u16, width: 1, height: 1 });
+                    frame.render_widget(Paragraph::new(p.char.to_string()).style(style), Rect { x: px, y: py, width: 1, height: 1 });
                 }
             }
         }

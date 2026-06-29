@@ -39,11 +39,10 @@ impl EventHandler {
 
                 if event::poll(timeout).expect("failed to poll events") {
                     match event::read().expect("failed to read event") {
-                        CrosstermEvent::Key(key) => {
-                            if key.kind == event::KeyEventKind::Press {
+                        CrosstermEvent::Key(key)
+                            if key.kind == event::KeyEventKind::Press => {
                                 let _ = _sender.send(Event::Key(key));
                             }
-                        }
                         CrosstermEvent::Mouse(mouse) => {
                             let _ = _sender.send(Event::Mouse(mouse));
                         }

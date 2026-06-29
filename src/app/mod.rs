@@ -200,6 +200,19 @@ impl App {
         self.calendar_date = chrono::NaiveDate::from_ymd_opt(year, month, 1).unwrap();
     }
 
+    /// `true` cuando la lista seleccionada es la vista virtual "Todas" (@all).
+    pub fn is_all_view(&self) -> bool {
+        self.task_lists.get(self.selected_list_idx).is_some_and(|l| l.id == "@all")
+    }
+
+    /// Título de la lista real a la que pertenece una tarea (para mostrar su origen en la vista @all).
+    pub fn list_title_for(&self, list_id: &str) -> String {
+        self.task_lists.iter()
+            .find(|l| l.id == list_id && l.id != "@all")
+            .map(|l| l.title.clone())
+            .unwrap_or_else(|| "---".to_string())
+    }
+
     pub fn get_config_dir() -> PathBuf {
         let mut path = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
         path.push("pomotask");
@@ -354,7 +367,7 @@ impl App {
                     *entry += 1;
                 }
 
-                if self.timer_seconds % 5 == 0 {
+                if self.timer_seconds.is_multiple_of(5) {
                     if let Some(task) = self.tasks.get(self.selected_task) {
                         self.stats.task_timers.insert(task.id.clone(), TaskTimerState { remaining: self.timer_seconds, mode: self.timer_mode });
                         self.save_stats();
@@ -378,7 +391,8 @@ impl App {
                 *t_entry += 1;
             }
             self.save_stats();
-            self.timer_mode = TimerMode::ShortBreak;
+            // Técnica Pomodoro: descanso largo cada 4 pomodoros, corto el resto.
+            self.timer_mode = if self.session_pomodoros.is_multiple_of(4) { TimerMode::LongBreak } else { TimerMode::ShortBreak };
             ("PomoTask", self.translate("notify_focus_end"))
         } else {
             self.timer_mode = TimerMode::Focus;
@@ -420,6 +434,17 @@ impl App {
     }
 
     pub fn toggle_timer(&mut self) { self.timer_active = !self.timer_active; }
+
+    /// Cambia manualmente entre Enfoque → Descanso corto → Descanso largo (solo con el timer detenido).
+    pub fn cycle_timer_mode(&mut self) {
+        if self.timer_active { return; }
+        self.timer_mode = match self.timer_mode {
+            TimerMode::Focus => TimerMode::ShortBreak,
+            TimerMode::ShortBreak => TimerMode::LongBreak,
+            TimerMode::LongBreak => TimerMode::Focus,
+        };
+        self.timer_seconds = self.timer_mode.duration(&self.config);
+    }
     pub fn reset_timer(&mut self) { 
         self.timer_active = false; 
         if let Some(task) = self.tasks.get(self.selected_task) { self.stats.task_timers.remove(&task.id); self.save_stats(); }
@@ -435,11 +460,11 @@ impl App {
         self.confirming_task_id = None; 
     }
 
-    pub fn parse_due_date(&self, input: &str) -> Option<DateTime<Utc>> {
+    pub fn parse_due_date(input: &str) -> Option<DateTime<Utc>> {
         let parts: Vec<&str> = input.split('-').collect();
         if parts.len() == 3 {
-            let y: i32 = parts[0].parse().ok()?; 
-            let m: u32 = parts[1].parse().ok()?; 
+            let y: i32 = parts[0].parse().ok()?;
+            let m: u32 = parts[1].parse().ok()?;
             let d: u32 = parts[2].parse().ok()?;
             // Google Tasks requiere que la hora sea exactamente 00:00:00Z.
             Utc.with_ymd_and_hms(y, m, d, 0, 0, 0).single()
@@ -469,7 +494,7 @@ impl App {
         }
     }
 
-    pub fn organize_tasks_hierarchical(&self, tasks: Vec<Task>) -> Vec<Task> {
+    pub fn organize_tasks_hierarchical(tasks: Vec<Task>) -> Vec<Task> {
         let mut organized = Vec::new();
         let sort_criteria = |a: &Task, b: &Task| {
             if a.completed != b.completed { return a.completed.cmp(&b.completed); }
@@ -497,6 +522,78 @@ impl App {
             children.sort_by(sort_criteria); organized.extend(children);
         }
         organized
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn task(id: &str, parent: Option<&str>, completed: bool, due_day: Option<u32>) -> Task {
+        Task {
+            id: id.to_string(),
+            list_id: "L1".to_string(),
+            title: id.to_string(),
+            completed,
+            due: due_day.and_then(|d| Utc.with_ymd_and_hms(2026, 6, d, 0, 0, 0).single()),
+            updated: Utc.with_ymd_and_hms(2026, 6, 1, 0, 0, 0).single().unwrap(),
+            completed_at: None,
+            notes: None,
+            parent_id: parent.map(|p| p.to_string()),
+            pomodoros: 0,
+        }
+    }
+
+    #[test]
+    fn parse_due_date_valida_fecha_correcta() {
+        let dt = App::parse_due_date("2026-06-29").expect("debe parsear");
+        assert_eq!(dt.format("%Y-%m-%d %H:%M:%S").to_string(), "2026-06-29 00:00:00");
+    }
+
+    #[test]
+    fn parse_due_date_rechaza_entradas_invalidas() {
+        assert!(App::parse_due_date("").is_none());
+        assert!(App::parse_due_date("2026-13-40").is_none()); // mes/día fuera de rango
+        assert!(App::parse_due_date("hoy").is_none());
+        assert!(App::parse_due_date("2026/06/29").is_none()); // separador incorrecto
+    }
+
+    #[test]
+    fn organize_coloca_subtareas_bajo_su_padre() {
+        let input = vec![
+            task("child", Some("parent"), false, None),
+            task("parent", None, false, None),
+            task("solo", None, false, None),
+        ];
+        let out = App::organize_tasks_hierarchical(input);
+        let ids: Vec<&str> = out.iter().map(|t| t.id.as_str()).collect();
+        // El hijo debe aparecer inmediatamente después de su padre.
+        let p = ids.iter().position(|&i| i == "parent").unwrap();
+        assert_eq!(ids[p + 1], "child");
+    }
+
+    #[test]
+    fn organize_ordena_completadas_al_final() {
+        let input = vec![
+            task("done", None, true, None),
+            task("pending", None, false, None),
+        ];
+        let out = App::organize_tasks_hierarchical(input);
+        assert_eq!(out.first().unwrap().id, "pending");
+        assert_eq!(out.last().unwrap().id, "done");
+    }
+
+    #[test]
+    fn organize_ordena_pendientes_por_fecha_de_vencimiento() {
+        let input = vec![
+            task("tarde", None, false, Some(20)),
+            task("pronto", None, false, Some(5)),
+            task("sin_fecha", None, false, None),
+        ];
+        let out = App::organize_tasks_hierarchical(input);
+        let ids: Vec<&str> = out.iter().map(|t| t.id.as_str()).collect();
+        // Con fecha antes que sin fecha; y la más próxima primero.
+        assert_eq!(ids, vec!["pronto", "tarde", "sin_fecha"]);
     }
 }
 
