@@ -29,6 +29,7 @@ Este método se fundamenta en la idea de que las pausas frecuentes pueden mejora
     - **Mapa de Calor**: Intensidad de color basada en tareas completadas por día (estilo GitHub).
     - **Progreso Diario**: Visualización de porcentaje de cumplimiento mediante iconos dinámicos.
 - **⏱️ Análisis Horario**: Vistas por **Mes**, **Semana** (cuadrícula horaria) y **Día** (detalle por hora) con soporte de zona horaria local.
+- **📊 Panel de Estadísticas** (`T`): Gráficas de barras de pomodoros y tareas completadas por día (últimos 7 días) más totales históricos.
 - **🎨 Personalización Estética Avanzada**:
     - **Temas Expandidos**: Soporte nativo para Catppuccin, Nord, Gruvbox, Dracula, Monokai, Solarized Dark y Ocean.
     - **Temas Custom**: Posibilidad de definir paletas RGB propias en `config.json`.
@@ -98,6 +99,7 @@ El script compilará el proyecto en modo `release` e instalará el binario en `~
 | `E` | Editar Tarea (disponible en todas las vistas) |
 | `C` | Mostrar/Ocultar completadas en la lista |
 | `S` | Sincronización manual |
+| `T` | Ver Estadísticas (gráficas de los últimos 7 días) |
 | `?` | Ver Ayuda |
 | `Q` / `Esc` | Salir |
 | `--version` / `-v` | Ver versión instalada (CLI) |

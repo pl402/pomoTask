@@ -100,6 +100,10 @@ pub async fn handle_key_events(
             app.mode = AppMode::Timer;
         },
 
+        AppMode::Stats => {
+            app.mode = AppMode::Timer;
+        },
+
         AppMode::ConfirmLogout => {
             match key.code {
                 KeyCode::Esc => { app.mode = AppMode::Settings; }
@@ -416,6 +420,7 @@ pub async fn handle_key_events(
                 }
                 KeyCode::Char('s') => sync_tasks(api_client, sender.clone(), app).await,
                 KeyCode::Char('?') => { app.mode = AppMode::Help; }
+                KeyCode::Char('t') => { app.mode = AppMode::Stats; }
                 KeyCode::Char(',') => { app.mode = AppMode::Settings; }
                 KeyCode::Char('[') => app.calendar_prev_month(),
                 KeyCode::Char(']') => app.calendar_next_month(),

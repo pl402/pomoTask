@@ -50,6 +50,7 @@ src/
     ├── list.rs      Lista jerárquica de tareas/subtareas.
     ├── timer.rs     Pantalla del temporizador y modo enfoque (reloj gigante).
     ├── modals.rs    Modales: input, edición, confirmación, ayuda, ajustes, selector de listas, logout.
+    ├── stats.rs     Pantalla de estadísticas (tecla `t`): BarChart de pomodoros/tareas por día + totales.
     └── palette.rs   Temas y colores (Catppuccin, Nord, Gruvbox, Dracula, Monokai, Solarized, Ocean, custom).
 ```
 
@@ -179,5 +180,5 @@ cargo test               # tests unitarios (lógica pura: parseo de fechas, jera
 
 Ver la tabla completa en `README.md`. Resumen: `Espacio` (timer), `m` (cambiar modo del timer),
 `Enter` (completar/guardar), `j/k` (navegar tareas), `h/l` (cambiar lista), `[`/`]` (navegar calendario),
-`N/A` (nueva tarea/subtarea), `E` (editar), `C` (toggle completadas), `S` (sync), `,` (ajustes),
-`?` (ayuda), `Q`/`Esc` (salir).
+`N/A` (nueva tarea/subtarea), `E` (editar), `C` (toggle completadas), `S` (sync), `T` (estadísticas),
+`,` (ajustes), `?` (ayuda), `Q`/`Esc` (salir).

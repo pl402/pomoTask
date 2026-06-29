@@ -115,6 +115,7 @@ pub fn render_help_modal(app: &App, frame: &mut Frame) {
     
     let keys = vec![
         ("SPACE", app.translate("start_pause")),
+        ("m", app.translate("switch_mode")),
         ("ENTER", app.translate("complete_task_hotkey")),
         ("j/k", app.translate("j_k_navigate_timer")),
         ("h/l", app.translate("h_l_change_list")),
@@ -125,6 +126,7 @@ pub fn render_help_modal(app: &App, frame: &mut Frame) {
         ("E", app.translate("edit_task")),
         ("C", app.translate("toggle_completed")),
         ("S", app.translate("sync_manual")),
+        ("T", app.translate("stats_title")),
         (",", app.translate("settings_title")),
         ("Q", app.translate("quit")),
         ("?", app.translate("help_label")),

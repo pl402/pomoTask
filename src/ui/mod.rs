@@ -3,6 +3,7 @@ pub mod list;
 pub mod timer;
 pub mod modals;
 pub mod palette;
+pub mod stats;
 
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect, Alignment},
@@ -64,6 +65,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             render_timer_screen(app, frame);
             render_logout_confirm_modal(app, frame);
         }
+        AppMode::Stats => self::stats::render_stats_screen(app, frame),
     }
     render_animation_layer(app, frame);
 }

@@ -75,7 +75,7 @@ pub struct TaskList { pub id: String, pub title: String }
 pub enum Language { English, Spanish }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum AppMode { Loading, Timer, Auth, AuthSuccess, ListSelector, Input, SubtaskInput, Edit, ConfirmComplete, Help, Settings, ConfirmLogout }
+pub enum AppMode { Loading, Timer, Auth, AuthSuccess, ListSelector, Input, SubtaskInput, Edit, ConfirmComplete, Help, Settings, ConfirmLogout, Stats }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum InputField { Title, Notes, Due, List }
@@ -91,6 +91,9 @@ pub struct Stats {
     pub task_pomodoros: BTreeMap<String, u64>,
     pub task_timers: BTreeMap<String, TaskTimerState>,
 }
+
+#[derive(Debug, Clone)]
+pub struct DayStats { pub label: String, pub pomodoros: u64, pub tasks_done: u64, pub focus_seconds: u64 }
 
 #[derive(Debug, Clone)]
 pub struct Particle { pub x: f64, pub y: f64, pub vx: f64, pub vy: f64, pub life: f32, pub char: char }
@@ -411,6 +414,33 @@ impl App {
         let entry = self.stats.hourly_tasks_done.entry(hour_key).or_insert(0);
         *entry += 1;
         self.save_stats();
+    }
+
+    /// Agrega estadísticas por día para los últimos `n` días (de más antiguo a más reciente).
+    /// Devuelve `(etiqueta "dd/mm", pomodoros, tareas_completadas, segundos_de_enfoque)`.
+    pub fn stats_last_n_days(&self, n: i64) -> Vec<DayStats> {
+        let today = Local::now().date_naive();
+        (0..n).rev().map(|i| {
+            let date = today - chrono::Duration::days(i);
+            let prefix = date.format("%Y-%m-%d").to_string();
+            let sum = |map: &BTreeMap<String, u64>| -> u64 {
+                map.iter().filter(|(k, _)| k.starts_with(&prefix)).map(|(_, v)| *v).sum()
+            };
+            DayStats {
+                label: date.format("%d/%m").to_string(),
+                pomodoros: sum(&self.stats.hourly_pomodoros),
+                tasks_done: sum(&self.stats.hourly_tasks_done),
+                focus_seconds: sum(&self.stats.hourly_seconds),
+            }
+        }).collect()
+    }
+
+    /// Totales históricos acumulados (todos los datos guardados).
+    pub fn stats_totals(&self) -> (u64, u64, u64) {
+        let total_pomodoros = self.stats.hourly_pomodoros.values().sum();
+        let total_tasks = self.stats.hourly_tasks_done.values().sum();
+        let total_focus = self.stats.hourly_seconds.values().sum();
+        (total_pomodoros, total_tasks, total_focus)
     }
 
     pub fn set_date_preset(&mut self, preset: DatePreset) {
