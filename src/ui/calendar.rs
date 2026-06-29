@@ -3,6 +3,7 @@ use ratatui::{
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{
+        block::{Position, Title},
         Block, BorderType, Borders, Table, Row, Cell,
     },
     Frame,
@@ -161,8 +162,32 @@ pub fn render_calendar(app: &App, frame: &mut Frame, area: Rect) {
         _ => vec![Constraint::Length(8); 7],
     };
 
+    // Leyenda en el borde inferior, adaptada a la vista del calendario.
+    let dim = Style::default().fg(Palette::subtext0(app));
+    let sq = |c| Span::styled("■", Style::default().fg(c));
+    let legend = match app.config.calendar_view {
+        crate::app::CalendarView::Standard => Line::from(vec![
+            sq(Palette::red(app)), Span::styled(" pend ", dim),
+            sq(Palette::green(app)), Span::styled(" ok ", dim),
+            sq(Palette::blue(app)), Span::styled(" act ", dim),
+        ]),
+        crate::app::CalendarView::Heatmap => Line::from(vec![
+            Span::styled("− ", dim),
+            sq(Palette::overlay0(app)), sq(Palette::blue(app)), sq(Palette::mauve(app)), sq(Palette::green(app)),
+            Span::styled(" + ", dim),
+        ]),
+        crate::app::CalendarView::Progress => Line::from(vec![
+            Span::styled("󰄲", Style::default().fg(Palette::green(app))), Span::styled(" ok ", dim),
+            Span::styled("󰄱", Style::default().fg(Palette::yellow(app))), Span::styled(" parc ", dim),
+        ]),
+    };
+
     let table = Table::new(rows, constraints)
-        .block(Block::default().title(title).title_alignment(Alignment::Center).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::mauve(app))))
+        .block(Block::default()
+            .title(title).title_alignment(Alignment::Center)
+            .title(Title::from(legend).position(Position::Bottom).alignment(Alignment::Center))
+            .borders(Borders::ALL).border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(Palette::overlay0(app))))
         .column_spacing(1);
 
     frame.render_widget(table, area);

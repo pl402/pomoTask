@@ -68,7 +68,11 @@ pub fn render_left_panel(app: &App, frame: &mut Frame, area: Rect) {
         // CONVERSIÓN A TIEMPO LOCAL
         let created_str = app.format_date(task.updated);
         let due_str = task.due.map(|d| app.format_due_date(d)).unwrap_or_else(|| "---".to_string());
-        let pomodoros_str = if task.pomodoros > 0 { format!("{}", task.pomodoros) } else { "".to_string() };
+        let pomodoros_str = match task.pomodoros {
+            0 => String::new(),
+            n if n <= 4 => "🍅".repeat(n as usize),
+            n => format!("🍅×{}", n),
+        };
 
         // Color semántico de la fecha de vencimiento (solo si la fila no está seleccionada ni completada).
         let due_cell = {
@@ -111,7 +115,7 @@ pub fn render_left_panel(app: &App, frame: &mut Frame, area: Rect) {
         let loading_widget = Paragraph::new(format!("\n\n\n{} {}", spinner, app.translate("loading_app")))
             .alignment(ratatui::layout::Alignment::Center)
             .style(Style::default().fg(Palette::mauve(app)))
-            .block(Block::default().title(list_title).borders(Borders::ALL).border_type(BorderType::Rounded));
+            .block(Block::default().title(list_title).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::mauve(app))));
         frame.render_widget(loading_widget, chunks[1]);
         return;
     }
@@ -122,7 +126,7 @@ pub fn render_left_panel(app: &App, frame: &mut Frame, area: Rect) {
         let empty_widget = Paragraph::new(format!("\n\n\n{}", empty_msg))
             .alignment(ratatui::layout::Alignment::Center)
             .style(Style::default().fg(Palette::overlay0(app)).add_modifier(Modifier::ITALIC))
-            .block(Block::default().title(list_title).borders(Borders::ALL).border_type(BorderType::Rounded));
+            .block(Block::default().title(list_title).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::mauve(app))));
         frame.render_widget(empty_widget, chunks[1]);
         return;
     }
@@ -149,7 +153,7 @@ pub fn render_left_panel(app: &App, frame: &mut Frame, area: Rect) {
 
     let table = Table::new(rows, widths)
     .header(header)
-    .block(Block::default().title(list_title).borders(Borders::ALL).border_type(BorderType::Rounded))
+    .block(Block::default().title(list_title).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::mauve(app))))
     .highlight_symbol(">> ");
 
     frame.render_stateful_widget(table, chunks[1], &mut state);

@@ -1,6 +1,7 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout, Alignment},
     style::{Modifier, Style},
+    text::{Line, Span},
     widgets::{
         Block, BorderType, Borders, Paragraph, Clear,
         Table, Row, Cell, List, ListItem,
@@ -41,25 +42,30 @@ pub fn render_input_modal(app: &App, frame: &mut Frame) {
 
     // Caret visible solo en el campo enfocado.
     let caret = |focused: bool, text: &str| if focused { format!("{}▏", text) } else { text.to_string() };
+    // Título del bloque con indicador ▸ cuando el campo está enfocado.
+    let ftitle = |focused: bool, key: &str| if focused { format!(" ▸ {} ", app.translate(key)) } else { format!(" {} ", app.translate(key)) };
 
-    let title_style = if app.focused_input == InputField::Title { Style::default().fg(Palette::yellow(app)) } else { Style::default().fg(Palette::subtext0(app)) };
-    let title_text = caret(app.focused_input == InputField::Title, &app.input_title);
+    let is_title = app.focused_input == InputField::Title;
+    let title_style = if is_title { Style::default().fg(Palette::yellow(app)) } else { Style::default().fg(Palette::subtext0(app)) };
+    let title_text = caret(is_title, &app.input_title);
     let title_width = chunks[0].width.max(3) - 2;
     let title_scroll = (title_text.chars().count() as u16).saturating_sub(title_width);
-    frame.render_widget(Paragraph::new(title_text).scroll((0, title_scroll)).block(Block::default().title(format!(" {} ", app.translate("field_title"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(title_style)), chunks[0]);
+    frame.render_widget(Paragraph::new(title_text).scroll((0, title_scroll)).block(Block::default().title(ftitle(is_title, "field_title")).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(title_style)), chunks[0]);
 
-    let notes_style = if app.focused_input == InputField::Notes { Style::default().fg(Palette::yellow(app)) } else { Style::default().fg(Palette::subtext0(app)) };
-    let notes_text = caret(app.focused_input == InputField::Notes, &app.input_notes);
+    let is_notes = app.focused_input == InputField::Notes;
+    let notes_style = if is_notes { Style::default().fg(Palette::yellow(app)) } else { Style::default().fg(Palette::subtext0(app)) };
+    let notes_text = caret(is_notes, &app.input_notes);
     let notes_width = chunks[1].width.max(3) - 2;
     let notes_scroll = (notes_text.chars().count() as u16).saturating_sub(notes_width);
-    frame.render_widget(Paragraph::new(notes_text).scroll((0, notes_scroll)).block(Block::default().title(format!(" {} ", app.translate("field_notes"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(notes_style)), chunks[1]);
+    frame.render_widget(Paragraph::new(notes_text).scroll((0, notes_scroll)).block(Block::default().title(ftitle(is_notes, "field_notes")).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(notes_style)), chunks[1]);
 
     let mut next_idx = 2;
     if app.mode == AppMode::Input {
-        let list_style = if app.focused_input == InputField::List { Style::default().fg(Palette::yellow(app)) } else { Style::default().fg(Palette::subtext0(app)) };
+        let is_list = app.focused_input == InputField::List;
+        let list_style = if is_list { Style::default().fg(Palette::yellow(app)) } else { Style::default().fg(Palette::subtext0(app)) };
         let list_name = app.task_lists.get(app.input_list_idx).map(|l| l.title.as_str()).unwrap_or("---");
         let list_text = format!(" ← {} → ", list_name);
-        frame.render_widget(Paragraph::new(list_text).alignment(Alignment::Center).block(Block::default().title(format!(" {} ", app.translate("list_selection"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(list_style)), chunks[next_idx]);
+        frame.render_widget(Paragraph::new(list_text).alignment(Alignment::Center).block(Block::default().title(ftitle(is_list, "list_selection")).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(list_style)), chunks[next_idx]);
         next_idx += 1;
     }
 
@@ -90,12 +96,23 @@ pub fn render_input_modal(app: &App, frame: &mut Frame) {
         frame.render_widget(Paragraph::new(label.as_str()).alignment(Alignment::Center).style(style).block(block), preset_chunks[idx]);
     }
 
-    let due_style = if app.focused_input == InputField::Due { Style::default().fg(Palette::yellow(app)) } else { Style::default().fg(Palette::subtext0(app)) };
-    let date_input_text = caret(app.focused_input == InputField::Due, &app.input_due);
+    let is_due = app.focused_input == InputField::Due;
+    let due_style = if is_due { Style::default().fg(Palette::yellow(app)) } else { Style::default().fg(Palette::subtext0(app)) };
+    let date_input_text = caret(is_due, &app.input_due);
     let due_width = chunks[next_idx].width.max(3) - 2;
     let due_scroll = (date_input_text.chars().count() as u16).saturating_sub(due_width);
 
-    frame.render_widget(Paragraph::new(date_input_text).scroll((0, due_scroll)).block(Block::default().title(format!(" {} {} ", app.translate("due_date"), app.translate("due_date_hint"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(due_style)), chunks[next_idx]);
+    // Título de fecha: ▸ cuando enfocado + resolución de la fecha escrita (✓ legible / ✗ inválida).
+    let prefix = if is_due { " ▸ " } else { " " };
+    let mut due_title = vec![Span::raw(format!("{}{} ", prefix, app.translate("due_date")))];
+    if app.input_due.trim().is_empty() {
+        due_title.push(Span::styled(format!("{} ", app.translate("due_date_hint")), Style::default().fg(Palette::overlay0(app))));
+    } else if let Some(dt) = App::parse_due_date(&app.input_due) {
+        due_title.push(Span::styled(format!("✓ {} ", app.format_due_date(dt)), Style::default().fg(Palette::green(app))));
+    } else {
+        due_title.push(Span::styled(format!("✗ {} ", app.translate("date_invalid")), Style::default().fg(Palette::red(app))));
+    }
+    frame.render_widget(Paragraph::new(date_input_text).scroll((0, due_scroll)).block(Block::default().title(Line::from(due_title)).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(due_style)), chunks[next_idx]);
     next_idx += 1;
     
     let input_hint = if app.focused_input == InputField::Due {

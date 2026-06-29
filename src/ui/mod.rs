@@ -115,7 +115,7 @@ pub fn render_right_panel(app: &App, frame: &mut Frame, area: Rect) {
         let notes = task.notes.as_deref().unwrap_or(&no_notes);
         for line in notes.lines() { info_lines.push(Line::from(vec![Span::raw(format!("  {}", line))])); }
     } else { info_lines.push(Line::from(app.translate("no_task"))); }
-    frame.render_widget(Paragraph::new(info_lines).wrap(ratatui::widgets::Wrap { trim: true }).block(Block::default().title(format!(" {} ", app.translate("info"))).borders(Borders::ALL).border_type(BorderType::Rounded)), chunks[1]);
+    frame.render_widget(Paragraph::new(info_lines).wrap(ratatui::widgets::Wrap { trim: true }).block(Block::default().title(format!(" {} ", app.translate("info"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::overlay0(app)))), chunks[1]);
 }
 
 fn render_loading_screen(app: &App, frame: &mut Frame) {
