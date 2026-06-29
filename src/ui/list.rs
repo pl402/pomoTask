@@ -20,8 +20,11 @@ pub fn render_left_panel(app: &App, frame: &mut Frame, area: Rect) {
 
     let total = app.timer_mode.duration(&app.config);
     let progress = ((total - app.timer_seconds) as f64 / total as f64).min(1.0);
+    let remaining_ratio = app.timer_seconds as f64 / total as f64;
+    // Enfoque: color dinámico verde→amarillo→rojo según el tiempo restante. Descanso: verde.
+    let gauge_fg = if app.timer_mode == TimerMode::Focus { Palette::timer_color(app, remaining_ratio) } else { Palette::green(app) };
     let label = format!("{} - {:02}:{:02}", match app.timer_mode { TimerMode::Focus => app.translate("focus"), _ => app.translate("break") }, app.timer_seconds / 60, app.timer_seconds % 60);
-    frame.render_widget(Gauge::default().block(Block::default().title(format!(" {} ", app.translate("timer"))).borders(Borders::ALL).border_type(BorderType::Rounded)).gauge_style(Style::default().fg(if app.timer_mode == TimerMode::Focus { Palette::red(app) } else { Palette::green(app) }).bg(Palette::surface0(app))).ratio(progress).label(label), chunks[0]);
+    frame.render_widget(Gauge::default().block(Block::default().title(format!(" {} ", app.translate("timer"))).borders(Borders::ALL).border_type(BorderType::Rounded)).gauge_style(Style::default().fg(gauge_fg).bg(Palette::surface0(app))).ratio(progress).label(label), chunks[0]);
 
     // En la vista "Todas" (@all) añadimos una columna que indica la lista de origen de cada tarea.
     let is_all_view = app.is_all_view();

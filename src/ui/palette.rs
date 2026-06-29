@@ -64,6 +64,14 @@ impl Default for ThemeColors {
 
 pub struct Palette;
 impl Palette {
+    /// Color del temporizador según la fracción de tiempo restante (1.0 = lleno, 0.0 = agotado):
+    /// verde cuando queda holgura, amarillo a la mitad, rojo cuando está por terminar.
+    pub fn timer_color(app: &App, remaining_ratio: f64) -> Color {
+        if remaining_ratio <= 0.20 { Self::red(app) }
+        else if remaining_ratio <= 0.50 { Self::peach(app) }
+        else { Self::green(app) }
+    }
+
     fn get_color(theme: Theme, custom: &Option<ThemeColors>, getter: impl Fn(&ThemeColors) -> (u8, u8, u8), preset: impl Fn(Theme) -> Color) -> Color {
         if theme == Theme::Custom {
             if let Some(c) = custom {

@@ -193,6 +193,14 @@ fn render_splash(app: &App, frame: &mut Frame) {
         app.translate("splash_tagline"),
         Style::default().fg(Palette::subtext0(app)).add_modifier(Modifier::ITALIC),
     )));
+    // Versión = timestamp del último commit (APP_VERSION). La mostramos como fecha legible.
+    let ver = env!("APP_VERSION");
+    let ver_disp = if ver.len() >= 8 {
+        format!("v{}-{}-{}", &ver[0..4], &ver[4..6], &ver[6..8])
+    } else {
+        ver.to_string()
+    };
+    lines.push(Line::from(Span::styled(ver_disp, Style::default().fg(Palette::overlay0(app)))));
 
     // Centrado vertical: colocamos el bloque en un Rect a media altura.
     let screen = frame.size();

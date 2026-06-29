@@ -41,9 +41,12 @@ pub fn render_timer_mode(app: &App, frame: &mut Frame) {
 
     let total = app.timer_mode.duration(&app.config);
     let progress = ((total - app.timer_seconds) as f64 / total as f64).min(1.0);
+    let remaining_ratio = app.timer_seconds as f64 / total as f64;
     let time_label = format!("{:02}:{:02}", app.timer_seconds / 60, app.timer_seconds % 60);
 
-    frame.render_widget(Gauge::default().block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded)).gauge_style(Style::default().fg(color).bg(Palette::surface0(app))).ratio(progress).label(time_label), chunks[1]);
+    // Enfoque: barra con color dinámico verde→amarillo→rojo; descanso: color del modo.
+    let gauge_fg = if is_focus { Palette::timer_color(app, remaining_ratio) } else { color };
+    frame.render_widget(Gauge::default().block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded)).gauge_style(Style::default().fg(gauge_fg).bg(Palette::surface0(app))).ratio(progress).label(time_label), chunks[1]);
 
     if let Some(task) = app.tasks.get(app.selected_task) {
         let is_main_selected = app.focus_subtask_idx == 0;
@@ -164,13 +167,17 @@ pub fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     if app.copy_feedback_frames > 0 {
         right_spans.push(Span::styled(format!(" {} ", app.translate("copied_clipboard")), Style::default().fg(Palette::green(app)).add_modifier(Modifier::BOLD)));
     }
+    let sep = || Span::styled("│", Style::default().fg(Palette::overlay0(app)));
     right_spans.extend(vec![
         Span::styled(format!(" {}: ", app.translate("timer_short")), Style::default().fg(Palette::subtext0(app))),
         Span::styled(format!("{} ", timer_label), Style::default().fg(if app.timer_mode == TimerMode::Focus { Palette::red(app) } else { Palette::green(app) })),
+        sep(),
         Span::styled(format!(" {}: ", app.translate("sync_short")), Style::default().fg(Palette::subtext0(app))),
         Span::styled(format!("{} ", spinner), Style::default().fg(Palette::blue(app))),
+        sep(),
         Span::styled(format!(" {}: ", app.translate("pomodoro_short")), Style::default().fg(Palette::subtext0(app))),
         Span::styled(format!("{} ", app.session_pomodoros), Style::default().fg(Palette::peach(app))),
+        sep(),
         Span::styled(format!(" {} | {} ", date_str, time_str), Style::default().fg(Palette::text(app))),
     ]);
 
