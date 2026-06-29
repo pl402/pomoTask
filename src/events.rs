@@ -18,6 +18,7 @@ pub enum Event {
     ApiTaskCompleted(String, u16, u16, u16),
     ApiTaskFailed(String),
     Sync,
+    SyncFailed,
 }
 
 pub struct EventHandler {

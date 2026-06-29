@@ -519,7 +519,8 @@ pub async fn sync_tasks(api: &Arc<ApiClient>, sender: UnboundedSender<Event>, ap
         tokio::spawn(async move {
             match api.fetch_task_lists().await {
                 Ok(lists) => { let _ = sender.send(Event::ListsUpdate(lists)); }
-                Err(_) => { let _ = sender.send(Event::ApiUpdate(Vec::new())); }
+                // Sin red: no vaciamos nada, conservamos la caché local.
+                Err(_) => { let _ = sender.send(Event::SyncFailed); }
             }
         });
     } else {

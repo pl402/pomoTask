@@ -122,6 +122,8 @@ manejarla en `ui/mod.rs::render`, y rutear el teclado en `handler.rs`.
 Todo se guarda en `~/.config/pomotask/` (vía `dirs::config_dir()` + `App::get_config_dir()`):
 - `config.json` — preferencias (duraciones, idioma, tema, vista de calendario, última lista/tarea).
 - `stats.json` — estadísticas de pomodoros por hora/tarea y timers persistidos.
+- `tasks_cache.json` — caché de las últimas tareas sincronizadas (modo offline). Se carga en `App::new()`
+  y se reescribe en cada `ApiUpdate`. Si falla la red al arrancar (`Event::SyncFailed`) se muestra esta caché.
 - `pomotask_token.json` — token OAuth. `logout()` lo borra.
 
 ### Archivos que NUNCA debes commitear

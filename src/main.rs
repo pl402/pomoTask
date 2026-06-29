@@ -64,6 +64,12 @@ async fn main() -> Result<()> {
                 Event::Sync => {
                     sync_tasks(&api_client, events.sender(), &mut app).await;
                 }
+                Event::SyncFailed => {
+                    // Sin conexión: salimos de la pantalla de carga y mostramos la caché local.
+                    app.loading = false;
+                    app.rebuild_visible_tasks();
+                    if app.mode == AppMode::Loading { app.mode = AppMode::Timer; }
+                }
                 Event::ApiUpdate(tasks) => {
                     app.creating_task_temp_id = None;
                     let old_mode = app.mode;
@@ -75,6 +81,7 @@ async fn main() -> Result<()> {
                     
                     // Guardar todas para el calendario
                     app.all_tasks = tasks_with_stats;
+                    app.save_tasks_cache(); // Persistir para uso offline
 
                     // Construir la lista visual (aplica show_completed + filtro de búsqueda + jerarquía).
                     app.rebuild_visible_tasks();

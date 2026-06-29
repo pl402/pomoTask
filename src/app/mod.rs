@@ -54,9 +54,9 @@ impl TimerMode { pub fn duration(&self, config: &Config) -> u32 { match self { T
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct TaskTimerState { pub remaining: u32, pub mode: TimerMode }
 
-#[derive(Debug, Clone)]
-pub struct Task { 
-    pub id: String, 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Task {
+    pub id: String,
     pub list_id: String, // Nuevo campo
     pub title: String, 
     pub completed: bool, 
@@ -147,7 +147,8 @@ impl App {
     pub fn new() -> Self {
         let config = Self::load_config().unwrap_or_default();
         let stats = Self::load_stats().unwrap_or_default();
-        Self {
+        let cached_tasks = Self::load_tasks_cache();
+        let mut app = Self {
             running: true,
             mode: AppMode::Loading,
             auth_url: None,
@@ -160,7 +161,7 @@ impl App {
             timer_seconds: TimerMode::Focus.duration(&config),
             timer_mode: TimerMode::Focus,
             tasks: Vec::new(),
-            all_tasks: Vec::new(),
+            all_tasks: cached_tasks,
             task_lists: Vec::new(),
             selected_list_idx: 0,
             selected_task: 0,
@@ -180,7 +181,10 @@ impl App {
             creating_task_temp_id: None,
             calendar_date: Local::now().date_naive(),
             task_filter: String::new(),
-        }
+        };
+        // Mostrar las tareas cacheadas de inmediato (se reemplazan al primer sync exitoso).
+        app.rebuild_visible_tasks();
+        app
     }
 
     /// Reconstruye `tasks` (lista visual) desde `all_tasks` aplicando el filtro de completadas,
@@ -258,6 +262,21 @@ impl App {
         path.push("stats.json");
         let data = fs::read_to_string(path).ok()?;
         serde_json::from_str(&data).ok()
+    }
+
+    /// Caché en disco de las últimas tareas sincronizadas (para mostrar algo sin red al arrancar).
+    fn load_tasks_cache() -> Vec<Task> {
+        let mut path = Self::get_config_dir();
+        path.push("tasks_cache.json");
+        fs::read_to_string(path).ok()
+            .and_then(|data| serde_json::from_str(&data).ok())
+            .unwrap_or_default()
+    }
+
+    pub fn save_tasks_cache(&self) {
+        let mut path = Self::get_config_dir();
+        path.push("tasks_cache.json");
+        if let Ok(data) = serde_json::to_string(&self.all_tasks) { let _ = fs::write(path, data); }
     }
 
     pub fn save_stats(&self) {
