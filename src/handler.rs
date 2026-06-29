@@ -87,7 +87,7 @@ pub async fn handle_key_events(
                                     let _ = sender_clone.send(Event::Sync);
                                 } else {
                                     let tasks: Vec<Task> = api.fetch_tasks(&selected_list_id, show_comp).await.unwrap_or_default();
-                                    let _ = sender_clone.send(Event::ApiUpdate(tasks));
+                                    let _ = sender_clone.send(Event::ApiUpdate(selected_list_id, tasks));
                                 }
 
                             } else {
@@ -599,12 +599,12 @@ pub async fn sync_tasks(api: &Arc<ApiClient>, sender: UnboundedSender<Event>, ap
                         all_tasks.extend(tasks);
                     }
                 }
-                let _ = sender.send(Event::ApiUpdate(all_tasks));
+                let _ = sender.send(Event::ApiUpdate("@all".to_string(), all_tasks));
             });
         } else {
             tokio::spawn(async move {
                 match api.fetch_tasks(&list_id, true).await { // Siempre traer completadas
-                    Ok(tasks) => { let _ = sender.send(Event::ApiUpdate(tasks)); }
+                    Ok(tasks) => { let _ = sender.send(Event::ApiUpdate(list_id, tasks)); }
                     Err(_) => { /* No enviar nada para no vaciar la lista actual en caso de error de red */ }
                 }
             });

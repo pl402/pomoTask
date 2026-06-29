@@ -74,36 +74,41 @@ async fn main() -> Result<()> {
                     app.rebuild_visible_tasks();
                     if app.mode == AppMode::Loading { app.mode = AppMode::Timer; }
                 }
-                Event::ApiUpdate(tasks) => {
+                Event::ApiUpdate(list_id, tasks) => {
                     app.creating_task_temp_id = None;
-                    let old_mode = app.mode;
                     let mut tasks_with_stats = Vec::new();
-                    for mut t in tasks { 
-                        t.pomodoros = *app.stats.task_pomodoros.get(&t.id).unwrap_or(&0); 
-                        tasks_with_stats.push(t); 
+                    for mut t in tasks {
+                        t.pomodoros = *app.stats.task_pomodoros.get(&t.id).unwrap_or(&0);
+                        tasks_with_stats.push(t);
                     }
-                    
-                    // Guardar todas para el calendario
-                    app.all_tasks = tasks_with_stats;
-                    app.cache_current_list();    // Caché en memoria por lista (cambio instantáneo)
-                    app.save_tasks_cache();      // Persistir para uso offline
 
-                    // Construir la lista visual (aplica show_completed + filtro de búsqueda + jerarquía).
-                    app.rebuild_visible_tasks();
-                    if let Some(last_id) = &app.config.last_task_id {
-                        if let Some(idx) = app.tasks.iter().position(|t| &t.id == last_id) { 
-                            app.selected_task = idx; 
-                        } else {
-                            app.selected_task = app.selected_task.min(app.tasks.len().saturating_sub(1));
+                    // Siempre actualizamos la caché de ESA lista (aunque ya no la estemos viendo).
+                    app.list_cache.insert(list_id.clone(), tasks_with_stats.clone());
+                    app.save_tasks_cache();
+
+                    // Solo refrescamos la vista si la respuesta corresponde a la lista seleccionada
+                    // actual; así una respuesta tardía de otra lista no pisa lo que estás viendo.
+                    let current_id = app.task_lists.get(app.selected_list_idx).map(|l| l.id.clone()).unwrap_or_default();
+                    if list_id == current_id {
+                        let old_mode = app.mode;
+                        app.all_tasks = tasks_with_stats;
+                        app.rebuild_visible_tasks();
+                        if let Some(last_id) = &app.config.last_task_id {
+                            if let Some(idx) = app.tasks.iter().position(|t| &t.id == last_id) {
+                                app.selected_task = idx;
+                            } else {
+                                app.selected_task = app.selected_task.min(app.tasks.len().saturating_sub(1));
+                            }
                         }
-                    }
-                    app.sync_active_timer_to_task(); app.loading = false;
-                    if old_mode == AppMode::Auth || old_mode == AppMode::Loading {
-                        if old_mode == AppMode::Auth {
-                            app.mode = AppMode::AuthSuccess;
-                            let _ = notify_rust::Notification::new().summary("PomoTask").body(&app.translate("auth_success_msg")).icon("emblem-success").show();
-                            let sender = events.sender(); tokio::spawn(async move { tokio::time::sleep(Duration::from_secs(3)).await; let _ = sender.send(Event::Tick); });
-                        } else { app.mode = AppMode::Timer; }
+                        app.sync_active_timer_to_task();
+                        app.loading = false;
+                        if old_mode == AppMode::Auth || old_mode == AppMode::Loading {
+                            if old_mode == AppMode::Auth {
+                                app.mode = AppMode::AuthSuccess;
+                                let _ = notify_rust::Notification::new().summary("PomoTask").body(&app.translate("auth_success_msg")).icon("emblem-success").show();
+                                let sender = events.sender(); tokio::spawn(async move { tokio::time::sleep(Duration::from_secs(3)).await; let _ = sender.send(Event::Tick); });
+                            } else { app.mode = AppMode::Timer; }
+                        }
                     }
                 }
                 Event::ApiTaskCompleted(id, x, y, w) => {

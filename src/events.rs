@@ -12,7 +12,7 @@ pub enum Event {
     Mouse(MouseEvent),
     #[allow(dead_code)]
     Resize(u16, u16),
-    ApiUpdate(Vec<Task>),
+    ApiUpdate(String, Vec<Task>),
     ListsUpdate(Vec<TaskList>),
     NeedsAuth(String),
     ApiTaskCompleted(String, u16, u16, u16),

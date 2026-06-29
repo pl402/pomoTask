@@ -209,7 +209,12 @@ recrean primero en el destino. ⚠️ No verificado contra la API real de Google
 El filtro de búsqueda vive en `App::task_filter`; `App::rebuild_visible_tasks()` reconstruye la lista
 visual desde `all_tasks` aplicando completadas + filtro + jerarquía (se llama en `ApiUpdate` y al teclear).
 
-Cambio de lista no bloqueante: `App::list_cache` (id → tareas) cachea en memoria cada lista; `switch_list()`
-muestra al instante la caché de la nueva lista (sin vaciar el panel) y la sincronización corre en segundo
-plano (`sync_tasks`), con el indicador "Cargando…" solo en la barra de estado. `cache_current_list()` se
-llama en `ApiUpdate`. El panel de la lista ya no muestra el spinner grande de carga.
+Cambio de lista no bloqueante: `App::list_cache` (id → tareas) cachea cada lista; `switch_list()` muestra
+al instante la caché de la nueva lista (sin vaciar el panel) y la sincronización corre en segundo plano
+(`sync_tasks`), con el indicador de carga solo en la barra de estado (spinner "S:"). El panel de la lista
+ya no muestra el spinner grande de carga.
+
+`Event::ApiUpdate(list_id, tasks)` lleva el id de la lista a la que corresponde la respuesta: el handler
+SIEMPRE actualiza `list_cache[list_id]`, pero solo refresca la vista (`all_tasks`) si `list_id` coincide
+con la lista seleccionada actual. Esto evita la condición de carrera donde una respuesta tardía de otra
+lista pisaba lo que estás viendo al cambiar de lista rápido.

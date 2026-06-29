@@ -334,13 +334,6 @@ impl App {
         self.save_selection();
     }
 
-    /// Guarda las tareas recién sincronizadas en la caché de la lista seleccionada.
-    pub fn cache_current_list(&mut self) {
-        if let Some(l) = self.task_lists.get(self.selected_list_idx) {
-            self.list_cache.insert(l.id.clone(), self.all_tasks.clone());
-        }
-    }
-
     /// `true` cuando la lista seleccionada es la vista virtual "Todas" (@all).
     pub fn is_all_view(&self) -> bool {
         self.task_lists.get(self.selected_list_idx).is_some_and(|l| l.id == "@all")
