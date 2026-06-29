@@ -8,10 +8,12 @@ pub enum Theme {
     Nord, 
     Gruvbox, 
     Dracula, 
-    Monokai, 
-    SolarizedDark, 
-    Ocean, 
-    Custom 
+    Monokai,
+    SolarizedDark,
+    Ocean,
+    TokyoNight,
+    RosePine,
+    Custom
 }
 
 impl Theme {
@@ -24,6 +26,8 @@ impl Theme {
             Theme::Monokai => "Monokai",
             Theme::SolarizedDark => "Solarized Dark",
             Theme::Ocean => "Ocean",
+            Theme::TokyoNight => "Tokyo Night",
+            Theme::RosePine => "Rosé Pine",
             Theme::Custom => "Custom",
         }
     }
@@ -91,6 +95,8 @@ impl Palette {
             Theme::Monokai => Color::Rgb(174, 129, 255),
             Theme::SolarizedDark => Color::Rgb(108, 113, 196),
             Theme::Ocean => Color::Rgb(192, 151, 187),
+            Theme::TokyoNight => Color::Rgb(187, 154, 247),
+            Theme::RosePine => Color::Rgb(196, 167, 231),
             _ => Color::Rgb(203, 166, 247),
         })
     }
@@ -103,6 +109,8 @@ impl Palette {
             Theme::Monokai => Color::Rgb(249, 38, 114),
             Theme::SolarizedDark => Color::Rgb(220, 50, 47),
             Theme::Ocean => Color::Rgb(191, 97, 106),
+            Theme::TokyoNight => Color::Rgb(247, 118, 142),
+            Theme::RosePine => Color::Rgb(235, 111, 146),
             _ => Color::Rgb(243, 139, 168),
         })
     }
@@ -115,6 +123,8 @@ impl Palette {
             Theme::Monokai => Color::Rgb(166, 226, 46),
             Theme::SolarizedDark => Color::Rgb(133, 153, 0),
             Theme::Ocean => Color::Rgb(163, 190, 140),
+            Theme::TokyoNight => Color::Rgb(158, 206, 106),
+            Theme::RosePine => Color::Rgb(156, 207, 216),
             _ => Color::Rgb(166, 227, 161),
         })
     }
@@ -127,6 +137,8 @@ impl Palette {
             Theme::Monokai => Color::Rgb(253, 151, 31),
             Theme::SolarizedDark => Color::Rgb(203, 75, 22),
             Theme::Ocean => Color::Rgb(208, 135, 112),
+            Theme::TokyoNight => Color::Rgb(255, 158, 100),
+            Theme::RosePine => Color::Rgb(235, 188, 186),
             _ => Color::Rgb(250, 179, 135),
         })
     }
@@ -139,6 +151,8 @@ impl Palette {
             Theme::Monokai => Color::Rgb(230, 219, 116),
             Theme::SolarizedDark => Color::Rgb(181, 137, 0),
             Theme::Ocean => Color::Rgb(235, 203, 139),
+            Theme::TokyoNight => Color::Rgb(224, 175, 104),
+            Theme::RosePine => Color::Rgb(246, 193, 119),
             _ => Color::Rgb(249, 226, 175),
         })
     }
@@ -151,6 +165,8 @@ impl Palette {
             Theme::Monokai => Color::Rgb(102, 217, 239),
             Theme::SolarizedDark => Color::Rgb(38, 139, 210),
             Theme::Ocean => Color::Rgb(136, 192, 208),
+            Theme::TokyoNight => Color::Rgb(122, 162, 247),
+            Theme::RosePine => Color::Rgb(49, 116, 143),
             _ => Color::Rgb(137, 180, 250),
         })
     }
@@ -163,6 +179,8 @@ impl Palette {
             Theme::Monokai => Color::Rgb(248, 248, 242),
             Theme::SolarizedDark => Color::Rgb(131, 148, 150),
             Theme::Ocean => Color::Rgb(236, 239, 244),
+            Theme::TokyoNight => Color::Rgb(192, 202, 245),
+            Theme::RosePine => Color::Rgb(224, 222, 244),
             _ => Color::Rgb(205, 214, 244),
         })
     }
@@ -175,6 +193,8 @@ impl Palette {
             Theme::Monokai => Color::Rgb(117, 113, 94),
             Theme::SolarizedDark => Color::Rgb(101, 123, 131),
             Theme::Ocean => Color::Rgb(216, 222, 233),
+            Theme::TokyoNight => Color::Rgb(169, 177, 214),
+            Theme::RosePine => Color::Rgb(144, 140, 170),
             _ => Color::Rgb(166, 173, 200),
         })
     }
@@ -187,6 +207,8 @@ impl Palette {
             Theme::Monokai => Color::Rgb(73, 72, 62),
             Theme::SolarizedDark => Color::Rgb(88, 110, 117),
             Theme::Ocean => Color::Rgb(76, 86, 106),
+            Theme::TokyoNight => Color::Rgb(86, 95, 137),
+            Theme::RosePine => Color::Rgb(110, 106, 134),
             _ => Color::Rgb(108, 112, 134),
         })
     }
@@ -199,6 +221,8 @@ impl Palette {
             Theme::Monokai => Color::Rgb(39, 40, 34),
             Theme::SolarizedDark => Color::Rgb(7, 54, 66),
             Theme::Ocean => Color::Rgb(59, 66, 82),
+            Theme::TokyoNight => Color::Rgb(41, 46, 66),
+            Theme::RosePine => Color::Rgb(31, 29, 46),
             _ => Color::Rgb(49, 50, 68),
         })
     }
@@ -211,6 +235,8 @@ impl Palette {
             Theme::Monokai => Color::Rgb(39, 40, 34),
             Theme::SolarizedDark => Color::Rgb(0, 43, 54),
             Theme::Ocean => Color::Rgb(46, 52, 64),
+            Theme::TokyoNight => Color::Rgb(26, 27, 38),
+            Theme::RosePine => Color::Rgb(25, 23, 36),
             _ => Color::Rgb(30, 30, 46),
         })
     }

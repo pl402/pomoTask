@@ -168,7 +168,9 @@ pub async fn handle_key_events(
                                 Theme::Monokai => Theme::Dracula,
                                 Theme::SolarizedDark => Theme::Monokai,
                                 Theme::Ocean => Theme::SolarizedDark,
-                                Theme::Custom => Theme::Ocean,
+                                Theme::TokyoNight => Theme::Ocean,
+                                Theme::RosePine => Theme::TokyoNight,
+                                Theme::Custom => Theme::RosePine,
                             };
                         }
                         5 => {
@@ -211,7 +213,9 @@ pub async fn handle_key_events(
                                 Theme::Dracula => Theme::Monokai,
                                 Theme::Monokai => Theme::SolarizedDark,
                                 Theme::SolarizedDark => Theme::Ocean,
-                                Theme::Ocean => Theme::Custom,
+                                Theme::Ocean => Theme::TokyoNight,
+                                Theme::TokyoNight => Theme::RosePine,
+                                Theme::RosePine => Theme::Custom,
                                 Theme::Custom => Theme::CatppuccinMocha,
                             };
                         }

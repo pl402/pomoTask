@@ -36,7 +36,7 @@ Este método se fundamenta en la idea de que las pausas frecuentes pueden mejora
 - **📋 Copiar al Portapapeles** (`y`): Copia la tarea seleccionada como texto markdown, incluyendo su descripción, fecha y todas sus subtareas con sus notas.
 - **🧹 Limpieza Automática de Estadísticas**: Al iniciar, poda los registros horarios locales más antiguos que el periodo configurado (último mes / año / siempre). Es **solo local: nunca borra nada de Google Tasks**. Configurable en Ajustes (`,`).
 - **🎨 Personalización Estética Avanzada**:
-    - **Temas Expandidos**: Soporte nativo para Catppuccin, Nord, Gruvbox, Dracula, Monokai, Solarized Dark y Ocean.
+    - **Temas Expandidos**: Soporte nativo para Catppuccin, Nord, Gruvbox, Dracula, Monokai, Solarized Dark, Ocean, Tokyo Night y Rosé Pine.
     - **Temas Custom**: Posibilidad de definir paletas RGB propias en `config.json`.
 - **🚀 Interfaz Ultrarrápida (Optimistic UI)**:
     - **Feedback Inmediato**: Inserción instantánea de tareas y spinners animados mientras se sincroniza con la nube.
