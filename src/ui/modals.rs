@@ -152,40 +152,62 @@ pub fn render_help_modal(app: &App, frame: &mut Frame) {
 }
 
 pub fn render_settings_modal(app: &App, frame: &mut Frame) {
-    let area = centered_rect(60, 50, frame.size());
+    let area = centered_rect(62, 80, frame.size());
     frame.render_widget(Clear, area);
-    
+
     let block = Block::default().title(format!(" {} ", app.translate("settings_title"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::yellow(app)));
     frame.render_widget(block, area);
 
     let chunks = Layout::default().direction(Direction::Vertical).constraints([Constraint::Min(0), Constraint::Length(1)]).margin(2).split(area);
 
-    let settings = [(app.translate("settings_focus"), format!("{} min", app.config.focus_duration / 60)),
-        (app.translate("settings_short"), format!("{} min", app.config.short_break_duration / 60)),
-        (app.translate("settings_long"), format!("{} min", app.config.long_break_duration / 60)),
-        (app.translate("settings_lang"), match app.config.language { crate::app::Language::Spanish => "Español".to_string(), crate::app::Language::English => "English".to_string() }),
-        (app.translate("settings_theme"), app.config.theme.name().to_string()),
-        (app.translate("settings_calendar_view"), match app.config.calendar_view {
+    // (icono + etiqueta, valor) por índice lógico 0..8 (debe coincidir con el handler de teclado).
+    let items: [(String, String); 9] = [
+        (format!("⏱  {}", app.translate("settings_focus")), format!("{} min", app.config.focus_duration / 60)),
+        (format!("☕  {}", app.translate("settings_short")), format!("{} min", app.config.short_break_duration / 60)),
+        (format!("🌙  {}", app.translate("settings_long")), format!("{} min", app.config.long_break_duration / 60)),
+        (format!("🌐  {}", app.translate("settings_lang")), match app.config.language { crate::app::Language::Spanish => "Español".to_string(), crate::app::Language::English => "English".to_string() }),
+        (format!("🎨  {}", app.translate("settings_theme")), app.config.theme.name().to_string()),
+        (format!("📅  {}", app.translate("settings_calendar_view")), match app.config.calendar_view {
             crate::app::CalendarView::Standard => app.translate("calendar_view_standard"),
             crate::app::CalendarView::Heatmap => app.translate("calendar_view_heatmap"),
             crate::app::CalendarView::Progress => app.translate("calendar_view_progress"),
         }),
-        (app.translate("settings_calendar_range"), match app.config.calendar_range {
+        (format!("🔭  {}", app.translate("settings_calendar_range")), match app.config.calendar_range {
             crate::app::CalendarRange::Month => app.translate("calendar_range_month"),
             crate::app::CalendarRange::Week => app.translate("calendar_range_week"),
             crate::app::CalendarRange::Day => app.translate("calendar_range_day"),
         }),
-        (app.translate("settings_retention"), match app.config.stats_retention {
+        (format!("🧹  {}", app.translate("settings_retention")), match app.config.stats_retention {
             crate::app::StatsRetention::Month => app.translate("retention_month"),
             crate::app::StatsRetention::Year => app.translate("retention_year"),
             crate::app::StatsRetention::Forever => app.translate("retention_forever"),
         }),
-        (app.translate("settings_logout"), "".to_string())];
+        (format!("🚪  {}", app.translate("settings_logout")), String::new()),
+    ];
 
-    let rows: Vec<Row> = settings.iter().enumerate().map(|(i, (k, v))| {
-        let style = if i == app.selected_settings_idx { Style::default().fg(Palette::base(app)).bg(Palette::yellow(app)) } else { Style::default().fg(Palette::text(app)) };
-        Row::new(vec![Cell::from(k.clone()), Cell::from(v.clone())]).style(style)
-    }).collect();
+    // Secciones (nombre, rango de índices).
+    let groups: [(String, std::ops::Range<usize>); 4] = [
+        (app.translate("settings_group_times"), 0..3),
+        (app.translate("settings_group_appearance"), 3..7),
+        (app.translate("settings_group_data"), 7..8),
+        (app.translate("settings_group_account"), 8..9),
+    ];
+
+    let mut rows: Vec<Row> = Vec::new();
+    for (gname, range) in groups.iter() {
+        rows.push(Row::new(vec![
+            Cell::from(format!("─ {} ─", gname)).style(Style::default().fg(Palette::overlay0(app)).add_modifier(Modifier::BOLD)),
+            Cell::from(""),
+        ]));
+        for i in range.clone() {
+            let (label, value) = &items[i];
+            let selected = i == app.selected_settings_idx;
+            // Afordancia ◄ ► en la fila seleccionada que tiene valor ajustable.
+            let value_disp = if selected && !value.is_empty() { format!("◄ {} ►", value) } else { value.clone() };
+            let style = if selected { Style::default().fg(Palette::base(app)).bg(Palette::yellow(app)) } else { Style::default().fg(Palette::text(app)) };
+            rows.push(Row::new(vec![Cell::from(label.clone()), Cell::from(value_disp)]).style(style));
+        }
+    }
 
     let table = Table::new(rows, [Constraint::Percentage(60), Constraint::Percentage(40)]);
     frame.render_widget(table, chunks[0]);
