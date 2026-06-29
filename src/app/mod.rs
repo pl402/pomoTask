@@ -91,12 +91,23 @@ pub enum InputField { Title, Notes, Due, List }
 pub enum DatePreset { Today, Tomorrow, Custom, None }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
-pub struct Stats { 
+pub struct Stats {
     pub hourly_pomodoros: BTreeMap<String, u64>,
     pub hourly_seconds: BTreeMap<String, u64>,
     pub hourly_tasks_done: BTreeMap<String, u64>,
     pub task_pomodoros: BTreeMap<String, u64>,
     pub task_timers: BTreeMap<String, TaskTimerState>,
+    // Totales acumulados de por vida: NO se podan en la limpieza, así "Totales históricos"
+    // sobrevive aunque se borren los registros horarios antiguos.
+    #[serde(default)]
+    pub lifetime_pomodoros: u64,
+    #[serde(default)]
+    pub lifetime_tasks_done: u64,
+    #[serde(default)]
+    pub lifetime_focus_seconds: u64,
+    // Marca de que ya se sembraron los totales desde los mapas horarios (migración una sola vez).
+    #[serde(default)]
+    pub totals_migrated: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -205,11 +216,26 @@ impl App {
         };
         // Mostrar las tareas cacheadas de inmediato (se reemplazan al primer sync exitoso).
         app.rebuild_visible_tasks();
+        // Sembrar los totales históricos desde los mapas horarios ANTES de podar (una sola vez).
+        app.migrate_lifetime_totals();
         // Limpieza transparente de estadísticas antiguas al arrancar (solo local, no toca Google).
         if app.cleanup_old_stats() {
             app.cleaning_frames = 30; // ~1.5 s de aviso en la barra de estado
         }
         app
+    }
+
+    /// Inicializa los contadores acumulados de por vida a partir de los mapas horarios existentes.
+    /// Se ejecuta una sola vez (controlado por `totals_migrated`) para no perder el histórico previo
+    /// de usuarios que ya tenían datos antes de existir estos contadores.
+    fn migrate_lifetime_totals(&mut self) {
+        if !self.stats.totals_migrated {
+            self.stats.lifetime_pomodoros = self.stats.hourly_pomodoros.values().sum();
+            self.stats.lifetime_tasks_done = self.stats.hourly_tasks_done.values().sum();
+            self.stats.lifetime_focus_seconds = self.stats.hourly_seconds.values().sum();
+            self.stats.totals_migrated = true;
+            self.save_stats();
+        }
     }
 
     /// Elimina los registros horarios (pomodoros, segundos de enfoque y tareas completadas) más
@@ -456,6 +482,7 @@ impl App {
                     let hour_key = Local::now().format("%Y-%m-%d %H:00").to_string();
                     let entry = self.stats.hourly_seconds.entry(hour_key).or_insert(0);
                     *entry += 1;
+                    self.stats.lifetime_focus_seconds += 1;
                 }
 
                 if self.timer_seconds.is_multiple_of(5) {
@@ -477,6 +504,7 @@ impl App {
             let hour_key = Local::now().format("%Y-%m-%d %H:00").to_string();
             let entry = self.stats.hourly_pomodoros.entry(hour_key).or_insert(0);
             *entry += 1;
+            self.stats.lifetime_pomodoros += 1;
             if let Some(task) = self.tasks.get(self.selected_task) {
                 let t_entry = self.stats.task_pomodoros.entry(task.id.clone()).or_insert(0);
                 *t_entry += 1;
@@ -501,6 +529,7 @@ impl App {
         let hour_key = Local::now().format("%Y-%m-%d %H:00").to_string();
         let entry = self.stats.hourly_tasks_done.entry(hour_key).or_insert(0);
         *entry += 1;
+        self.stats.lifetime_tasks_done += 1;
         self.save_stats();
     }
 
@@ -523,12 +552,9 @@ impl App {
         }).collect()
     }
 
-    /// Totales históricos acumulados (todos los datos guardados).
+    /// Totales históricos acumulados de por vida (no se ven afectados por la limpieza).
     pub fn stats_totals(&self) -> (u64, u64, u64) {
-        let total_pomodoros = self.stats.hourly_pomodoros.values().sum();
-        let total_tasks = self.stats.hourly_tasks_done.values().sum();
-        let total_focus = self.stats.hourly_seconds.values().sum();
-        (total_pomodoros, total_tasks, total_focus)
+        (self.stats.lifetime_pomodoros, self.stats.lifetime_tasks_done, self.stats.lifetime_focus_seconds)
     }
 
     /// Arma el texto de una tarea (con su descripción, fecha y todas sus subtareas) en formato
