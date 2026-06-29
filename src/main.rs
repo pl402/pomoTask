@@ -85,7 +85,8 @@ async fn main() -> Result<()> {
                     
                     // Guardar todas para el calendario
                     app.all_tasks = tasks_with_stats;
-                    app.save_tasks_cache(); // Persistir para uso offline
+                    app.cache_current_list();    // Caché en memoria por lista (cambio instantáneo)
+                    app.save_tasks_cache();      // Persistir para uso offline
 
                     // Construir la lista visual (aplica show_completed + filtro de búsqueda + jerarquía).
                     app.rebuild_visible_tasks();

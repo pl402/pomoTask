@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc, Local, Datelike, TimeZone};
 use serde::{Serialize, Deserialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::fs;
 use crate::ui::palette::{Theme, ThemeColors};
@@ -175,6 +175,8 @@ pub struct App {
     pub splash_frames: u32,
     pub prev_mode: AppMode,
     pub modal_anim: u8,
+    // Caché en memoria por lista (id → tareas) para cambiar de lista sin esperar a la red.
+    pub list_cache: HashMap<String, Vec<Task>>,
 }
 
 impl App {
@@ -222,7 +224,14 @@ impl App {
             splash_frames: 32, // ~1.6 s de splash con el logo al arrancar (saltable con cualquier tecla)
             prev_mode: AppMode::Loading,
             modal_anim: 0,
+            list_cache: HashMap::new(),
         };
+        // Sembrar la caché por lista con lo que haya en disco para la última lista usada.
+        if let Some(id) = app.config.last_list_id.clone() {
+            if !app.all_tasks.is_empty() {
+                app.list_cache.insert(id, app.all_tasks.clone());
+            }
+        }
         // Mostrar las tareas cacheadas de inmediato (se reemplazan al primer sync exitoso).
         app.rebuild_visible_tasks();
         // Si hay caché local, arrancamos ya en la vista normal (con "Cargando…" en el pie) en vez de
@@ -313,6 +322,25 @@ impl App {
             month -= 1;
         }
         self.calendar_date = chrono::NaiveDate::from_ymd_opt(year, month, 1).unwrap();
+    }
+
+    /// Cambia a la lista `new_idx` mostrando al instante sus tareas cacheadas (si las hay),
+    /// sin vaciar el panel. La consulta a la red se dispara aparte (en segundo plano).
+    pub fn switch_list(&mut self, new_idx: usize) {
+        self.selected_list_idx = new_idx;
+        self.selected_task = 0;
+        let id = self.task_lists.get(new_idx).map(|l| l.id.clone()).unwrap_or_default();
+        // Tareas conocidas de esa lista (vacío si nunca se ha visto en esta sesión).
+        self.all_tasks = self.list_cache.get(&id).cloned().unwrap_or_default();
+        self.rebuild_visible_tasks();
+        self.save_selection();
+    }
+
+    /// Guarda las tareas recién sincronizadas en la caché de la lista seleccionada.
+    pub fn cache_current_list(&mut self) {
+        if let Some(l) = self.task_lists.get(self.selected_list_idx) {
+            self.list_cache.insert(l.id.clone(), self.all_tasks.clone());
+        }
     }
 
     /// `true` cuando la lista seleccionada es la vista virtual "Todas" (@all).

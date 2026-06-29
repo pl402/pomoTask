@@ -109,14 +109,11 @@ pub fn render_left_panel(app: &App, frame: &mut Frame, area: Rect) {
         list_title = format!("{}🔍 {} ", list_title, app.task_filter);
     }
 
+    // Durante la carga con la lista aún vacía, NO bloqueamos con un spinner grande:
+    // mostramos solo el panel con borde y dejamos el indicador "Cargando…" en la barra de estado.
     if app.loading && app.tasks.is_empty() && app.marking_done_task_id.is_none() && app.creating_task_temp_id.is_none() {
-        let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-        let spinner = frames[app.spinner_frame % frames.len()];
-        let loading_widget = Paragraph::new(format!("\n\n\n{} {}", spinner, app.translate("loading_app")))
-            .alignment(ratatui::layout::Alignment::Center)
-            .style(Style::default().fg(Palette::mauve(app)))
-            .block(Block::default().title(list_title).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::mauve(app))));
-        frame.render_widget(loading_widget, chunks[1]);
+        let panel = Block::default().title(list_title).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::mauve(app)));
+        frame.render_widget(panel, chunks[1]);
         return;
     }
 

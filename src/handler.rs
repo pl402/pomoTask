@@ -286,8 +286,7 @@ pub async fn handle_key_events(
                         app.mode = AppMode::Timer;
                     } else {
                         app.mode = AppMode::Timer;
-                        app.tasks.clear();
-                        app.save_selection();
+                        app.switch_list(app.selected_list_idx); // muestra la caché local al instante
                         sync_tasks(api_client, sender.clone(), app).await;
                     }
                 }
@@ -518,17 +517,14 @@ pub async fn handle_key_events(
                 KeyCode::Tab if !app.timer_active => { app.mode = AppMode::ListSelector; }
                 KeyCode::Left | KeyCode::Char('h') if !app.timer_active => {
                     if app.task_lists.is_empty() { return; }
-                    if app.selected_list_idx == 0 { app.selected_list_idx = app.task_lists.len() - 1; }
-                    else { app.selected_list_idx -= 1; }
-                    app.tasks.clear();
-                    app.save_selection();
-                    sync_tasks(api_client, sender.clone(), app).await;
+                    let new = if app.selected_list_idx == 0 { app.task_lists.len() - 1 } else { app.selected_list_idx - 1 };
+                    app.switch_list(new); // muestra la caché local al instante
+                    sync_tasks(api_client, sender.clone(), app).await; // refresco en segundo plano
                 }
                 KeyCode::Right | KeyCode::Char('l') if !app.timer_active => {
                     if app.task_lists.is_empty() { return; }
-                    app.selected_list_idx = (app.selected_list_idx + 1) % app.task_lists.len();
-                    app.tasks.clear();
-                    app.save_selection();
+                    let new = (app.selected_list_idx + 1) % app.task_lists.len();
+                    app.switch_list(new);
                     sync_tasks(api_client, sender.clone(), app).await;
                 }
                 KeyCode::Enter => {
