@@ -3,7 +3,7 @@ use std::time::Duration;
 use crate::app::{App, AppMode, InputField, DatePreset, Task};
 use crate::ui::palette::Theme;
 use crate::events::Event;
-use crate::api::ApiClient;
+use crate::api::{ApiClient, MoveTaskData};
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 use chrono::{Local, Utc, DateTime, Duration as ChronoDuration};
@@ -235,12 +235,37 @@ pub async fn handle_key_events(
 
         AppMode::ListSelector => {
             match key.code {
-                KeyCode::Esc => { app.mode = AppMode::Timer; }
+                KeyCode::Esc => { app.mode = AppMode::Timer; app.moving_task_id = None; }
                 KeyCode::Enter => {
-                    app.mode = AppMode::Timer;
-                    app.tasks.clear();
-                    app.save_selection();
-                    sync_tasks(api_client, sender.clone(), app).await;
+                    if let Some(moving_id) = app.moving_task_id.take() {
+                        // Mover la tarea (y sus subtareas) a la lista destino seleccionada.
+                        let target = app.task_lists.get(app.selected_list_idx).cloned();
+                        if let (Some(target), Some(parent)) = (target, app.all_tasks.iter().find(|t| t.id == moving_id).cloned()) {
+                            if target.id != "@all" && target.id != parent.list_id {
+                                let children: Vec<MoveTaskData> = app.all_tasks.iter()
+                                    .filter(|t| t.parent_id.as_ref() == Some(&moving_id))
+                                    .map(|t| MoveTaskData { title: t.title.clone(), notes: t.notes.clone(), due: t.due, completed: t.completed })
+                                    .collect();
+                                let parent_data = MoveTaskData { title: parent.title.clone(), notes: parent.notes.clone(), due: parent.due, completed: parent.completed };
+                                let from_list = parent.list_id.clone();
+                                let to_list = target.id.clone();
+                                let api = api_client.clone();
+                                let sender_clone = sender.clone();
+                                app.loading = true;
+                                tokio::spawn(async move {
+                                    let _ = api.move_task_tree(&from_list, &to_list, &moving_id, parent_data, children).await;
+                                    // Re-sincronizar para reflejar el estado real (haya ido bien o mal).
+                                    let _ = sender_clone.send(Event::Sync);
+                                });
+                            }
+                        }
+                        app.mode = AppMode::Timer;
+                    } else {
+                        app.mode = AppMode::Timer;
+                        app.tasks.clear();
+                        app.save_selection();
+                        sync_tasks(api_client, sender.clone(), app).await;
+                    }
                 }
                 KeyCode::Down | KeyCode::Char('j')
                     if !app.task_lists.is_empty() => {
@@ -440,6 +465,16 @@ pub async fn handle_key_events(
                     sync_tasks(api_client, sender.clone(), app).await;
                 }
                 KeyCode::Char('s') => sync_tasks(api_client, sender.clone(), app).await,
+                KeyCode::Char('M') if !app.timer_active => {
+                    // Mover tarea a otra lista: requiere al menos 2 listas reales y una tarea seleccionada.
+                    let real_lists = app.task_lists.iter().filter(|l| l.id != "@all").count();
+                    if real_lists >= 2 {
+                        if let Some(task) = app.tasks.get(app.selected_task) {
+                            app.moving_task_id = Some(task.id.clone());
+                            app.mode = AppMode::ListSelector;
+                        }
+                    }
+                }
                 KeyCode::Char('/') if !app.timer_active => { app.mode = AppMode::Search; }
                 KeyCode::Char('?') => { app.mode = AppMode::Help; }
                 KeyCode::Char('t') => { app.mode = AppMode::Stats; }

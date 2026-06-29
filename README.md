@@ -32,6 +32,7 @@ Este método se fundamenta en la idea de que las pausas frecuentes pueden mejora
 - **📊 Panel de Estadísticas** (`T`): Gráficas de barras de pomodoros y tareas completadas por día (últimos 7 días) más totales históricos.
 - **🔍 Búsqueda Instantánea** (`/`): Filtrado de tareas por texto en tiempo real mientras escribes.
 - **📴 Modo Offline**: Las tareas se cachean localmente; si no hay conexión al arrancar, se muestran las últimas sincronizadas en lugar de una pantalla vacía.
+- **🔀 Mover entre Listas** (`M`): Reubica una tarea (con sus subtareas) en otra lista de forma segura (recrea en destino y luego borra el origen).
 - **🎨 Personalización Estética Avanzada**:
     - **Temas Expandidos**: Soporte nativo para Catppuccin, Nord, Gruvbox, Dracula, Monokai, Solarized Dark y Ocean.
     - **Temas Custom**: Posibilidad de definir paletas RGB propias en `config.json`.
@@ -99,6 +100,7 @@ El script compilará el proyecto en modo `release` e instalará el binario en `~
 | `,` (Coma) | Configuración (Tiempos, Idioma, Temas) |
 | `N` / `A` | Nueva Tarea / Nueva Subtarea |
 | `E` | Editar Tarea (disponible en todas las vistas) |
+| `M` | Mover Tarea (y sus subtareas) a otra lista |
 | `C` | Mostrar/Ocultar completadas en la lista |
 | `S` | Sincronización manual |
 | `/` | Buscar / filtrar tareas por texto (Enter: aplicar · Esc: limpiar) |

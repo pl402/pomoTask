@@ -141,6 +141,7 @@ pub struct App {
     pub creating_task_temp_id: Option<String>,
     pub calendar_date: chrono::NaiveDate,
     pub task_filter: String,
+    pub moving_task_id: Option<String>,
 }
 
 impl App {
@@ -181,6 +182,7 @@ impl App {
             creating_task_temp_id: None,
             calendar_date: Local::now().date_naive(),
             task_filter: String::new(),
+            moving_task_id: None,
         };
         // Mostrar las tareas cacheadas de inmediato (se reemplazan al primer sync exitoso).
         app.rebuild_visible_tasks();

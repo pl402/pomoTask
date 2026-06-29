@@ -124,6 +124,7 @@ pub fn render_help_modal(app: &App, frame: &mut Frame) {
         ("N", app.translate("new_task")),
         ("A", app.translate("new_subtask")),
         ("E", app.translate("edit_task")),
+        ("M", app.translate("move_task_label")),
         ("C", app.translate("toggle_completed")),
         ("S", app.translate("sync_manual")),
         ("/", app.translate("search_label")),
@@ -219,5 +220,11 @@ pub fn render_list_selector(app: &App, frame: &mut Frame) {
         let s = if i == app.selected_list_idx { Style::default().fg(Palette::base(app)).bg(Palette::mauve(app)) } else { Style::default().fg(Palette::text(app)) };
         ListItem::new(format!("  {}  ", l.title)).style(s)
     }).collect();
-    frame.render_widget(List::new(items).block(Block::default().title(format!(" {} ", app.translate("lists_title"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::mauve(app)))), area);
+    // Cuando estamos moviendo una tarea, el selector elige la lista DESTINO.
+    let title = if app.moving_task_id.is_some() {
+        format!(" {} ", app.translate("move_to_title"))
+    } else {
+        format!(" {} ", app.translate("lists_title"))
+    };
+    frame.render_widget(List::new(items).block(Block::default().title(title).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::mauve(app)))), area);
 }

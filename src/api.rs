@@ -159,5 +159,45 @@ impl ApiClient {
         Ok(())
     }
 
+    /// Inserta una tarea completa en `list_id` (opcionalmente bajo `parent`) y devuelve su nuevo id.
+    async fn insert_full(&self, list_id: &str, data: &MoveTaskData, parent: Option<&str>) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let hub = match &self.hub { Some(h) => h, None => return Ok(String::new()) };
+        let task = api::Task {
+            title: Some(data.title.clone()),
+            notes: data.notes.clone(),
+            due: data.due.map(|d| d.to_rfc3339()),
+            status: Some(if data.completed { "completed".to_string() } else { "needsAction".to_string() }),
+            ..Default::default()
+        };
+        let mut call = hub.tasks().insert(task, list_id);
+        if let Some(p) = parent { call = call.parent(p); }
+        let (_, created) = call.doit().await?;
+        Ok(created.id.unwrap_or_default())
+    }
+
+    /// Mueve una tarea (y sus subtareas) de `from_list` a `to_list`.
+    /// Orden seguro: primero recrea TODO en destino; solo si eso tuvo éxito borra el original
+    /// (el borrado del padre elimina en cascada sus subtareas en el origen). Si algo falla antes
+    /// del borrado, el origen queda intacto (en el peor caso queda un duplicado en destino).
+    pub async fn move_task_tree(&self, from_list: &str, to_list: &str, task_id: &str, parent: MoveTaskData, children: Vec<MoveTaskData>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.ensure_full_permissions().await?;
+        let hub = match &self.hub { Some(h) => h, None => return Ok(()) };
+
+        let new_parent_id = self.insert_full(to_list, &parent, None).await?;
+        for child in &children {
+            self.insert_full(to_list, child, Some(&new_parent_id)).await?;
+        }
+        hub.tasks().delete(from_list, task_id).doit().await?;
+        Ok(())
+    }
+
     fn mock_tasks(&self) -> Vec<Task> { vec![Task { id: "1".to_string(), list_id: "@default".to_string(), title: "Modo Simulado".to_string(), completed: false, due: None, updated: Utc::now(), completed_at: None, notes: None, parent_id: None, pomodoros: 0 }] }
+}
+
+/// Datos mínimos para recrear una tarea al moverla entre listas.
+pub struct MoveTaskData {
+    pub title: String,
+    pub notes: Option<String>,
+    pub due: Option<DateTime<Utc>>,
+    pub completed: bool,
 }
