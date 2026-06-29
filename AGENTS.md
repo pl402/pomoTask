@@ -180,5 +180,8 @@ cargo test               # tests unitarios (lógica pura: parseo de fechas, jera
 
 Ver la tabla completa en `README.md`. Resumen: `Espacio` (timer), `m` (cambiar modo del timer),
 `Enter` (completar/guardar), `j/k` (navegar tareas), `h/l` (cambiar lista), `[`/`]` (navegar calendario),
-`N/A` (nueva tarea/subtarea), `E` (editar), `C` (toggle completadas), `S` (sync), `T` (estadísticas),
-`,` (ajustes), `?` (ayuda), `Q`/`Esc` (salir).
+`N/A` (nueva tarea/subtarea), `E` (editar), `C` (toggle completadas), `S` (sync), `/` (buscar),
+`T` (estadísticas), `,` (ajustes), `?` (ayuda), `Q`/`Esc` (salir).
+
+El filtro de búsqueda vive en `App::task_filter`; `App::rebuild_visible_tasks()` reconstruye la lista
+visual desde `all_tasks` aplicando completadas + filtro + jerarquía (se llama en `ApiUpdate` y al teclear).

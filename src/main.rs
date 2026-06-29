@@ -74,17 +74,11 @@ async fn main() -> Result<()> {
                     }
                     
                     // Guardar todas para el calendario
-                    app.all_tasks = tasks_with_stats.clone();
-                    
-                    // Filtrar para la lista visual
-                    let filtered_tasks = if app.config.show_completed {
-                        tasks_with_stats
-                    } else {
-                        tasks_with_stats.into_iter().filter(|t| !t.completed).collect()
-                    };
-                    
-                    app.tasks = App::organize_tasks_hierarchical(filtered_tasks);
-                    if let Some(last_id) = &app.config.last_task_id { 
+                    app.all_tasks = tasks_with_stats;
+
+                    // Construir la lista visual (aplica show_completed + filtro de búsqueda + jerarquía).
+                    app.rebuild_visible_tasks();
+                    if let Some(last_id) = &app.config.last_task_id {
                         if let Some(idx) = app.tasks.iter().position(|t| &t.id == last_id) { 
                             app.selected_task = idx; 
                         } else {

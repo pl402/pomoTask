@@ -10,7 +10,7 @@ use ratatui::{
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{
-        Block, BorderType, Borders, Paragraph,
+        Block, BorderType, Borders, Clear, Paragraph,
     },
     Frame,
 };
@@ -66,6 +66,10 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             render_logout_confirm_modal(app, frame);
         }
         AppMode::Stats => self::stats::render_stats_screen(app, frame),
+        AppMode::Search => {
+            render_timer_screen(app, frame);
+            render_search_bar(app, frame);
+        }
     }
     render_animation_layer(app, frame);
 }
@@ -158,6 +162,32 @@ fn render_auth_screen(app: &App, frame: &mut Frame) {
         frame.render_widget(Paragraph::new(vec![Line::from(vec![Span::styled(foot, Style::default().fg(Palette::green(app)))]), Line::from(""), Line::from(vec![Span::styled(app.translate("auth_waiting"), Style::default().fg(Palette::peach(app)))])]).alignment(Alignment::Center), content[3]);
     } else { frame.render_widget(Paragraph::new(app.translate("login_btn")).alignment(Alignment::Center).style(Style::default().fg(Palette::green(app)).add_modifier(Modifier::REVERSED)), content[2]); }
     frame.render_widget(Paragraph::new(format!("'Q' -> {}", app.translate("quit"))).alignment(Alignment::Center).style(Style::default().fg(Palette::overlay0(app))), chunks[2]);
+}
+
+fn render_search_bar(app: &App, frame: &mut Frame) {
+    let screen = frame.size();
+    // Barra de búsqueda centrada horizontalmente, cerca de la parte superior.
+    let width = (screen.width as f32 * 0.6) as u16;
+    let area = Rect {
+        x: screen.x + (screen.width.saturating_sub(width)) / 2,
+        y: screen.y + 1,
+        width,
+        height: 3,
+    };
+    frame.render_widget(Clear, area);
+    let text = format!("🔍 {}_", app.task_filter);
+    frame.render_widget(
+        Paragraph::new(text)
+            .style(Style::default().fg(Palette::text(app)))
+            .block(
+                Block::default()
+                    .title(format!(" {} ", app.translate("search_title")))
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
+                    .border_style(Style::default().fg(Palette::yellow(app))),
+            ),
+        area,
+    );
 }
 
 pub fn centered_rect(p_x: u16, p_y: u16, r: Rect) -> Rect {

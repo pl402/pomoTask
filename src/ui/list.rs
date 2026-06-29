@@ -76,9 +76,12 @@ pub fn render_left_panel(app: &App, frame: &mut Frame, area: Rect) {
         Row::new(cells).style(style)
     }).collect();
 
-    let list_title = if let Some(l) = app.task_lists.get(app.selected_list_idx) { 
-        format!(" {} - {} ", app.translate("tasks"), l.title) 
+    let mut list_title = if let Some(l) = app.task_lists.get(app.selected_list_idx) {
+        format!(" {} - {} ", app.translate("tasks"), l.title)
     } else { format!(" {} ", app.translate("tasks")) };
+    if !app.task_filter.is_empty() {
+        list_title = format!("{}🔍 {} ", list_title, app.task_filter);
+    }
 
     if app.loading && app.tasks.is_empty() && app.marking_done_task_id.is_none() && app.creating_task_temp_id.is_none() {
         let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];

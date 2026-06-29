@@ -75,7 +75,7 @@ pub struct TaskList { pub id: String, pub title: String }
 pub enum Language { English, Spanish }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum AppMode { Loading, Timer, Auth, AuthSuccess, ListSelector, Input, SubtaskInput, Edit, ConfirmComplete, Help, Settings, ConfirmLogout, Stats }
+pub enum AppMode { Loading, Timer, Auth, AuthSuccess, ListSelector, Input, SubtaskInput, Edit, ConfirmComplete, Help, Settings, ConfirmLogout, Stats, Search }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum InputField { Title, Notes, Due, List }
@@ -140,6 +140,7 @@ pub struct App {
     pub marking_done_task_id: Option<String>,
     pub creating_task_temp_id: Option<String>,
     pub calendar_date: chrono::NaiveDate,
+    pub task_filter: String,
 }
 
 impl App {
@@ -178,6 +179,22 @@ impl App {
             marking_done_task_id: None,
             creating_task_temp_id: None,
             calendar_date: Local::now().date_naive(),
+            task_filter: String::new(),
+        }
+    }
+
+    /// Reconstruye `tasks` (lista visual) desde `all_tasks` aplicando el filtro de completadas,
+    /// el filtro de búsqueda por texto y la organización jerárquica.
+    pub fn rebuild_visible_tasks(&mut self) {
+        let filter = self.task_filter.to_lowercase();
+        let filtered: Vec<Task> = self.all_tasks.iter()
+            .filter(|t| self.config.show_completed || !t.completed)
+            .filter(|t| filter.is_empty() || t.title.to_lowercase().contains(&filter))
+            .cloned()
+            .collect();
+        self.tasks = Self::organize_tasks_hierarchical(filtered);
+        if self.selected_task >= self.tasks.len() {
+            self.selected_task = self.tasks.len().saturating_sub(1);
         }
     }
 

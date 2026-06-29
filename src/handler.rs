@@ -104,6 +104,27 @@ pub async fn handle_key_events(
             app.mode = AppMode::Timer;
         },
 
+        AppMode::Search => {
+            match key.code {
+                // Enter o Esc cierran el buscador; Esc además limpia el filtro.
+                KeyCode::Enter => { app.mode = AppMode::Timer; }
+                KeyCode::Esc => {
+                    app.task_filter.clear();
+                    app.rebuild_visible_tasks();
+                    app.mode = AppMode::Timer;
+                }
+                KeyCode::Backspace => {
+                    app.task_filter.pop();
+                    app.rebuild_visible_tasks();
+                }
+                KeyCode::Char(c) => {
+                    app.task_filter.push(c);
+                    app.rebuild_visible_tasks();
+                }
+                _ => {}
+            }
+        },
+
         AppMode::ConfirmLogout => {
             match key.code {
                 KeyCode::Esc => { app.mode = AppMode::Settings; }
@@ -419,6 +440,7 @@ pub async fn handle_key_events(
                     sync_tasks(api_client, sender.clone(), app).await;
                 }
                 KeyCode::Char('s') => sync_tasks(api_client, sender.clone(), app).await,
+                KeyCode::Char('/') if !app.timer_active => { app.mode = AppMode::Search; }
                 KeyCode::Char('?') => { app.mode = AppMode::Help; }
                 KeyCode::Char('t') => { app.mode = AppMode::Stats; }
                 KeyCode::Char(',') => { app.mode = AppMode::Settings; }
