@@ -99,7 +99,7 @@ El script compilará el proyecto en modo `release` e instalará el binario en `~
 | `h` / `l` | Cambiar entre listas de tareas (← / →) |
 | `[` / `]` | **Navegar Calendario** (mes anterior / siguiente) |
 | `Tab` | Abrir selector de listas o saltar campos |
-| `,` (Coma) | Configuración (Tiempos, Idioma, Temas) |
+| `,` (Coma) | Configuración (Tiempos, Idioma, Temas, Vistas, Retención de datos, Intervalo de sync) |
 | `N` / `A` | Nueva Tarea / Nueva Subtarea |
 | `E` | Editar Tarea (disponible en todas las vistas) |
 | `y` | Copiar Tarea al portapapeles (con notas y subtareas) |
@@ -115,12 +115,17 @@ El script compilará el proyecto en modo `release` e instalará el binario en `~
 ## 📂 Estructura del Código
 
 Arquitectura diseñada para ser modular, legible y fácil de extender:
-- `src/ui/`: Componentes de interfaz (Calendario, Listas, Modales, Temporizador).
+- `src/ui/`: Componentes de interfaz (Calendario, Listas, Modales, Temporizador, Estadísticas).
 - `src/ui/palette.rs`: Sistema dinámico de temas y colores.
-- `src/app/`: Lógica de negocio y estado global de la aplicación.
+- `src/ui/stats.rs`: Pantalla de estadísticas (gráficas de barras).
+- `src/app/`: Lógica de negocio, estado global y **caché por lista** (cambio de lista sin esperar a la red).
 - `src/app/i18n.rs`: Motor de internacionalización (Español/Inglés).
-- `src/handler.rs`: Lógica centralizada para la gestión de eventos de teclado.
+- `src/handler.rs`: Lógica centralizada de teclado + sincronización (`sync_tasks` / `sync_all_lists`).
 - `src/api.rs`: Integración asíncrona con Google Tasks API.
+
+> **Desarrollo**: `cargo run` (TUI), `cargo test` (tests unitarios de lógica pura), `cargo clippy`
+> (0 warnings), `cargo fmt`. Requiere `client_secret.json` en la raíz para compilar (o se usa un
+> placeholder y la app corre en modo simulado). Comentarios y UI en español; commits en Conventional Commits.
 
 ---
 Desarrollado con ❤️ desde **México** 🇲🇽 por un humano que sobrevive a base de agua, té y papitas con mucho chile. 🍵🔥🌶️

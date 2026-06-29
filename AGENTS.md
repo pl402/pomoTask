@@ -39,19 +39,21 @@ UI mediante un canal `mpsc::UnboundedChannel<Event>`. La UI nunca bloquea espera
 src/
 ├── main.rs          Bucle principal: render → recibe Event → muta App. Maneja flags (--version/-v).
 ├── events.rs        enum Event + EventHandler (poll de teclado/mouse + Tick cada 50ms en una task tokio).
-├── handler.rs       handle_key_events() + sync_tasks(). Toda la lógica de teclado vive aquí (~520 líneas).
-├── api.rs           ApiClient: wrapper async de Google Tasks (fetch/create/update/toggle + OAuth + paginación).
+├── handler.rs       handle_key_events() + sync_tasks() (lista puntual) + sync_all_lists() (todas, en
+│                    segundo plano). Toda la lógica de teclado vive aquí.
+├── api.rs           ApiClient: wrapper async de Google Tasks (fetch/create/update/toggle/move + OAuth + paginación).
 ├── app/
-│   ├── mod.rs       Estado global App, structs (Task, Config, Stats), persistencia de config/stats.
+│   ├── mod.rs       Estado global App, structs (Task, Config, Stats), caché por lista, persistencia de config/stats/caché.
 │   └── i18n.rs      Motor de traducción (Español/Inglés) vía App::translate(key).
 └── ui/
-    ├── mod.rs       render() — despacha según AppMode a la vista correspondiente.
-    ├── calendar.rs  Calendario: vistas Standard/Heatmap/Progress y rangos Month/Week/Day.
-    ├── list.rs      Lista jerárquica de tareas/subtareas.
-    ├── timer.rs     Pantalla del temporizador y modo enfoque (reloj gigante).
-    ├── modals.rs    Modales: input, edición, confirmación, ayuda, ajustes, selector de listas, logout.
+    ├── mod.rs       render() — despacha según AppMode; splash inicial, animaciones y barra de búsqueda.
+    ├── calendar.rs  Calendario: vistas Standard/Heatmap/Progress y rangos Month/Week/Day + leyenda.
+    ├── list.rs      Lista jerárquica de tareas/subtareas (panel activo, fechas con color, iconos 🍅).
+    ├── timer.rs     Pantalla del temporizador y modo enfoque (reloj gigante, puntos del ciclo, pie).
+    ├── modals.rs    Modales: input, edición, confirmación, ayuda, ajustes (por secciones), selector, logout.
     ├── stats.rs     Pantalla de estadísticas (tecla `t`): BarChart de pomodoros/tareas por día + totales.
-    └── palette.rs   Temas y colores (Catppuccin, Nord, Gruvbox, Dracula, Monokai, Solarized, Ocean, custom).
+    └── palette.rs   Temas y colores (Catppuccin, Nord, Gruvbox, Dracula, Monokai, Solarized, Ocean,
+                     Tokyo Night, Rosé Pine, Custom) + Palette::timer_color() (verde→amarillo→rojo).
 ```
 
 ### Diagrama de componentes y flujo
@@ -100,9 +102,13 @@ y devuelve su resultado como un `Event` por el canal; `main()` es el único que 
 
 ### Estado de la app (`AppMode`)
 
-`Loading, Timer, Auth, AuthSuccess, ListSelector, Input, SubtaskInput, Edit, ConfirmComplete, Help, Settings, ConfirmLogout`.
+`Loading, Timer, Auth, AuthSuccess, ListSelector, Input, SubtaskInput, Edit, ConfirmComplete, Help,
+Settings, ConfirmLogout, Stats, Search`.
 `ui::render` despacha según este modo. Para añadir una pantalla nueva: agregar variante a `AppMode`,
 manejarla en `ui/mod.rs::render`, y rutear el teclado en `handler.rs`.
+
+Además del modo, hay overlays que NO son `AppMode` y se dibujan encima en `render()`: la **splash**
+inicial (`splash_frames`) y la capa de **animación** (partículas de victoria + texto flotante "+1 🍅").
 
 ## Autenticación y archivos sensibles
 
@@ -111,7 +117,8 @@ manejarla en `ui/mod.rs::render`, y rutear el teclado en `handler.rs`.
 - **Resolución de `client_secret.json`** (orden, ver `api.rs::ApiClient::new`):
   1. `~/.config/pomotask/client_secret.json`
   2. `./client_secret.json` (raíz del proyecto)
-  3. Credenciales **incrustadas en el binario** vía `include_str!("../client_secret.json")`.
+  3. Credenciales **incrustadas en el binario** en compilación: `build.rs` copia el secreto (o un
+     placeholder) a `OUT_DIR/embedded_secret.json` y `api.rs` lo embebe con `include_str!`.
 - **`build.rs` ya NO falla si falta `client_secret.json`**: copia las credenciales (o un placeholder vacío)
   a `OUT_DIR/embedded_secret.json`, que `api.rs` embebe con `include_str!`. Así CI y los clones limpios
   compilan; sin credenciales válidas la app cae a modo simulado (`mock_tasks`). Ver README para generarlas.
@@ -131,8 +138,8 @@ Todo se guarda en `~/.config/pomotask/` (vía `dirs::config_dir()` + `App::get_c
   `App::new()` (a `App::list_cache`) y se reescribe en cada `ApiUpdate`. Permite mostrar cualquier lista al
   instante sin red. Si falla la red al arrancar (`Event::SyncFailed`) se muestra esta caché.
   Si hay caché, la app arranca directamente en `AppMode::Timer` (no en la pantalla de carga a pantalla
-  completa) con un indicador "⠋ Cargando…" en el pie mientras sincroniza; la pantalla `Loading` completa
-  solo se usa en el primer arranque sin caché.
+  completa); mientras sincroniza, el único indicador de carga es el spinner "S:" en la barra de estado
+  (pie). La pantalla `Loading` completa solo se usa en el primer arranque sin caché.
 - Splash inicial: `App::splash_frames` (~1.6 s) hace que `ui::render` dibuje el logo ASCII (`render_splash`)
   por encima de todo al arrancar; la sincronización corre de fondo y cualquier tecla la salta. No es un
   `AppMode`, es un overlay que decrementa en `tick()`.
@@ -143,7 +150,7 @@ Todo se guarda en `~/.config/pomotask/` (vía `dirs::config_dir()` + `App::get_c
 `.gitignore` ya los excluye, pero un agente debe tenerlos presentes:
 - `client_secret.json` (secreto OAuth — está en disco para compilar, pero ignorado por git).
 - `pomotask_token.json` (token de sesión del usuario).
-- `/target`, `Cargo.lock` (ignorado en este repo), `*.json.bak`.
+- `/target`, `*.json.bak`. (Nota: `Cargo.lock` SÍ se versiona — ver gotchas.)
 
 Nunca imprimas, registres ni incluyas el contenido de estos archivos en código, logs o respuestas.
 
@@ -184,11 +191,16 @@ cargo test               # tests unitarios (lógica pura: parseo de fechas, jera
 
 - `Cargo.lock` SÍ se versiona (es un binario/aplicación). Ya no está en `.gitignore`.
 - La lista `@all` es virtual (se inyecta en `main.rs` al recibir `ListsUpdate`); no existe en la API.
-- El descanso largo se activa automáticamente cada 4 pomodoros (`session_pomodoros % 4 == 0`); también
-  se puede cambiar de modo manualmente con la tecla `m` (timer detenido).
+- El descanso largo se activa automáticamente cada 4 pomodoros (`session_pomodoros.is_multiple_of(4)`);
+  también se puede cambiar de modo manualmente con la tecla `m` (timer detenido).
 - No se captura el mouse: se omite a propósito `EnableMouseCapture` para preservar la selección de texto del terminal.
 - Sin credenciales válidas, `ApiClient` cae a `mock_tasks()` (modo simulado) en vez de fallar.
-- El `Event::Tick` (50 ms) impulsa animaciones (partículas, spinners) y el conteo del temporizador.
+- El `Event::Tick` (50 ms ⇒ 20/seg) impulsa animaciones, el conteo del temporizador y el sync periódico
+  (`App::sync_due()` cuenta ticks; 1 min = 1200 ticks).
+- Las completadas se ocultan por defecto (`config.show_completed = false`); la tecla `C` solo re-filtra
+  en memoria (`rebuild_visible_tasks`), NO consulta la red (la caché ya trae las completadas).
+- `fetch_tasks` siempre se llama con `show_completed = true` para poblar caché y calendario; el filtro
+  de visibilidad se aplica después en `rebuild_visible_tasks`.
 
 ## Atajos de teclado
 
@@ -210,9 +222,8 @@ El filtro de búsqueda vive en `App::task_filter`; `App::rebuild_visible_tasks()
 visual desde `all_tasks` aplicando completadas + filtro + jerarquía (se llama en `ApiUpdate` y al teclear).
 
 Cambio de lista no bloqueante: `App::list_cache` (id → tareas) cachea cada lista; `switch_list()` muestra
-al instante la caché de la nueva lista (sin vaciar el panel) y la sincronización corre en segundo plano
-(`sync_tasks`), con el indicador de carga solo en la barra de estado (spinner "S:"). El panel de la lista
-ya no muestra el spinner grande de carga.
+al instante la caché de la nueva lista (sin vaciar el panel) y **NO dispara sincronización** (el sync es
+periódico/al iniciar/manual — ver más abajo). El panel de la lista ya no muestra el spinner grande de carga.
 
 `Event::ApiUpdate(list_id, tasks)` lleva el id de la lista a la que corresponde la respuesta: el handler
 SIEMPRE actualiza `list_cache[list_id]`, pero solo refresca la vista (`all_tasks`) si `list_id` coincide
