@@ -121,7 +121,10 @@ manejarla en `ui/mod.rs::render`, y rutear el teclado en `handler.rs`.
 
 Todo se guarda en `~/.config/pomotask/` (vía `dirs::config_dir()` + `App::get_config_dir()`):
 - `config.json` — preferencias (duraciones, idioma, tema, vista de calendario, última lista/tarea).
-- `stats.json` — estadísticas de pomodoros por hora/tarea y timers persistidos.
+- `stats.json` — estadísticas de pomodoros por hora/tarea y timers persistidos. Al arrancar,
+  `App::cleanup_old_stats()` poda los mapas horarios (`hourly_*`) más antiguos que `config.stats_retention`
+  (mes/año/siempre, configurable en Ajustes). Es **solo local**, no toca Google. Muestra "🧹 Limpiando…"
+  en el pie por ~1.5 s (`cleaning_frames`). Nota: reduce también los "totales históricos" de la vista `T`.
 - `tasks_cache.json` — caché de las últimas tareas sincronizadas (modo offline). Se carga en `App::new()`
   y se reescribe en cada `ApiUpdate`. Si falla la red al arrancar (`Event::SyncFailed`) se muestra esta caché.
 - `pomotask_token.json` — token OAuth. `logout()` lo borra.

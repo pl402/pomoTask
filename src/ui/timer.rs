@@ -153,6 +153,9 @@ pub fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     ];
 
     let mut right_spans = vec![];
+    if app.cleaning_frames > 0 {
+        right_spans.push(Span::styled(format!(" {} ", app.translate("cleaning_stats")), Style::default().fg(Palette::yellow(app)).add_modifier(Modifier::BOLD)));
+    }
     if app.copy_feedback_frames > 0 {
         right_spans.push(Span::styled(format!(" {} ", app.translate("copied_clipboard")), Style::default().fg(Palette::green(app)).add_modifier(Modifier::BOLD)));
     }

@@ -16,6 +16,10 @@ pub enum CalendarView { Standard, Heatmap, Progress }
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum CalendarRange { Month, Week, Day }
 
+/// Cuánta historia de estadísticas locales (registros horarios) se conserva al arrancar.
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Default)]
+pub enum StatsRetention { Month, #[default] Year, Forever }
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config { 
     pub focus_duration: u32, 
@@ -28,7 +32,9 @@ pub struct Config {
     pub calendar_range: CalendarRange,
     pub last_list_id: Option<String>,
     pub last_task_id: Option<String>,
-    pub show_completed: bool, 
+    pub show_completed: bool,
+    #[serde(default)]
+    pub stats_retention: StatsRetention,
 }
 
 impl Default for Config { 
@@ -45,8 +51,9 @@ impl Default for Config {
             last_list_id: None,
             last_task_id: None,
             show_completed: false,
-        } 
-    } 
+            stats_retention: StatsRetention::Year,
+        }
+    }
 }
 
 impl TimerMode { pub fn duration(&self, config: &Config) -> u32 { match self { TimerMode::Focus => config.focus_duration, TimerMode::ShortBreak => config.short_break_duration, TimerMode::LongBreak => config.long_break_duration } } }
@@ -94,6 +101,12 @@ pub struct Stats {
 
 #[derive(Debug, Clone)]
 pub struct DayStats { pub label: String, pub pomodoros: u64, pub tasks_done: u64, pub focus_seconds: u64 }
+
+/// Conserva solo las entradas cuya clave (fecha "YYYY-MM-DD HH:00") es >= `cutoff` ("YYYY-MM-DD").
+/// La comparación léxica equivale a comparar fechas por el formato fijo ISO con ceros a la izquierda.
+fn prune_before(map: &mut BTreeMap<String, u64>, cutoff: &str) {
+    map.retain(|k, _| k.as_str() >= cutoff);
+}
 
 #[derive(Debug, Clone)]
 pub struct Particle { pub x: f64, pub y: f64, pub vx: f64, pub vy: f64, pub life: f32, pub char: char }
@@ -144,6 +157,7 @@ pub struct App {
     pub moving_task_id: Option<String>,
     pub clipboard_request: Option<String>,
     pub copy_feedback_frames: u32,
+    pub cleaning_frames: u32,
 }
 
 impl App {
@@ -187,10 +201,40 @@ impl App {
             moving_task_id: None,
             clipboard_request: None,
             copy_feedback_frames: 0,
+            cleaning_frames: 0,
         };
         // Mostrar las tareas cacheadas de inmediato (se reemplazan al primer sync exitoso).
         app.rebuild_visible_tasks();
+        // Limpieza transparente de estadísticas antiguas al arrancar (solo local, no toca Google).
+        if app.cleanup_old_stats() {
+            app.cleaning_frames = 30; // ~1.5 s de aviso en la barra de estado
+        }
         app
+    }
+
+    /// Elimina los registros horarios (pomodoros, segundos de enfoque y tareas completadas) más
+    /// antiguos que el periodo de retención configurado. Es puramente local: NO borra nada de
+    /// Google Tasks. Devuelve `true` si se eliminó algo (para mostrar el aviso "Limpiando…").
+    pub fn cleanup_old_stats(&mut self) -> bool {
+        let months = match self.config.stats_retention {
+            StatsRetention::Month => 1,
+            StatsRetention::Year => 12,
+            StatsRetention::Forever => return false,
+        };
+        let cutoff = match Local::now().date_naive().checked_sub_months(chrono::Months::new(months)) {
+            Some(d) => d.format("%Y-%m-%d").to_string(),
+            None => return false,
+        };
+        // Las claves tienen formato fijo "YYYY-MM-DD HH:00", así que la comparación léxica equivale
+        // a comparar fechas. Conservamos las entradas con fecha >= corte.
+        let count = |s: &Stats| s.hourly_pomodoros.len() + s.hourly_seconds.len() + s.hourly_tasks_done.len();
+        let before = count(&self.stats);
+        prune_before(&mut self.stats.hourly_pomodoros, &cutoff);
+        prune_before(&mut self.stats.hourly_seconds, &cutoff);
+        prune_before(&mut self.stats.hourly_tasks_done, &cutoff);
+        let removed = before != count(&self.stats);
+        if removed { self.save_stats(); }
+        removed
     }
 
     /// Reconstruye `tasks` (lista visual) desde `all_tasks` aplicando el filtro de completadas,
@@ -383,6 +427,7 @@ impl App {
     pub fn tick(&mut self) {
         self.spinner_frame = self.spinner_frame.wrapping_add(1);
         if self.copy_feedback_frames > 0 { self.copy_feedback_frames -= 1; }
+        if self.cleaning_frames > 0 { self.cleaning_frames -= 1; }
         
         // Update Animation
         if self.animation.task_id.is_some() {
@@ -693,6 +738,19 @@ mod tests {
         let out = App::organize_tasks_hierarchical(input);
         assert_eq!(out.first().unwrap().id, "pending");
         assert_eq!(out.last().unwrap().id, "done");
+    }
+
+    #[test]
+    fn prune_before_conserva_solo_lo_reciente() {
+        let mut map = BTreeMap::new();
+        map.insert("2025-01-15 10:00".to_string(), 3u64); // antiguo
+        map.insert("2026-06-29 09:00".to_string(), 5u64); // reciente
+        map.insert("2026-05-29 00:00".to_string(), 1u64); // justo en el corte
+        prune_before(&mut map, "2026-05-29");
+        assert!(!map.contains_key("2025-01-15 10:00"));   // eliminado
+        assert!(map.contains_key("2026-06-29 09:00"));     // conservado
+        assert!(map.contains_key("2026-05-29 00:00"));     // el día del corte se conserva
+        assert_eq!(map.len(), 2);
     }
 
     #[test]

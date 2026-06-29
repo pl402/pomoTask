@@ -141,10 +141,10 @@ pub async fn handle_key_events(
                 KeyCode::Esc => { app.mode = AppMode::Timer; }
                 KeyCode::Up | KeyCode::Char('k') => {
                     if app.selected_settings_idx > 0 { app.selected_settings_idx -= 1; }
-                    else { app.selected_settings_idx = 7; }
+                    else { app.selected_settings_idx = 8; }
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
-                    if app.selected_settings_idx < 7 { app.selected_settings_idx += 1; }
+                    if app.selected_settings_idx < 8 { app.selected_settings_idx += 1; }
                     else { app.selected_settings_idx = 0; }
                 }
                 KeyCode::Left | KeyCode::Char('h') => {
@@ -177,6 +177,13 @@ pub async fn handle_key_events(
                                 crate::app::CalendarRange::Month => crate::app::CalendarRange::Day,
                                 crate::app::CalendarRange::Week => crate::app::CalendarRange::Month,
                                 crate::app::CalendarRange::Day => crate::app::CalendarRange::Week,
+                            };
+                        }
+                        7 => {
+                            app.config.stats_retention = match app.config.stats_retention {
+                                crate::app::StatsRetention::Month => crate::app::StatsRetention::Forever,
+                                crate::app::StatsRetention::Year => crate::app::StatsRetention::Month,
+                                crate::app::StatsRetention::Forever => crate::app::StatsRetention::Year,
                             };
                         }
                         _ => {}
@@ -216,7 +223,14 @@ pub async fn handle_key_events(
                                 crate::app::CalendarRange::Day => crate::app::CalendarRange::Month,
                             };
                         }
-                        7
+                        7 => {
+                            app.config.stats_retention = match app.config.stats_retention {
+                                crate::app::StatsRetention::Month => crate::app::StatsRetention::Year,
+                                crate::app::StatsRetention::Year => crate::app::StatsRetention::Forever,
+                                crate::app::StatsRetention::Forever => crate::app::StatsRetention::Month,
+                            };
+                        }
+                        8
                             if (key.code == KeyCode::Enter || key.code == KeyCode::Right || key.code == KeyCode::Char('l')) => {
                                 app.mode = AppMode::ConfirmLogout;
                             }
@@ -226,7 +240,7 @@ pub async fn handle_key_events(
                     app.timer_seconds = app.timer_mode.duration(&app.config);
                 }
                 KeyCode::Enter
-                    if app.selected_settings_idx == 7 => {
+                    if app.selected_settings_idx == 8 => {
                         app.mode = AppMode::ConfirmLogout;
                     }
                 _ => {}

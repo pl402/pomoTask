@@ -170,6 +170,11 @@ pub fn render_settings_modal(app: &App, frame: &mut Frame) {
             crate::app::CalendarRange::Week => app.translate("calendar_range_week"),
             crate::app::CalendarRange::Day => app.translate("calendar_range_day"),
         }),
+        (app.translate("settings_retention"), match app.config.stats_retention {
+            crate::app::StatsRetention::Month => app.translate("retention_month"),
+            crate::app::StatsRetention::Year => app.translate("retention_year"),
+            crate::app::StatsRetention::Forever => app.translate("retention_forever"),
+        }),
         (app.translate("settings_logout"), "".to_string())];
 
     let rows: Vec<Row> = settings.iter().enumerate().map(|(i, (k, v))| {

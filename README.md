@@ -34,6 +34,7 @@ Este método se fundamenta en la idea de que las pausas frecuentes pueden mejora
 - **📴 Modo Offline**: Las tareas se cachean localmente; si no hay conexión al arrancar, se muestran las últimas sincronizadas en lugar de una pantalla vacía.
 - **🔀 Mover entre Listas** (`M`): Reubica una tarea (con sus subtareas) en otra lista de forma segura (recrea en destino y luego borra el origen).
 - **📋 Copiar al Portapapeles** (`y`): Copia la tarea seleccionada como texto markdown, incluyendo su descripción, fecha y todas sus subtareas con sus notas.
+- **🧹 Limpieza Automática de Estadísticas**: Al iniciar, poda los registros horarios locales más antiguos que el periodo configurado (último mes / año / siempre). Es **solo local: nunca borra nada de Google Tasks**. Configurable en Ajustes (`,`).
 - **🎨 Personalización Estética Avanzada**:
     - **Temas Expandidos**: Soporte nativo para Catppuccin, Nord, Gruvbox, Dracula, Monokai, Solarized Dark y Ocean.
     - **Temas Custom**: Posibilidad de definir paletas RGB propias en `config.json`.
