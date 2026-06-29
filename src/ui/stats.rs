@@ -8,9 +8,10 @@ use ratatui::{
 
 use crate::app::App;
 use crate::ui::palette::Palette;
+use crate::ui::anim_rect;
 
 pub fn render_stats_screen(app: &App, frame: &mut Frame) {
-    let area = frame.size();
+    let area = anim_rect(app, frame.size());
     let block = Block::default()
         .title(format!(" 📊 {} ", app.translate("stats_title")))
         .borders(Borders::ALL)

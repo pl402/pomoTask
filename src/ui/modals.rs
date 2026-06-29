@@ -11,10 +11,10 @@ use ratatui::{
 
 use crate::app::{App, AppMode, InputField, DatePreset};
 use crate::ui::palette::Palette;
-use crate::ui::centered_rect;
+use crate::ui::{centered_rect, anim_rect};
 
 pub fn render_input_modal(app: &App, frame: &mut Frame) {
-    let area = centered_rect(70, 70, frame.size());
+    let area = anim_rect(app, centered_rect(70, 70, frame.size()));
     frame.render_widget(Clear, area);
     let title_key = match app.mode { AppMode::SubtaskInput => "subtask_title", AppMode::Edit => "edit_title", _ => "input_title" };
     let mut modal_title = format!(" {} ", app.translate(title_key));
@@ -126,7 +126,7 @@ pub fn render_input_modal(app: &App, frame: &mut Frame) {
 }
 
 pub fn render_help_modal(app: &App, frame: &mut Frame) {
-    let area = centered_rect(64, 90, frame.size());
+    let area = anim_rect(app, centered_rect(64, 90, frame.size()));
     frame.render_widget(Clear, area);
     
     let block = Block::default()
@@ -187,7 +187,7 @@ pub fn render_help_modal(app: &App, frame: &mut Frame) {
 }
 
 pub fn render_settings_modal(app: &App, frame: &mut Frame) {
-    let area = centered_rect(62, 80, frame.size());
+    let area = anim_rect(app, centered_rect(62, 80, frame.size()));
     frame.render_widget(Clear, area);
 
     let block = Block::default().title(format!(" {} ", app.translate("settings_title"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::yellow(app)));
@@ -251,7 +251,7 @@ pub fn render_settings_modal(app: &App, frame: &mut Frame) {
 }
 
 pub fn render_logout_confirm_modal(app: &App, frame: &mut Frame) {
-    let area = centered_rect(50, 20, frame.size());
+    let area = anim_rect(app, centered_rect(50, 20, frame.size()));
     frame.render_widget(Clear, area);
     frame.render_widget(Block::default().title(format!(" {} ", app.translate("logout_confirm_title"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Palette::red(app))), area);
     let chunks = Layout::default().direction(Direction::Vertical).constraints([Constraint::Length(2), Constraint::Min(0), Constraint::Length(1)]).margin(1).split(area);
@@ -260,7 +260,7 @@ pub fn render_logout_confirm_modal(app: &App, frame: &mut Frame) {
 }
 
 pub fn render_confirm_modal(app: &App, frame: &mut Frame) {
-    let area = centered_rect(50, 20, frame.size());
+    let area = anim_rect(app, centered_rect(50, 20, frame.size()));
     frame.render_widget(Clear, area);
     
     let task = if let Some(id) = &app.confirming_task_id {
@@ -282,7 +282,7 @@ pub fn render_confirm_modal(app: &App, frame: &mut Frame) {
 }
 
 pub fn render_list_selector(app: &App, frame: &mut Frame) {
-    let area = centered_rect(60, 40, frame.size());
+    let area = anim_rect(app, centered_rect(60, 40, frame.size()));
     frame.render_widget(Clear, area);
     let items: Vec<ListItem> = app.task_lists.iter().enumerate().map(|(i, l)| {
         let s = if i == app.selected_list_idx { Style::default().fg(Palette::base(app)).bg(Palette::mauve(app)) } else { Style::default().fg(Palette::text(app)) };

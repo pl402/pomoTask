@@ -25,7 +25,38 @@ use self::modals::{
     render_settings_modal, render_logout_confirm_modal, render_list_selector
 };
 
+const MODAL_ANIM_MAX: u8 = 5;
+
+/// `true` si el modo dibuja un modal flotante (para animar su apertura).
+fn is_modal_mode(mode: AppMode) -> bool {
+    matches!(mode,
+        AppMode::Input | AppMode::SubtaskInput | AppMode::Edit | AppMode::Settings
+        | AppMode::Help | AppMode::ConfirmComplete | AppMode::ConfirmLogout
+        | AppMode::ListSelector | AppMode::Stats)
+}
+
+/// Escala un rect hacia su centro según el progreso de apertura del modal (efecto "pop").
+pub fn anim_rect(app: &App, base: Rect) -> Rect {
+    if app.modal_anim == 0 { return base; }
+    let p = (MODAL_ANIM_MAX - app.modal_anim) as f32 / MODAL_ANIM_MAX as f32;
+    let scale = 0.7 + 0.3 * p;
+    let w = ((base.width as f32) * scale) as u16;
+    let h = ((base.height as f32) * scale) as u16;
+    Rect {
+        x: base.x + base.width.saturating_sub(w) / 2,
+        y: base.y + base.height.saturating_sub(h) / 2,
+        width: w.max(1),
+        height: h.max(1),
+    }
+}
+
 pub fn render(app: &mut App, frame: &mut Frame) {
+    // Detectar apertura de un modal para animar su entrada.
+    if app.mode != app.prev_mode {
+        if is_modal_mode(app.mode) { app.modal_anim = MODAL_ANIM_MAX; }
+        app.prev_mode = app.mode;
+    }
+
     // Splash inicial con el logo: se muestra un instante por encima de todo (la carga sigue de fondo).
     if app.splash_frames > 0 {
         render_splash(app, frame);
@@ -242,6 +273,25 @@ pub fn centered_rect(p_x: u16, p_y: u16, r: Rect) -> Rect {
 }
 
 fn render_animation_layer(app: &mut App, frame: &mut Frame) {
+    // Texto flotante "+1 🍅": sube y se atenúa al final.
+    if let Some(text) = app.animation.float_text.clone() {
+        let life = app.animation.float_life;
+        if life > 0.0 {
+            let screen = frame.size();
+            let rise = ((1.0 - life) * 6.0) as u16; // sube hasta 6 filas
+            let base_y = screen.y + screen.height / 3;
+            let y = base_y.saturating_sub(rise);
+            let color = if life < 0.3 { Palette::overlay0(app) } else { Palette::peach(app) };
+            let w = (text.chars().count() as u16) + 2;
+            let x = screen.x + screen.width.saturating_sub(w) / 2;
+            let area = Rect { x, y, width: w, height: 1 };
+            frame.render_widget(
+                Paragraph::new(text).alignment(Alignment::Center).style(Style::default().fg(color).add_modifier(Modifier::BOLD)),
+                area,
+            );
+        }
+    }
+
     if let Some(_id) = &app.animation.task_id {
         let mut particles = app.animation.particles.clone();
         for p in &mut particles {

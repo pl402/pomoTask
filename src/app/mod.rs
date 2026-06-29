@@ -130,6 +130,9 @@ pub struct AnimationState {
     pub spawn_x: u16,
     pub spawn_y: u16,
     pub spawn_w: u16,
+    // Texto flotante (p. ej. "+1 🍅") que sube y se desvanece.
+    pub float_text: Option<String>,
+    pub float_life: f32, // 1.0 → 0.0
 }
 
 pub struct App {
@@ -170,6 +173,8 @@ pub struct App {
     pub copy_feedback_frames: u32,
     pub cleaning_frames: u32,
     pub splash_frames: u32,
+    pub prev_mode: AppMode,
+    pub modal_anim: u8,
 }
 
 impl App {
@@ -215,6 +220,8 @@ impl App {
             copy_feedback_frames: 0,
             cleaning_frames: 0,
             splash_frames: 32, // ~1.6 s de splash con el logo al arrancar (saltable con cualquier tecla)
+            prev_mode: AppMode::Loading,
+            modal_anim: 0,
         };
         // Mostrar las tareas cacheadas de inmediato (se reemplazan al primer sync exitoso).
         app.rebuild_visible_tasks();
@@ -463,6 +470,11 @@ impl App {
         if self.copy_feedback_frames > 0 { self.copy_feedback_frames -= 1; }
         if self.cleaning_frames > 0 { self.cleaning_frames -= 1; }
         if self.splash_frames > 0 { self.splash_frames -= 1; }
+        if self.modal_anim > 0 { self.modal_anim -= 1; }
+        if self.animation.float_life > 0.0 {
+            self.animation.float_life -= 0.02;
+            if self.animation.float_life <= 0.0 { self.animation.float_text = None; }
+        }
         
         // Update Animation
         if self.animation.task_id.is_some() {
@@ -519,6 +531,9 @@ impl App {
                 *t_entry += 1;
             }
             self.save_stats();
+            // Texto flotante de recompensa "+1 🍅".
+            self.animation.float_text = Some("+1 🍅".to_string());
+            self.animation.float_life = 1.0;
             // Técnica Pomodoro: descanso largo cada 4 pomodoros, corto el resto.
             self.timer_mode = if self.session_pomodoros.is_multiple_of(4) { TimerMode::LongBreak } else { TimerMode::ShortBreak };
             ("PomoTask", self.translate("notify_focus_end"))
