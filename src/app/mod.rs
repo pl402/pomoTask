@@ -385,9 +385,27 @@ impl App {
     fn load_tasks_cache() -> HashMap<String, Vec<Task>> {
         let mut path = Self::get_config_dir();
         path.push("tasks_cache.json");
-        fs::read_to_string(path).ok()
-            .and_then(|data| serde_json::from_str(&data).ok())
-            .unwrap_or_default()
+        let data = match fs::read_to_string(path) { Ok(d) => d, Err(_) => return HashMap::new() };
+
+        // Formato nuevo: mapa id → tareas.
+        if let Ok(map) = serde_json::from_str::<HashMap<String, Vec<Task>>>(&data) {
+            return map;
+        }
+
+        // Formato viejo (un solo arreglo de tareas): lo migramos agrupando por list_id,
+        // y guardamos también el conjunto completo bajo "@all".
+        if let Ok(list) = serde_json::from_str::<Vec<Task>>(&data) {
+            let mut map: HashMap<String, Vec<Task>> = HashMap::new();
+            for t in &list {
+                map.entry(t.list_id.clone()).or_default().push(t.clone());
+            }
+            if !list.is_empty() {
+                map.insert("@all".to_string(), list);
+            }
+            return map;
+        }
+
+        HashMap::new()
     }
 
     pub fn save_tasks_cache(&self) {
@@ -762,6 +780,26 @@ impl App {
 mod tests {
     use super::*;
 
+    /// Constructor mínimo para tests (sin I/O de disco).
+    fn blank_app() -> App {
+        App {
+            running: true, mode: AppMode::Timer, auth_url: None,
+            input_title: String::new(), input_notes: String::new(), input_due: String::new(),
+            focused_input: InputField::Title, editing_task_id: None,
+            timer_active: false, timer_seconds: 0, timer_mode: TimerMode::Focus,
+            tasks: Vec::new(), all_tasks: Vec::new(), task_lists: Vec::new(),
+            selected_list_idx: 0, selected_task: 0, selected_settings_idx: 0,
+            selected_date_preset: DatePreset::None, loading: false, spinner_frame: 0,
+            session_pomodoros: 0, tick_count: 0, config: Config::default(), stats: Stats::default(),
+            animation: AnimationState::default(), focus_subtask_idx: 0, input_list_idx: 0,
+            confirming_task_id: None, marking_done_task_id: None, creating_task_temp_id: None,
+            calendar_date: chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+            task_filter: String::new(), moving_task_id: None, clipboard_request: None,
+            copy_feedback_frames: 0, cleaning_frames: 0, splash_frames: 0,
+            prev_mode: AppMode::Loading, modal_anim: 0, list_cache: HashMap::new(),
+        }
+    }
+
     fn task(id: &str, parent: Option<&str>, completed: bool, due_day: Option<u32>) -> Task {
         Task {
             id: id.to_string(),
@@ -814,6 +852,22 @@ mod tests {
         let out = App::organize_tasks_hierarchical(input);
         assert_eq!(out.first().unwrap().id, "pending");
         assert_eq!(out.last().unwrap().id, "done");
+    }
+
+    #[test]
+    fn switch_list_muestra_cache_local_al_instante() {
+        let mut app = blank_app();
+        app.task_lists = vec![
+            TaskList { id: "L1".to_string(), title: "L1".to_string() },
+            TaskList { id: "L2".to_string(), title: "L2".to_string() },
+        ];
+        app.list_cache.insert("L2".to_string(), vec![task("a", None, false, None), task("b", None, false, None)]);
+        app.config.show_completed = true;
+
+        app.switch_list(1); // cambiar a L2
+
+        assert_eq!(app.selected_list_idx, 1);
+        assert_eq!(app.tasks.len(), 2, "switch_list debe mostrar la caché local de L2 sin esperar a la red");
     }
 
     #[test]
