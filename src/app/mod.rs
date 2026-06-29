@@ -35,7 +35,12 @@ pub struct Config {
     pub show_completed: bool,
     #[serde(default)]
     pub stats_retention: StatsRetention,
+    /// Minutos entre sincronizaciones automáticas en segundo plano (0 = solo al iniciar / manual).
+    #[serde(default = "default_sync_interval")]
+    pub sync_interval_minutes: u32,
 }
+
+fn default_sync_interval() -> u32 { 15 }
 
 impl Default for Config { 
     fn default() -> Self { 
@@ -52,6 +57,7 @@ impl Default for Config {
             last_task_id: None,
             show_completed: false,
             stats_retention: StatsRetention::Year,
+            sync_interval_minutes: 15,
         }
     }
 }
@@ -177,6 +183,8 @@ pub struct App {
     pub modal_anim: u8,
     // Caché en memoria por lista (id → tareas) para cambiar de lista sin esperar a la red.
     pub list_cache: HashMap<String, Vec<Task>>,
+    // Ticks transcurridos desde la última sincronización completa (para el sync periódico).
+    pub sync_tick_counter: u32,
 }
 
 impl App {
@@ -229,6 +237,7 @@ impl App {
             prev_mode: AppMode::Loading,
             modal_anim: 0,
             list_cache,
+            sync_tick_counter: 0,
         };
         // Mostrar las tareas cacheadas de inmediato (se reemplazan al primer sync exitoso).
         app.rebuild_visible_tasks();
@@ -320,6 +329,22 @@ impl App {
             month -= 1;
         }
         self.calendar_date = chrono::NaiveDate::from_ymd_opt(year, month, 1).unwrap();
+    }
+
+    /// `true` cuando toca una sincronización automática según el intervalo configurado.
+    /// Reinicia el contador al disparar. Con intervalo 0 nunca dispara (solo manual / al iniciar).
+    pub fn sync_due(&mut self) -> bool {
+        if self.config.sync_interval_minutes == 0 || self.task_lists.is_empty() {
+            return false;
+        }
+        // Tick cada 50 ms ⇒ 20/seg ⇒ 1200/min.
+        let threshold = self.config.sync_interval_minutes.saturating_mul(1200);
+        if self.sync_tick_counter >= threshold {
+            self.sync_tick_counter = 0;
+            true
+        } else {
+            false
+        }
     }
 
     /// Cambia a la lista `new_idx` mostrando al instante sus tareas cacheadas (si las hay),
@@ -508,6 +533,7 @@ impl App {
         if self.cleaning_frames > 0 { self.cleaning_frames -= 1; }
         if self.splash_frames > 0 { self.splash_frames -= 1; }
         if self.modal_anim > 0 { self.modal_anim -= 1; }
+        self.sync_tick_counter = self.sync_tick_counter.saturating_add(1);
         if self.animation.float_life > 0.0 {
             self.animation.float_life -= 0.02;
             if self.animation.float_life <= 0.0 { self.animation.float_text = None; }
@@ -790,6 +816,7 @@ mod tests {
             task_filter: String::new(), moving_task_id: None, clipboard_request: None,
             copy_feedback_frames: 0, cleaning_frames: 0, splash_frames: 0,
             prev_mode: AppMode::Loading, modal_anim: 0, list_cache: HashMap::new(),
+            sync_tick_counter: 0,
         }
     }
 
@@ -845,6 +872,19 @@ mod tests {
         let out = App::organize_tasks_hierarchical(input);
         assert_eq!(out.first().unwrap().id, "pending");
         assert_eq!(out.last().unwrap().id, "done");
+    }
+
+    #[test]
+    fn rebuild_oculta_completadas_por_defecto() {
+        let mut app = blank_app(); // Config::default() => show_completed = false
+        assert!(!app.config.show_completed, "el default debe ser ocultar completadas");
+        app.all_tasks = vec![
+            task("pendiente", None, false, None),
+            task("hecha", None, true, None),
+        ];
+        app.rebuild_visible_tasks();
+        assert_eq!(app.tasks.len(), 1, "las completadas deben ocultarse por defecto");
+        assert_eq!(app.tasks[0].id, "pendiente");
     }
 
     #[test]

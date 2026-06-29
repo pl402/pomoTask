@@ -196,7 +196,7 @@ pub fn render_settings_modal(app: &App, frame: &mut Frame) {
     let chunks = Layout::default().direction(Direction::Vertical).constraints([Constraint::Min(0), Constraint::Length(1)]).margin(2).split(area);
 
     // (icono + etiqueta, valor) por índice lógico 0..8 (debe coincidir con el handler de teclado).
-    let items: [(String, String); 9] = [
+    let items: [(String, String); 10] = [
         (format!("⏱  {}", app.translate("settings_focus")), format!("{} min", app.config.focus_duration / 60)),
         (format!("☕  {}", app.translate("settings_short")), format!("{} min", app.config.short_break_duration / 60)),
         (format!("🌙  {}", app.translate("settings_long")), format!("{} min", app.config.long_break_duration / 60)),
@@ -217,6 +217,11 @@ pub fn render_settings_modal(app: &App, frame: &mut Frame) {
             crate::app::StatsRetention::Year => app.translate("retention_year"),
             crate::app::StatsRetention::Forever => app.translate("retention_forever"),
         }),
+        (format!("🔄  {}", app.translate("settings_sync_interval")), if app.config.sync_interval_minutes == 0 {
+            app.translate("sync_off")
+        } else {
+            format!("{} min", app.config.sync_interval_minutes)
+        }),
         (format!("🚪  {}", app.translate("settings_logout")), String::new()),
     ];
 
@@ -224,8 +229,8 @@ pub fn render_settings_modal(app: &App, frame: &mut Frame) {
     let groups: [(String, std::ops::Range<usize>); 4] = [
         (app.translate("settings_group_times"), 0..3),
         (app.translate("settings_group_appearance"), 3..7),
-        (app.translate("settings_group_data"), 7..8),
-        (app.translate("settings_group_account"), 8..9),
+        (app.translate("settings_group_data"), 7..9),
+        (app.translate("settings_group_account"), 9..10),
     ];
 
     let mut rows: Vec<Row> = Vec::new();

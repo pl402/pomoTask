@@ -15,7 +15,7 @@ use color_eyre::Result;
 use crate::app::{App, AppMode, TaskList};
 use crate::events::{Event, EventHandler};
 use crate::api::ApiClient;
-use crate::handler::{handle_key_events, sync_tasks};
+use crate::handler::{handle_key_events, sync_tasks, sync_all_lists};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -39,13 +39,19 @@ async fn main() -> Result<()> {
     
     terminal.draw(|f| ui::render(&mut app, f))?;
     let api_client = std::sync::Arc::new(ApiClient::new(events.sender()).await);
-    sync_tasks(&api_client, events.sender(), &mut app).await;
+    sync_all_lists(&api_client, events.sender(), &mut app);
 
     while app.running {
         terminal.draw(|f| ui::render(&mut app, f))?;
         if let Some(event) = events.next().await {
             match event {
-                Event::Tick => app.tick(),
+                Event::Tick => {
+                    app.tick();
+                    // Sincronización automática en segundo plano según el intervalo configurado.
+                    if app.sync_due() {
+                        sync_all_lists(&api_client, events.sender(), &mut app);
+                    }
+                }
                 Event::Key(key) => {
                     handle_key_events(key, &mut app, &api_client, &events.sender()).await;
                     // Si el handler solicitó copiar texto, lo volcamos con el portapapeles persistente.
@@ -63,7 +69,8 @@ async fn main() -> Result<()> {
                     all_lists.append(&mut lists);
                     app.task_lists = all_lists; 
                     if let Some(last_id) = &app.config.last_list_id { if let Some(idx) = app.task_lists.iter().position(|l| &l.id == last_id) { app.selected_list_idx = idx; } }
-                    app.loading = false; sync_tasks(&api_client, events.sender(), &mut app).await; 
+                    // Ya tenemos las listas: sincronizamos TODAS en segundo plano.
+                    sync_all_lists(&api_client, events.sender(), &mut app);
                 }
                 Event::Sync => {
                     sync_tasks(&api_client, events.sender(), &mut app).await;

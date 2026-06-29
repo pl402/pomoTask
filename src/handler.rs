@@ -147,10 +147,10 @@ pub async fn handle_key_events(
                 KeyCode::Esc => { app.mode = AppMode::Timer; }
                 KeyCode::Up | KeyCode::Char('k') => {
                     if app.selected_settings_idx > 0 { app.selected_settings_idx -= 1; }
-                    else { app.selected_settings_idx = 8; }
+                    else { app.selected_settings_idx = 9; }
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
-                    if app.selected_settings_idx < 8 { app.selected_settings_idx += 1; }
+                    if app.selected_settings_idx < 9 { app.selected_settings_idx += 1; }
                     else { app.selected_settings_idx = 0; }
                 }
                 KeyCode::Left | KeyCode::Char('h') => {
@@ -194,6 +194,7 @@ pub async fn handle_key_events(
                                 crate::app::StatsRetention::Forever => crate::app::StatsRetention::Year,
                             };
                         }
+                        8 => { app.config.sync_interval_minutes = app.config.sync_interval_minutes.saturating_sub(5); }
                         _ => {}
                     }
                     app.save_config();
@@ -240,7 +241,8 @@ pub async fn handle_key_events(
                                 crate::app::StatsRetention::Forever => crate::app::StatsRetention::Month,
                             };
                         }
-                        8
+                        8 => { app.config.sync_interval_minutes = (app.config.sync_interval_minutes + 5).min(120); }
+                        9
                             if (key.code == KeyCode::Enter || key.code == KeyCode::Right || key.code == KeyCode::Char('l')) => {
                                 app.mode = AppMode::ConfirmLogout;
                             }
@@ -250,7 +252,7 @@ pub async fn handle_key_events(
                     app.timer_seconds = app.timer_mode.duration(&app.config);
                 }
                 KeyCode::Enter
-                    if app.selected_settings_idx == 8 => {
+                    if app.selected_settings_idx == 9 => {
                         app.mode = AppMode::ConfirmLogout;
                     }
                 _ => {}
@@ -286,8 +288,7 @@ pub async fn handle_key_events(
                         app.mode = AppMode::Timer;
                     } else {
                         app.mode = AppMode::Timer;
-                        app.switch_list(app.selected_list_idx); // muestra la caché local al instante
-                        sync_tasks(api_client, sender.clone(), app).await;
+                        app.switch_list(app.selected_list_idx); // solo caché local; el sync es periódico
                     }
                 }
                 KeyCode::Down | KeyCode::Char('j')
@@ -483,11 +484,12 @@ pub async fn handle_key_events(
                     }
                 }
                 KeyCode::Char('c') => {
+                    // Solo re-filtra la vista (la caché ya trae completadas); sin red.
                     app.config.show_completed = !app.config.show_completed;
                     app.save_config();
-                    sync_tasks(api_client, sender.clone(), app).await;
+                    app.rebuild_visible_tasks();
                 }
-                KeyCode::Char('s') => sync_tasks(api_client, sender.clone(), app).await,
+                KeyCode::Char('s') => sync_all_lists(api_client, sender.clone(), app),
                 KeyCode::Char('M') if !app.timer_active => {
                     // Mover tarea a otra lista: requiere al menos 2 listas reales y una tarea seleccionada.
                     let real_lists = app.task_lists.iter().filter(|l| l.id != "@all").count();
@@ -518,14 +520,12 @@ pub async fn handle_key_events(
                 KeyCode::Left | KeyCode::Char('h') if !app.timer_active => {
                     if app.task_lists.is_empty() { return; }
                     let new = if app.selected_list_idx == 0 { app.task_lists.len() - 1 } else { app.selected_list_idx - 1 };
-                    app.switch_list(new); // muestra la caché local al instante
-                    sync_tasks(api_client, sender.clone(), app).await; // refresco en segundo plano
+                    app.switch_list(new); // solo muestra la caché local; NO sincroniza (el sync es periódico)
                 }
                 KeyCode::Right | KeyCode::Char('l') if !app.timer_active => {
                     if app.task_lists.is_empty() { return; }
                     let new = (app.selected_list_idx + 1) % app.task_lists.len();
                     app.switch_list(new);
-                    sync_tasks(api_client, sender.clone(), app).await;
                 }
                 KeyCode::Enter => {
                     if app.timer_active {
@@ -575,6 +575,37 @@ pub async fn handle_key_events(
             }
         }
     }
+}
+
+/// Sincroniza TODAS las listas en segundo plano (al iniciar, periódicamente y con 'S').
+/// Envía un `ApiUpdate` por lista y otro para "@all". No bloquea la interfaz.
+pub fn sync_all_lists(api: &Arc<ApiClient>, sender: UnboundedSender<Event>, app: &mut App) {
+    app.loading = true;
+    app.sync_tick_counter = 0;
+    let api = api.clone();
+
+    if app.task_lists.is_empty() {
+        // Aún no tenemos las listas: primero las pedimos (ListsUpdate disparará el sync completo).
+        tokio::spawn(async move {
+            match api.fetch_task_lists().await {
+                Ok(lists) => { let _ = sender.send(Event::ListsUpdate(lists)); }
+                Err(_) => { let _ = sender.send(Event::SyncFailed); }
+            }
+        });
+        return;
+    }
+
+    let ids: Vec<String> = app.task_lists.iter().filter(|l| l.id != "@all").map(|l| l.id.clone()).collect();
+    tokio::spawn(async move {
+        let mut all = Vec::new();
+        for id in ids {
+            if let Ok(tasks) = api.fetch_tasks(&id, true).await {
+                let _ = sender.send(Event::ApiUpdate(id.clone(), tasks.clone()));
+                all.extend(tasks);
+            }
+        }
+        let _ = sender.send(Event::ApiUpdate("@all".to_string(), all));
+    });
 }
 
 pub async fn sync_tasks(api: &Arc<ApiClient>, sender: UnboundedSender<Event>, app: &mut App) {

@@ -218,3 +218,9 @@ ya no muestra el spinner grande de carga.
 SIEMPRE actualiza `list_cache[list_id]`, pero solo refresca la vista (`all_tasks`) si `list_id` coincide
 con la lista seleccionada actual. Esto evita la condición de carrera donde una respuesta tardía de otra
 lista pisaba lo que estás viendo al cambiar de lista rápido.
+
+Modelo de sincronización: cambiar de lista NO sincroniza (solo muestra caché). `sync_all_lists()` trae
+todas las listas en segundo plano al iniciar, periódicamente (`App::sync_due()` según
+`config.sync_interval_minutes`, default 15, 0 = solo manual) y con la tecla `S`. `sync_tasks()` (lista
+puntual) se reserva para `Event::Sync` tras crear/completar/editar una tarea. `C` (mostrar completadas)
+solo re-filtra la vista en memoria, sin red.

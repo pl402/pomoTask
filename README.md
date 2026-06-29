@@ -22,7 +22,7 @@ Este método se fundamenta en la idea de que las pausas frecuentes pueden mejora
 
 ## ✨ Características Principales
 
-- **☁️ Sincronización Real con Google Tasks**: Gestión bidireccional de tareas y subtareas en tiempo real.
+- **☁️ Sincronización Real con Google Tasks**: Gestión bidireccional de tareas y subtareas. Sincroniza todas las listas en segundo plano al iniciar y cada N minutos (configurable; cambiar de lista no re-consulta, usa caché local).
 - **🔗 Conexión Automática**: Servidor local temporal para capturar credenciales OAuth sin copiar/pegar códigos.
 - **📅 Vistas de Calendario Personalizables**:
     - **Semáforo**: Indicadores clásicos de Pendiente (🔴), Hecho (🟢) y Actividad (🔵).
