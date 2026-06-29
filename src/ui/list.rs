@@ -7,6 +7,8 @@ use ratatui::{
     Frame,
 };
 
+use chrono::Local;
+
 use crate::app::{App, TimerMode};
 use crate::ui::palette::Palette;
 
@@ -24,10 +26,10 @@ pub fn render_left_panel(app: &App, frame: &mut Frame, area: Rect) {
     // En la vista "Todas" (@all) añadimos una columna que indica la lista de origen de cada tarea.
     let is_all_view = app.is_all_view();
 
-    let header_titles: Vec<&str> = if is_all_view {
-        vec![" Tarea ", " 📋 Lista ", " 🕒 Creada ", " 📅 Venc. ", " 🍅 "]
+    let header_titles: Vec<String> = if is_all_view {
+        vec![format!(" {} ", app.translate("col_task")), format!(" 📋 {} ", app.translate("col_list")), format!(" 🕒 {} ", app.translate("col_created")), format!(" 📅 {} ", app.translate("col_due")), " 🍅 ".to_string()]
     } else {
-        vec![" Tarea ", " 🕒 Creada ", " 📅 Venc. ", " 🍅 "]
+        vec![format!(" {} ", app.translate("col_task")), format!(" 🕒 {} ", app.translate("col_created")), format!(" 📅 {} ", app.translate("col_due")), " 🍅 ".to_string()]
     };
     let header_cells = header_titles.into_iter().map(|h| Cell::from(h).style(Style::default().fg(Palette::mauve(app)).add_modifier(Modifier::BOLD)));
     let header = Row::new(header_cells).height(1).bottom_margin(0);
@@ -65,12 +67,29 @@ pub fn render_left_panel(app: &App, frame: &mut Frame, area: Rect) {
         let due_str = task.due.map(|d| app.format_due_date(d)).unwrap_or_else(|| "---".to_string());
         let pomodoros_str = if task.pomodoros > 0 { format!("{}", task.pomodoros) } else { "".to_string() };
 
+        // Color semántico de la fecha de vencimiento (solo si la fila no está seleccionada ni completada).
+        let due_cell = {
+            let mut c = Cell::from(due_str);
+            if !is_selected && !task.completed {
+                if let Some(d) = task.due {
+                    let today = Local::now().date_naive();
+                    let due_date = d.date_naive();
+                    if due_date < today {
+                        c = c.style(Style::default().fg(Palette::red(app)).add_modifier(Modifier::BOLD));
+                    } else if due_date == today {
+                        c = c.style(Style::default().fg(Palette::peach(app)));
+                    }
+                }
+            }
+            c
+        };
+
         let mut cells = vec![Cell::from(title_content)];
         if is_all_view {
             cells.push(Cell::from(app.list_title_for(&task.list_id)));
         }
         cells.push(Cell::from(created_str));
-        cells.push(Cell::from(due_str));
+        cells.push(due_cell);
         cells.push(Cell::from(pomodoros_str));
 
         Row::new(cells).style(style)

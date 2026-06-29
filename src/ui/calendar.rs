@@ -22,8 +22,8 @@ pub fn render_calendar(app: &App, frame: &mut Frame, area: Rect) {
     let month_name = app.translate(&format!("month_{}", month));
     let mut title = match app.config.calendar_range {
         crate::app::CalendarRange::Month => format!(" {} {} ", month_name, year),
-        crate::app::CalendarRange::Week => format!(" {} {} (Semana) ", month_name, year),
-        crate::app::CalendarRange::Day => format!(" {} {} (Día) ", month_name, year),
+        crate::app::CalendarRange::Week => format!(" {} {} ({}) ", month_name, year, app.translate("calendar_range_week")),
+        crate::app::CalendarRange::Day => format!(" {} {} ({}) ", month_name, year, app.translate("calendar_range_day")),
     };
     
     // Agrupar estadísticas por fecha completa y hora

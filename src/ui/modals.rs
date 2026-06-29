@@ -39,22 +39,27 @@ pub fn render_input_modal(app: &App, frame: &mut Frame) {
 
     let chunks = Layout::default().direction(Direction::Vertical).constraints(constraints).margin(2).split(area);
 
+    // Caret visible solo en el campo enfocado.
+    let caret = |focused: bool, text: &str| if focused { format!("{}▏", text) } else { text.to_string() };
+
     let title_style = if app.focused_input == InputField::Title { Style::default().fg(Palette::yellow(app)) } else { Style::default().fg(Palette::subtext0(app)) };
+    let title_text = caret(app.focused_input == InputField::Title, &app.input_title);
     let title_width = chunks[0].width.max(3) - 2;
-    let title_scroll = (app.input_title.chars().count() as u16).saturating_sub(title_width);
-    frame.render_widget(Paragraph::new(app.input_title.as_str()).scroll((0, title_scroll)).block(Block::default().title(" Título ").borders(Borders::ALL).border_style(title_style)), chunks[0]);
+    let title_scroll = (title_text.chars().count() as u16).saturating_sub(title_width);
+    frame.render_widget(Paragraph::new(title_text).scroll((0, title_scroll)).block(Block::default().title(format!(" {} ", app.translate("field_title"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(title_style)), chunks[0]);
 
     let notes_style = if app.focused_input == InputField::Notes { Style::default().fg(Palette::yellow(app)) } else { Style::default().fg(Palette::subtext0(app)) };
+    let notes_text = caret(app.focused_input == InputField::Notes, &app.input_notes);
     let notes_width = chunks[1].width.max(3) - 2;
-    let notes_scroll = (app.input_notes.chars().count() as u16).saturating_sub(notes_width);
-    frame.render_widget(Paragraph::new(app.input_notes.as_str()).scroll((0, notes_scroll)).block(Block::default().title(" Notas ").borders(Borders::ALL).border_style(notes_style)), chunks[1]);
+    let notes_scroll = (notes_text.chars().count() as u16).saturating_sub(notes_width);
+    frame.render_widget(Paragraph::new(notes_text).scroll((0, notes_scroll)).block(Block::default().title(format!(" {} ", app.translate("field_notes"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(notes_style)), chunks[1]);
 
     let mut next_idx = 2;
     if app.mode == AppMode::Input {
         let list_style = if app.focused_input == InputField::List { Style::default().fg(Palette::yellow(app)) } else { Style::default().fg(Palette::subtext0(app)) };
         let list_name = app.task_lists.get(app.input_list_idx).map(|l| l.title.as_str()).unwrap_or("---");
         let list_text = format!(" ← {} → ", list_name);
-        frame.render_widget(Paragraph::new(list_text).alignment(Alignment::Center).block(Block::default().title(format!(" {} ", app.translate("list_selection"))).borders(Borders::ALL).border_style(list_style)), chunks[next_idx]);
+        frame.render_widget(Paragraph::new(list_text).alignment(Alignment::Center).block(Block::default().title(format!(" {} ", app.translate("list_selection"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(list_style)), chunks[next_idx]);
         next_idx += 1;
     }
 
@@ -86,11 +91,11 @@ pub fn render_input_modal(app: &App, frame: &mut Frame) {
     }
 
     let due_style = if app.focused_input == InputField::Due { Style::default().fg(Palette::yellow(app)) } else { Style::default().fg(Palette::subtext0(app)) };
-    let date_input_text = app.input_due.as_str();
+    let date_input_text = caret(app.focused_input == InputField::Due, &app.input_due);
     let due_width = chunks[next_idx].width.max(3) - 2;
     let due_scroll = (date_input_text.chars().count() as u16).saturating_sub(due_width);
-    
-    frame.render_widget(Paragraph::new(date_input_text).scroll((0, due_scroll)).block(Block::default().title(format!(" {} {} ", app.translate("due_date"), app.translate("due_date_hint"))).borders(Borders::ALL).border_style(due_style)), chunks[next_idx]);
+
+    frame.render_widget(Paragraph::new(date_input_text).scroll((0, due_scroll)).block(Block::default().title(format!(" {} {} ", app.translate("due_date"), app.translate("due_date_hint"))).borders(Borders::ALL).border_type(BorderType::Rounded).border_style(due_style)), chunks[next_idx]);
     next_idx += 1;
     
     let input_hint = if app.focused_input == InputField::Due {
