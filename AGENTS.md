@@ -129,6 +129,9 @@ Todo se guarda en `~/.config/pomotask/` (vía `dirs::config_dir()` + `App::get_c
   los siembra una sola vez desde los mapas horarios para no perder el histórico de usuarios existentes.
 - `tasks_cache.json` — caché de las últimas tareas sincronizadas (modo offline). Se carga en `App::new()`
   y se reescribe en cada `ApiUpdate`. Si falla la red al arrancar (`Event::SyncFailed`) se muestra esta caché.
+  Si hay caché, la app arranca directamente en `AppMode::Timer` (no en la pantalla de carga a pantalla
+  completa) con un indicador "⠋ Cargando…" en el pie mientras sincroniza; la pantalla `Loading` completa
+  solo se usa en el primer arranque sin caché.
 - `pomotask_token.json` — token OAuth. `logout()` lo borra.
 
 ### Archivos que NUNCA debes commitear

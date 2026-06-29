@@ -216,6 +216,12 @@ impl App {
         };
         // Mostrar las tareas cacheadas de inmediato (se reemplazan al primer sync exitoso).
         app.rebuild_visible_tasks();
+        // Si hay caché local, arrancamos ya en la vista normal (con "Cargando…" en el pie) en vez de
+        // la pantalla de carga a pantalla completa, que da sensación de lentitud. Sin caché (primer
+        // arranque) se mantiene la pantalla de carga.
+        if !app.all_tasks.is_empty() {
+            app.mode = AppMode::Timer;
+        }
         // Sembrar los totales históricos desde los mapas horarios ANTES de podar (una sola vez).
         app.migrate_lifetime_totals();
         // Limpieza transparente de estadísticas antiguas al arrancar (solo local, no toca Google).

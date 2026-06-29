@@ -146,11 +146,16 @@ pub fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     
     let timer_label = format!("{:02}:{:02}", app.timer_seconds / 60, app.timer_seconds % 60);
 
-    let left_spans = vec![
+    let mut left_spans = vec![
         Span::styled(" pomo", Style::default().fg(Palette::text(app)).add_modifier(Modifier::BOLD)),
         Span::styled("Task ", Style::default().fg(Palette::mauve(app)).add_modifier(Modifier::BOLD)),
         Span::styled(format!(" {} ", app.translate("footer_hint")), Style::default().fg(Palette::yellow(app))),
     ];
+    if app.loading {
+        let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+        let f = frames[app.spinner_frame % frames.len()];
+        left_spans.push(Span::styled(format!(" {} {} ", f, app.translate("loading_footer")), Style::default().fg(Palette::blue(app)).add_modifier(Modifier::BOLD)));
+    }
 
     let mut right_spans = vec![];
     if app.cleaning_frames > 0 {

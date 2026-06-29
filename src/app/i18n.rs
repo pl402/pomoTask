@@ -6,6 +6,7 @@ impl App {
             Language::Spanish => match key {
                 "title" => "🍅 PomoTask-CLI",
                 "loading_app" => "Cargando PomoTask...",
+                "loading_footer" => "Cargando…",
                 "sync" => "Sinc",
                 "session" => "Sesión",
                 "timer" => "Temporizador",
@@ -139,6 +140,7 @@ impl App {
             Language::English => match key {
                 "title" => "🍅 PomoTask-CLI",
                 "loading_app" => "Loading PomoTask...",
+                "loading_footer" => "Loading…",
                 "sync" => "Sync",
                 "session" => "Session",
                 "timer" => "Timer",
