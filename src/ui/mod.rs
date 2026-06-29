@@ -170,13 +170,10 @@ fn render_auth_screen(app: &App, frame: &mut Frame) {
 }
 
 fn render_splash(app: &App, frame: &mut Frame) {
-    // Logo "PomoTask" en ASCII art (figlet Standard).
+    // Logo "PomoTask" en ASCII art (estilo half-block compacto, 2 líneas).
     let art = [
-        r#" ____                    _____         _    "#,
-        r#"|  _ \ ___  _ __ ___   __|_   _|_ _ ___| | __"#,
-        r#"| |_) / _ \| '_ ` _ \ / _ \| |/ _` / __| |/ /"#,
-        r#"|  __/ (_) | | | | | | (_) | | (_| \__ \   < "#,
-        r#"|_|   \___/|_| |_| |_|\___/|_|\__,_|___/_|\_\"#,
+        "█▀█ █▀█ █▀▄▀█ █▀█   ▀█▀ █▀█ █▀ █▄▀",
+        "█▀▀ █▄█ █ ▀ █ █▄█    █  █▀█ ▄█ █ █",
     ];
     let width = art.iter().map(|l| l.chars().count()).max().unwrap_or(0);
 
