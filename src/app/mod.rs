@@ -183,7 +183,11 @@ impl App {
     pub fn new() -> Self {
         let config = Self::load_config().unwrap_or_default();
         let stats = Self::load_stats().unwrap_or_default();
-        let cached_tasks = Self::load_tasks_cache();
+        // Caché por lista desde disco; mostramos la última lista usada de inmediato.
+        let list_cache = Self::load_tasks_cache();
+        let cached_tasks = config.last_list_id.as_ref()
+            .and_then(|id| list_cache.get(id).cloned())
+            .unwrap_or_default();
         let mut app = Self {
             running: true,
             mode: AppMode::Loading,
@@ -224,14 +228,8 @@ impl App {
             splash_frames: 32, // ~1.6 s de splash con el logo al arrancar (saltable con cualquier tecla)
             prev_mode: AppMode::Loading,
             modal_anim: 0,
-            list_cache: HashMap::new(),
+            list_cache,
         };
-        // Sembrar la caché por lista con lo que haya en disco para la última lista usada.
-        if let Some(id) = app.config.last_list_id.clone() {
-            if !app.all_tasks.is_empty() {
-                app.list_cache.insert(id, app.all_tasks.clone());
-            }
-        }
         // Mostrar las tareas cacheadas de inmediato (se reemplazan al primer sync exitoso).
         app.rebuild_visible_tasks();
         // Si hay caché local, arrancamos ya en la vista normal (con "Cargando…" en el pie) en vez de
@@ -383,8 +381,8 @@ impl App {
         serde_json::from_str(&data).ok()
     }
 
-    /// Caché en disco de las últimas tareas sincronizadas (para mostrar algo sin red al arrancar).
-    fn load_tasks_cache() -> Vec<Task> {
+    /// Caché en disco por lista (id → tareas) para mostrar cualquier lista sin red al arrancar.
+    fn load_tasks_cache() -> HashMap<String, Vec<Task>> {
         let mut path = Self::get_config_dir();
         path.push("tasks_cache.json");
         fs::read_to_string(path).ok()
@@ -395,7 +393,7 @@ impl App {
     pub fn save_tasks_cache(&self) {
         let mut path = Self::get_config_dir();
         path.push("tasks_cache.json");
-        if let Ok(data) = serde_json::to_string(&self.all_tasks) { let _ = fs::write(path, data); }
+        if let Ok(data) = serde_json::to_string(&self.list_cache) { let _ = fs::write(path, data); }
     }
 
     pub fn save_stats(&self) {

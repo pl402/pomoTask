@@ -127,8 +127,9 @@ Todo se guarda en `~/.config/pomotask/` (vía `dirs::config_dir()` + `App::get_c
   en el pie por ~1.5 s (`cleaning_frames`). Los "totales históricos" de la vista `T` se mantienen en
   contadores acumulados aparte (`lifetime_*` en `Stats`), que NO se podan; `migrate_lifetime_totals()`
   los siembra una sola vez desde los mapas horarios para no perder el histórico de usuarios existentes.
-- `tasks_cache.json` — caché de las últimas tareas sincronizadas (modo offline). Se carga en `App::new()`
-  y se reescribe en cada `ApiUpdate`. Si falla la red al arrancar (`Event::SyncFailed`) se muestra esta caché.
+- `tasks_cache.json` — caché **por lista** (`HashMap<id, Vec<Task>>`, todas las listas). Se carga entera en
+  `App::new()` (a `App::list_cache`) y se reescribe en cada `ApiUpdate`. Permite mostrar cualquier lista al
+  instante sin red. Si falla la red al arrancar (`Event::SyncFailed`) se muestra esta caché.
   Si hay caché, la app arranca directamente en `AppMode::Timer` (no en la pantalla de carga a pantalla
   completa) con un indicador "⠋ Cargando…" en el pie mientras sincroniza; la pantalla `Loading` completa
   solo se usa en el primer arranque sin caché.
