@@ -112,17 +112,16 @@ async fn main() -> Result<()> {
                         if old_mode == AppMode::Auth || old_mode == AppMode::Loading {
                             if old_mode == AppMode::Auth {
                                 app.mode = AppMode::AuthSuccess;
+                                // ~3 s en pantalla (ticks de 50 ms); app.tick() hace la transición al temporizador.
+                                app.auth_success_frames = 60;
                                 let _ = notify_rust::Notification::new().summary("PomoTask").body(&app.translate("auth_success_msg")).icon("emblem-success").show();
-                                let sender = events.sender(); tokio::spawn(async move { tokio::time::sleep(Duration::from_secs(3)).await; let _ = sender.send(Event::Tick); });
                             } else { app.mode = AppMode::Timer; }
                         }
                     }
                 }
-                Event::ApiTaskCompleted(id, x, y, w) => {
-                    if app.marking_done_task_id.as_ref() == Some(&id) {
-                        app.marking_done_task_id = None;
-                        app.start_completion_animation(id, x, y, w);
-                    }
+                Event::ApiTaskCompleted(id, x, y, w) if app.marking_done_task_id.as_ref() == Some(&id) => {
+                    app.marking_done_task_id = None;
+                    app.start_completion_animation(id, x, y, w);
                 }
                 Event::ApiTaskFailed(id) => {
                     if app.marking_done_task_id.as_ref() == Some(&id) {
@@ -132,7 +131,7 @@ async fn main() -> Result<()> {
                         app.creating_task_temp_id = None;
                     }
                 }
-                _ => { if app.mode == AppMode::AuthSuccess && !app.task_lists.is_empty() { app.mode = AppMode::Timer; } }
+                _ => {}
             }
         }
     }

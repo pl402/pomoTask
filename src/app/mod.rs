@@ -179,6 +179,8 @@ pub struct App {
     pub copy_feedback_frames: u32,
     pub cleaning_frames: u32,
     pub splash_frames: u32,
+    // Ticks restantes en la pantalla de "Conexión exitosa" antes de pasar al temporizador.
+    pub auth_success_frames: u32,
     pub prev_mode: AppMode,
     pub modal_anim: u8,
     // Caché en memoria por lista (id → tareas) para cambiar de lista sin esperar a la red.
@@ -234,6 +236,7 @@ impl App {
             copy_feedback_frames: 0,
             cleaning_frames: 0,
             splash_frames: 32, // ~1.6 s de splash con el logo al arrancar (saltable con cualquier tecla)
+            auth_success_frames: 0,
             prev_mode: AppMode::Loading,
             modal_anim: 0,
             list_cache,
@@ -532,6 +535,13 @@ impl App {
         if self.copy_feedback_frames > 0 { self.copy_feedback_frames -= 1; }
         if self.cleaning_frames > 0 { self.cleaning_frames -= 1; }
         if self.splash_frames > 0 { self.splash_frames -= 1; }
+        // Cuenta atrás de la pantalla de "Conexión exitosa": al agotarse pasamos al temporizador.
+        if self.auth_success_frames > 0 {
+            self.auth_success_frames -= 1;
+            if self.auth_success_frames == 0 && self.mode == AppMode::AuthSuccess {
+                self.mode = AppMode::Timer;
+            }
+        }
         if self.modal_anim > 0 { self.modal_anim -= 1; }
         self.sync_tick_counter = self.sync_tick_counter.saturating_add(1);
         if self.animation.float_life > 0.0 {
@@ -814,7 +824,7 @@ mod tests {
             confirming_task_id: None, marking_done_task_id: None, creating_task_temp_id: None,
             calendar_date: chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
             task_filter: String::new(), moving_task_id: None, clipboard_request: None,
-            copy_feedback_frames: 0, cleaning_frames: 0, splash_frames: 0,
+            copy_feedback_frames: 0, cleaning_frames: 0, splash_frames: 0, auth_success_frames: 0,
             prev_mode: AppMode::Loading, modal_anim: 0, list_cache: HashMap::new(),
             sync_tick_counter: 0,
         }

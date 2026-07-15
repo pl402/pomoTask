@@ -33,7 +33,11 @@ pub async fn handle_key_events(
             }
         },
 
-        AppMode::AuthSuccess => {},
+        // Cualquier tecla salta la pantalla de éxito y entra directo al temporizador.
+        AppMode::AuthSuccess => {
+            app.auth_success_frames = 0;
+            app.mode = AppMode::Timer;
+        },
 
         AppMode::ConfirmComplete => {
             match key.code {
