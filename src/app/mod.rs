@@ -32,6 +32,8 @@ pub struct Config {
     pub calendar_range: CalendarRange,
     pub last_list_id: Option<String>,
     pub last_task_id: Option<String>,
+    // Solo de sesión: nunca se persiste, así cada arranque empieza ocultando las completadas.
+    #[serde(skip)]
     pub show_completed: bool,
     #[serde(default)]
     pub stats_retention: StatsRetention,
@@ -895,6 +897,22 @@ mod tests {
         app.rebuild_visible_tasks();
         assert_eq!(app.tasks.len(), 1, "las completadas deben ocultarse por defecto");
         assert_eq!(app.tasks[0].id, "pendiente");
+    }
+
+    #[test]
+    fn config_persistida_no_puede_forzar_mostrar_completadas() {
+        // Un config.json viejo con "show_completed": true no debe afectar: el campo
+        // es solo de sesión (serde lo ignora al cargar y no lo escribe al guardar).
+        let json = r#"{
+            "focus_duration": 1500, "short_break_duration": 300, "long_break_duration": 900,
+            "language": "Spanish", "theme": "CatppuccinMocha", "custom_theme": null,
+            "calendar_view": "Standard", "calendar_range": "Month",
+            "last_list_id": null, "last_task_id": null, "show_completed": true
+        }"#;
+        let config: Config = serde_json::from_str(json).expect("config válida");
+        assert!(!config.show_completed, "show_completed nunca debe cargarse desde disco");
+        let saved = serde_json::to_string(&config).expect("serializa");
+        assert!(!saved.contains("show_completed"), "show_completed no debe persistirse");
     }
 
     #[test]

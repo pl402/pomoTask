@@ -489,8 +489,8 @@ pub async fn handle_key_events(
                 }
                 KeyCode::Char('c') => {
                     // Solo re-filtra la vista (la caché ya trae completadas); sin red.
+                    // Toggle de sesión: no se guarda, al reiniciar siempre arranca oculto.
                     app.config.show_completed = !app.config.show_completed;
-                    app.save_config();
                     app.rebuild_visible_tasks();
                 }
                 KeyCode::Char('s') => sync_all_lists(api_client, sender.clone(), app),
