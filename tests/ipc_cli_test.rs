@@ -355,6 +355,27 @@ async fn test_ipc_blocklist_commands() {
     .expect("set-action");
     let updated_config = load_blocklist();
     assert_eq!(updated_config.action, "minimize");
+
+    // add-allowed-title & remove-allowed-title
+    execute_ipc_command(&[
+        "blocklist".to_string(),
+        "add-allowed-title".to_string(),
+        "spotify web".to_string(),
+    ])
+    .await
+    .expect("add-allowed-title");
+    let cfg_with_allowed = load_blocklist();
+    assert!(cfg_with_allowed.allowed_title_keywords.contains(&"spotify web".to_string()));
+
+    execute_ipc_command(&[
+        "blocklist".to_string(),
+        "remove-allowed-title".to_string(),
+        "spotify web".to_string(),
+    ])
+    .await
+    .expect("remove-allowed-title");
+    let cfg_after_remove = load_blocklist();
+    assert!(!cfg_after_remove.allowed_title_keywords.contains(&"spotify web".to_string()));
 }
 
 #[tokio::test]

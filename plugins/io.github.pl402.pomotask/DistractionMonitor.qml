@@ -26,6 +26,12 @@ Item {
     blocked_classes: [
       "steam", "discord", "spotify"
     ],
+    allowed_title_keywords: [
+      "youtube music", "music.youtube.com"
+    ],
+    allowed_classes: [
+      "youtube music", "youtube-music", "com.github.th_ch.youtube_music"
+    ],
     action: "warn"
   })
 
@@ -42,6 +48,24 @@ Item {
     var c = String(appClass || "").toLowerCase().trim()
     var ic = String(initialClass || "").toLowerCase().trim()
 
+    // 1. Excepciones permitidas (Lista Blanca)
+    var allowedKeywords = Array.isArray(bl.allowed_title_keywords) ? bl.allowed_title_keywords : []
+    for (var a = 0; a < allowedKeywords.length; a++) {
+      var akw = String(allowedKeywords[a] || "").toLowerCase().trim()
+      if (akw !== "" && (t.indexOf(akw) !== -1 || it.indexOf(akw) !== -1)) {
+        return false
+      }
+    }
+
+    var allowedClasses = Array.isArray(bl.allowed_classes) ? bl.allowed_classes : []
+    for (var b = 0; b < allowedClasses.length; b++) {
+      var acls = String(allowedClasses[b] || "").toLowerCase().trim()
+      if (acls !== "" && (c === acls || ic === acls || c.indexOf(acls) !== -1)) {
+        return false
+      }
+    }
+
+    // 2. Reglas de bloqueo
     var keywords = Array.isArray(bl.title_keywords) ? bl.title_keywords : []
     for (var i = 0; i < keywords.length; i++) {
       var kw = String(keywords[i] || "").toLowerCase().trim()

@@ -43,7 +43,26 @@ impl Default for RuntimeState {
 pub struct BlocklistConfig {
     pub title_keywords: Vec<String>,
     pub blocked_classes: Vec<String>,
+    #[serde(default = "default_allowed_title_keywords")]
+    pub allowed_title_keywords: Vec<String>,
+    #[serde(default = "default_allowed_classes")]
+    pub allowed_classes: Vec<String>,
     pub action: String, // "warn", "warn_and_unfocus", "minimize"
+}
+
+fn default_allowed_title_keywords() -> Vec<String> {
+    vec![
+        "youtube music".to_string(),
+        "music.youtube.com".to_string(),
+    ]
+}
+
+fn default_allowed_classes() -> Vec<String> {
+    vec![
+        "youtube music".to_string(),
+        "youtube-music".to_string(),
+        "com.github.th_ch.youtube_music".to_string(),
+    ]
 }
 
 impl Default for BlocklistConfig {
@@ -64,6 +83,8 @@ impl Default for BlocklistConfig {
                 "discord".to_string(),
                 "spotify".to_string(),
             ],
+            allowed_title_keywords: default_allowed_title_keywords(),
+            allowed_classes: default_allowed_classes(),
             action: "warn".to_string(),
         }
     }
@@ -74,6 +95,24 @@ impl BlocklistConfig {
         let title_lower = title.to_lowercase();
         let class_lower = app_class.to_lowercase();
 
+        // 1. Verificar excepciones de la lista blanca primero (ej. YouTube Music)
+        for allow_kw in &self.allowed_title_keywords {
+            let kw_trimmed = allow_kw.trim();
+            if !kw_trimmed.is_empty() && title_lower.contains(&kw_trimmed.to_lowercase()) {
+                return false;
+            }
+        }
+        for allow_cls in &self.allowed_classes {
+            let cls_trimmed = allow_cls.trim();
+            if !cls_trimmed.is_empty() {
+                let cls_low = cls_trimmed.to_lowercase();
+                if class_lower == cls_low || class_lower.contains(&cls_low) {
+                    return false;
+                }
+            }
+        }
+
+        // 2. Verificar reglas de bloqueo
         for kw in &self.title_keywords {
             let kw_trimmed = kw.trim();
             if kw_trimmed.is_empty() {
@@ -767,6 +806,50 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
                     save_blocklist(&config).map_err(|e| e.to_string())?;
                     serde_json::to_string_pretty(&config).map_err(|e| e.to_string())
                 }
+                "add-allowed-title" => {
+                    if clean_args.len() < 3 {
+                        return Err("Missing allowed keyword to add".to_string());
+                    }
+                    let mut config = load_blocklist();
+                    let kw = clean_args[2].to_string();
+                    if !config.allowed_title_keywords.contains(&kw) {
+                        config.allowed_title_keywords.push(kw);
+                    }
+                    save_blocklist(&config).map_err(|e| e.to_string())?;
+                    serde_json::to_string_pretty(&config).map_err(|e| e.to_string())
+                }
+                "remove-allowed-title" => {
+                    if clean_args.len() < 3 {
+                        return Err("Missing allowed keyword to remove".to_string());
+                    }
+                    let mut config = load_blocklist();
+                    let kw = clean_args[2];
+                    config.allowed_title_keywords.retain(|k| k != kw);
+                    save_blocklist(&config).map_err(|e| e.to_string())?;
+                    serde_json::to_string_pretty(&config).map_err(|e| e.to_string())
+                }
+                "add-allowed-class" => {
+                    if clean_args.len() < 3 {
+                        return Err("Missing allowed class name to add".to_string());
+                    }
+                    let mut config = load_blocklist();
+                    let cls = clean_args[2].to_string();
+                    if !config.allowed_classes.contains(&cls) {
+                        config.allowed_classes.push(cls);
+                    }
+                    save_blocklist(&config).map_err(|e| e.to_string())?;
+                    serde_json::to_string_pretty(&config).map_err(|e| e.to_string())
+                }
+                "remove-allowed-class" => {
+                    if clean_args.len() < 3 {
+                        return Err("Missing allowed class name to remove".to_string());
+                    }
+                    let mut config = load_blocklist();
+                    let cls = clean_args[2];
+                    config.allowed_classes.retain(|c| c != cls);
+                    save_blocklist(&config).map_err(|e| e.to_string())?;
+                    serde_json::to_string_pretty(&config).map_err(|e| e.to_string())
+                }
                 "remove-title" => {
                     if clean_args.len() < 3 {
                         return Err("Missing keyword to remove".to_string());
@@ -883,13 +966,22 @@ mod tests {
     #[test]
     fn test_blocklist_matching() {
         let mut blocklist = BlocklistConfig::default();
+        blocklist.title_keywords.push("youtube".to_string());
         blocklist.title_keywords.push("facebook".to_string());
         blocklist.title_keywords.push("   ".to_string());
         blocklist.blocked_classes.push("steam".to_string());
         blocklist.blocked_classes.push("".to_string());
 
+        // YouTube estándar está bloqueado
+        assert!(blocklist.is_distraction("Rick Astley - Never Gonna Give You Up - YouTube", "firefox"));
         assert!(blocklist.is_distraction("Facebook - Log In", "firefox"));
         assert!(blocklist.is_distraction("Any Title", "steam"));
+
+        // YouTube Music está explícitamente en la lista blanca de excepciones
+        assert!(!blocklist.is_distraction("Coldplay - Yellow - YouTube Music", "google-chrome"));
+        assert!(!blocklist.is_distraction("music.youtube.com", "zen"));
+        assert!(!blocklist.is_distraction("Any Song", "youtube-music"));
+
         assert!(blocklist.is_distraction("Twitter / X", "google-chrome"));
         assert!(!blocklist.is_distraction("GitHub - Pull Requests", "zen"));
         assert!(!blocklist.is_distraction("Rust Docs", "firefox"));
