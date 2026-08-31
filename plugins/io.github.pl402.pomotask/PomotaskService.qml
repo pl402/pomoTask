@@ -104,13 +104,29 @@ Item {
       if (obj && typeof obj === "object") {
         if (obj.state !== undefined) root.state = String(obj.state)
         if (obj.mode !== undefined) root.mode = String(obj.mode)
-        if (obj.remaining_seconds !== undefined) root.remainingSeconds = Number(obj.remaining_seconds)
         if (obj.total_seconds !== undefined) root.totalSeconds = Number(obj.total_seconds)
         if (obj.session_pomodoros !== undefined) root.sessionPomodoros = Number(obj.session_pomodoros)
         root.activeTaskId = obj.active_task_id ? String(obj.active_task_id) : ""
         root.activeTaskTitle = obj.active_task_title ? String(obj.active_task_title) : ""
         if (obj.strict_break !== undefined) root.strictBreak = Boolean(obj.strict_break)
         if (obj.anti_distraction !== undefined) root.antiDistraction = Boolean(obj.anti_distraction)
+
+        if (obj.state === "running" && obj.target_end_timestamp) {
+          var nowSec = Math.floor(Date.now() / 1000)
+          var diff = Math.max(0, Number(obj.target_end_timestamp) - nowSec)
+          if (Math.abs(root.remainingSeconds - diff) > 1 || !root.isRunning) {
+            root.remainingSeconds = diff
+          }
+        } else if (obj.remaining_seconds !== undefined) {
+          var newSec = Number(obj.remaining_seconds)
+          if (root.isRunning && obj.state === "running") {
+            if (Math.abs(root.remainingSeconds - newSec) > 2) {
+              root.remainingSeconds = newSec
+            }
+          } else {
+            root.remainingSeconds = newSec
+          }
+        }
         root.lastError = ""
       }
     } catch (e) {
@@ -129,18 +145,43 @@ Item {
         } else {
           var all = []
           var lists = []
+          var seenIds = {}
+
+          for (var listId in obj) {
+            if (listId !== "@all") {
+              lists.push(listId)
+            }
+          }
+
           if (Array.isArray(obj["@all"]) && obj["@all"].length > 0) {
-            all = obj["@all"]
-            for (var k in obj) {
-              if (k !== "@all") lists.push(k)
+            all = obj["@all"].slice()
+            for (var i = 0; i < all.length; i++) {
+              if (all[i] && all[i].id) {
+                seenIds[all[i].id] = true
+              }
+            }
+            for (var j = 0; j < lists.length; j++) {
+              var listTasks = obj[lists[j]]
+              if (Array.isArray(listTasks)) {
+                for (var k = 0; k < listTasks.length; k++) {
+                  var t = listTasks[k]
+                  if (t && t.id && !seenIds[t.id]) {
+                    all.push(t)
+                    seenIds[t.id] = true
+                  }
+                }
+              }
             }
           } else {
-            for (var listId in obj) {
-              if (listId !== "@all") lists.push(listId)
-              var items = obj[listId]
+            for (var m = 0; m < lists.length; m++) {
+              var items = obj[lists[m]]
               if (Array.isArray(items)) {
-                for (var i = 0; i < items.length; i++) {
-                  all.push(items[i])
+                for (var n = 0; n < items.length; n++) {
+                  var item = items[n]
+                  if (item && item.id && !seenIds[item.id]) {
+                    all.push(item)
+                    seenIds[item.id] = true
+                  }
                 }
               }
             }

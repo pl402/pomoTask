@@ -490,7 +490,7 @@ impl App {
         let mut path = Self::get_config_dir();
         path.push("config.json");
         if let Ok(data) = serde_json::to_string_pretty(&self.config) {
-            let _ = fs::write(path, data);
+            let _ = crate::ipc::atomic_write(&path, &data);
         }
     }
 
@@ -535,7 +535,7 @@ impl App {
         let mut path = Self::get_config_dir();
         path.push("tasks_cache.json");
         if let Ok(data) = serde_json::to_string(&self.list_cache) {
-            let _ = fs::write(path, data);
+            let _ = crate::ipc::atomic_write(&path, &data);
         }
     }
 
@@ -543,7 +543,7 @@ impl App {
         let mut path = Self::get_config_dir();
         path.push("stats.json");
         if let Ok(data) = serde_json::to_string_pretty(&self.stats) {
-            let _ = fs::write(path, data);
+            let _ = crate::ipc::atomic_write(&path, &data);
         }
     }
 
@@ -1049,6 +1049,11 @@ impl App {
         };
 
         let total_seconds = self.timer_mode.duration(&self.config);
+        let target_end_timestamp = if self.timer_active {
+            Some(Utc::now().timestamp() + self.timer_seconds as i64)
+        } else {
+            None
+        };
 
         crate::ipc::RuntimeState {
             state: state_str.to_string(),
@@ -1060,6 +1065,7 @@ impl App {
             active_task_title,
             strict_break: false,
             anti_distraction: true,
+            target_end_timestamp,
         }
     }
 
@@ -1295,5 +1301,6 @@ mod tests {
         assert_eq!(state.session_pomodoros, 3);
         assert_eq!(state.active_task_id.as_deref(), Some("t1"));
         assert_eq!(state.active_task_title.as_deref(), Some("t1"));
+        assert!(state.target_end_timestamp.is_some());
     }
 }

@@ -1,5 +1,5 @@
 use crate::api::ApiClient;
-use crate::app::Task;
+use crate::app::{Stats, Task};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -18,6 +18,8 @@ pub struct RuntimeState {
     pub active_task_title: Option<String>,
     pub strict_break: bool,
     pub anti_distraction: bool,
+    #[serde(default)]
+    pub target_end_timestamp: Option<i64>,
 }
 
 impl Default for RuntimeState {
@@ -32,6 +34,7 @@ impl Default for RuntimeState {
             active_task_title: None,
             strict_break: false,
             anti_distraction: true,
+            target_end_timestamp: None,
         }
     }
 }
@@ -72,13 +75,21 @@ impl BlocklistConfig {
         let class_lower = app_class.to_lowercase();
 
         for kw in &self.title_keywords {
-            if title_lower.contains(&kw.to_lowercase()) {
+            let kw_trimmed = kw.trim();
+            if kw_trimmed.is_empty() {
+                continue;
+            }
+            if title_lower.contains(&kw_trimmed.to_lowercase()) {
                 return true;
             }
         }
         for cls in &self.blocked_classes {
-            let cls_lower = cls.to_lowercase();
-            if class_lower == cls_lower || class_lower.contains(&cls_lower) {
+            let cls_trimmed = cls.trim();
+            if cls_trimmed.is_empty() {
+                continue;
+            }
+            let cls_lower = cls_trimmed.to_lowercase();
+            if class_lower == cls_lower {
                 return true;
             }
         }
@@ -158,13 +169,102 @@ pub fn get_tasks_cache_path() -> PathBuf {
     get_config_dir().join("tasks_cache.json")
 }
 
+pub fn atomic_write(path: &Path, content: &str) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let file_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("file");
+    let tmp_file_name = format!(".{}_{}.tmp", file_name, rand::random::<u64>());
+    let tmp_path = path.with_file_name(tmp_file_name);
+
+    fs::write(&tmp_path, content)?;
+    if let Err(e) = fs::rename(&tmp_path, path) {
+        let _ = fs::remove_file(&tmp_path);
+        return Err(e);
+    }
+    Ok(())
+}
+
+pub fn record_headless_pomodoro(active_task_id: Option<&str>) {
+    let path = get_config_dir().join("stats.json");
+    let mut stats: Stats = if let Ok(data) = fs::read_to_string(&path) {
+        serde_json::from_str(&data).unwrap_or_default()
+    } else {
+        Stats::default()
+    };
+
+    let hour_key = chrono::Local::now().format("%Y-%m-%d %H:00").to_string();
+    let entry = stats.hourly_pomodoros.entry(hour_key).or_insert(0);
+    *entry += 1;
+    stats.lifetime_pomodoros += 1;
+
+    if let Some(task_id) = active_task_id {
+        let t_entry = stats.task_pomodoros.entry(task_id.to_string()).or_insert(0);
+        *t_entry += 1;
+    }
+
+    if let Ok(data) = serde_json::to_string_pretty(&stats) {
+        let _ = atomic_write(&path, &data);
+    }
+}
+
+pub fn record_headless_task_done() {
+    let path = get_config_dir().join("stats.json");
+    let mut stats: Stats = if let Ok(data) = fs::read_to_string(&path) {
+        serde_json::from_str(&data).unwrap_or_default()
+    } else {
+        Stats::default()
+    };
+
+    let hour_key = chrono::Local::now().format("%Y-%m-%d %H:00").to_string();
+    let entry = stats.hourly_tasks_done.entry(hour_key).or_insert(0);
+    *entry += 1;
+    stats.lifetime_tasks_done += 1;
+
+    if let Ok(data) = serde_json::to_string_pretty(&stats) {
+        let _ = atomic_write(&path, &data);
+    }
+}
+
 pub fn load_runtime_state() -> RuntimeState {
     load_runtime_state_from(&get_runtime_state_path())
 }
 
 pub fn load_runtime_state_from(path: &Path) -> RuntimeState {
     if let Ok(data) = fs::read_to_string(path) {
-        if let Ok(state) = serde_json::from_str(&data) {
+        if let Ok(mut state) = serde_json::from_str::<RuntimeState>(&data) {
+            if state.state == "running" {
+                if let Some(target) = state.target_end_timestamp {
+                    let now = Utc::now().timestamp();
+                    let diff = target - now;
+                    if diff <= 0 {
+                        let (focus_dur, short_dur, long_dur) = load_config_durations();
+                        if state.mode == "work" {
+                            state.session_pomodoros += 1;
+                            record_headless_pomodoro(state.active_task_id.as_deref());
+                            if state.session_pomodoros.is_multiple_of(4) {
+                                state.mode = "long_break".to_string();
+                                state.total_seconds = long_dur;
+                            } else {
+                                state.mode = "short_break".to_string();
+                                state.total_seconds = short_dur;
+                            }
+                        } else {
+                            state.mode = "work".to_string();
+                            state.total_seconds = focus_dur;
+                        }
+                        state.remaining_seconds = state.total_seconds;
+                        state.state = "stopped".to_string();
+                        state.target_end_timestamp = None;
+                        let _ = save_runtime_state_to(&state, path);
+                    } else {
+                        state.remaining_seconds = diff as u32;
+                    }
+                }
+            }
             return state;
         }
     }
@@ -176,12 +276,9 @@ pub fn save_runtime_state(state: &RuntimeState) -> std::io::Result<()> {
 }
 
 pub fn save_runtime_state_to(state: &RuntimeState, path: &Path) -> std::io::Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
     let data = serde_json::to_string_pretty(state)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    fs::write(path, data)
+    atomic_write(path, &data)
 }
 
 pub fn load_blocklist() -> BlocklistConfig {
@@ -202,12 +299,9 @@ pub fn save_blocklist(config: &BlocklistConfig) -> std::io::Result<()> {
 }
 
 pub fn save_blocklist_to(config: &BlocklistConfig, path: &Path) -> std::io::Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
     let data = serde_json::to_string_pretty(config)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    fs::write(path, data)
+    atomic_write(path, &data)
 }
 
 pub fn load_tasks_cache() -> HashMap<String, Vec<Task>> {
@@ -243,12 +337,9 @@ pub fn save_tasks_cache(cache: &HashMap<String, Vec<Task>>) -> std::io::Result<(
 }
 
 pub fn save_tasks_cache_to(cache: &HashMap<String, Vec<Task>>, path: &Path) -> std::io::Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
     let data = serde_json::to_string_pretty(cache)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    fs::write(path, data)
+    atomic_write(path, &data)
 }
 
 pub fn load_config_durations() -> (u32, u32, u32) {
@@ -298,20 +389,38 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
             match clean_args[1] {
                 "start" => {
                     state.state = "running".to_string();
+                    state.target_end_timestamp =
+                        Some(Utc::now().timestamp() + state.remaining_seconds as i64);
                 }
                 "pause" => {
+                    if state.state == "running" {
+                        if let Some(target) = state.target_end_timestamp {
+                            let diff = target - Utc::now().timestamp();
+                            state.remaining_seconds = diff.max(0) as u32;
+                        }
+                    }
                     state.state = "paused".to_string();
+                    state.target_end_timestamp = None;
                 }
                 "toggle" => {
                     if state.state == "running" {
+                        if let Some(target) = state.target_end_timestamp {
+                            let diff = target - Utc::now().timestamp();
+                            state.remaining_seconds = diff.max(0) as u32;
+                        }
                         state.state = "paused".to_string();
+                        state.target_end_timestamp = None;
                     } else {
                         state.state = "running".to_string();
+                        state.target_end_timestamp =
+                            Some(Utc::now().timestamp() + state.remaining_seconds as i64);
                     }
                 }
                 "skip" => {
+                    state.target_end_timestamp = None;
                     if state.mode == "work" {
                         state.session_pomodoros += 1;
+                        record_headless_pomodoro(state.active_task_id.as_deref());
                         if state.session_pomodoros.is_multiple_of(4) {
                             state.mode = "long_break".to_string();
                             state.total_seconds = long_dur;
@@ -327,10 +436,12 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
                     state.state = "stopped".to_string();
                 }
                 "reset" => {
+                    state.target_end_timestamp = None;
                     state.remaining_seconds = state.total_seconds;
                     state.state = "stopped".to_string();
                 }
                 "mode" | "set-mode" => {
+                    state.target_end_timestamp = None;
                     if clean_args.len() < 3 {
                         return Err("Missing mode: work, short_break, long_break".to_string());
                     }
@@ -434,6 +545,7 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
                     }
 
                     save_tasks_cache(&cache).map_err(|e| e.to_string())?;
+                    record_headless_task_done();
 
                     // Intentar sincronizar con Google Tasks API en segundo plano si el token existe
                     if get_config_dir().join("pomotask_token.json").exists() {
@@ -512,6 +624,9 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
                         .entry(target_list_id.clone())
                         .or_default()
                         .push(new_task.clone());
+                    if let Some(all_list) = cache.get_mut("@all") {
+                        all_list.push(new_task.clone());
+                    }
                     save_tasks_cache(&cache).map_err(|e| e.to_string())?;
 
                     // Intentar crear tarea en Google Tasks API si el token existe
@@ -690,6 +805,7 @@ mod tests {
             active_task_title: Some("Implement IPC".to_string()),
             strict_break: false,
             anti_distraction: true,
+            target_end_timestamp: Some(1700000000),
         };
         let json = serde_json::to_string(&state).expect("serialize");
         let decoded: RuntimeState = serde_json::from_str(&json).expect("deserialize");
@@ -702,6 +818,7 @@ mod tests {
         assert_eq!(decoded.active_task_title.as_deref(), Some("Implement IPC"));
         assert!(!decoded.strict_break);
         assert!(decoded.anti_distraction);
+        assert_eq!(decoded.target_end_timestamp, Some(1700000000));
     }
 
     #[test]
@@ -716,19 +833,23 @@ mod tests {
         assert_eq!(default_state.active_task_title, None);
         assert!(!default_state.strict_break);
         assert!(default_state.anti_distraction);
+        assert_eq!(default_state.target_end_timestamp, None);
     }
 
     #[test]
     fn test_blocklist_matching() {
         let mut blocklist = BlocklistConfig::default();
         blocklist.title_keywords.push("facebook".to_string());
+        blocklist.title_keywords.push("   ".to_string());
         blocklist.blocked_classes.push("steam".to_string());
+        blocklist.blocked_classes.push("".to_string());
 
         assert!(blocklist.is_distraction("Facebook - Log In", "firefox"));
         assert!(blocklist.is_distraction("Any Title", "steam"));
         assert!(blocklist.is_distraction("Twitter / X", "google-chrome"));
         assert!(!blocklist.is_distraction("GitHub - Pull Requests", "zen"));
         assert!(!blocklist.is_distraction("Rust Docs", "firefox"));
+        assert!(!blocklist.is_distraction("", ""));
     }
 
     #[test]
@@ -758,6 +879,7 @@ mod tests {
             active_task_title: Some("My Task".to_string()),
             strict_break: true,
             anti_distraction: false,
+            target_end_timestamp: None,
         };
 
         save_runtime_state_to(&state, &state_path).unwrap();
@@ -772,6 +894,7 @@ mod tests {
         assert_eq!(loaded.active_task_title.as_deref(), Some("My Task"));
         assert!(loaded.strict_break);
         assert!(!loaded.anti_distraction);
+        assert_eq!(loaded.target_end_timestamp, None);
 
         let _ = std::fs::remove_dir_all(temp_dir);
     }

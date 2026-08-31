@@ -39,8 +39,8 @@ Item {
 
     var t = String(title || "").toLowerCase()
     var it = String(initialTitle || "").toLowerCase()
-    var c = String(appClass || "").toLowerCase()
-    var ic = String(initialClass || "").toLowerCase()
+    var c = String(appClass || "").toLowerCase().trim()
+    var ic = String(initialClass || "").toLowerCase().trim()
 
     var keywords = Array.isArray(bl.title_keywords) ? bl.title_keywords : []
     for (var i = 0; i < keywords.length; i++) {
@@ -54,7 +54,7 @@ Item {
     for (var j = 0; j < classes.length; j++) {
       var cls = String(classes[j] || "").toLowerCase().trim()
       if (cls !== "") {
-        if (c === cls || c.indexOf(cls) !== -1 || ic === cls || ic.indexOf(cls) !== -1) {
+        if (c === cls || ic === cls) {
           return true
         }
       }

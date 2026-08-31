@@ -48,6 +48,7 @@ async fn test_ipc_status() {
         active_task_title: Some("My Special Task".to_string()),
         strict_break: false,
         anti_distraction: true,
+        target_end_timestamp: None,
     };
     save_runtime_state(&state).unwrap();
 
@@ -236,7 +237,9 @@ async fn test_ipc_task_create() {
     let _lock = TEST_LOCK.lock().await;
     let ctx = TestContext::new("task_create");
     let cache_path = ctx.temp_dir.join("tasks_cache.json");
-    let map: HashMap<String, Vec<Task>> = HashMap::new();
+    let mut map: HashMap<String, Vec<Task>> = HashMap::new();
+    map.insert("@all".to_string(), Vec::new());
+    map.insert("personal".to_string(), Vec::new());
     fs::write(&cache_path, serde_json::to_string(&map).unwrap()).unwrap();
 
     execute_ipc_command(&[
@@ -255,6 +258,10 @@ async fn test_ipc_task_create() {
     let tasks = loaded_map.get("personal").expect("personal list");
     assert_eq!(tasks.len(), 1);
     assert_eq!(tasks[0].title, "Buy milk");
+
+    let all_tasks = loaded_map.get("@all").expect("@all list");
+    assert_eq!(all_tasks.len(), 1);
+    assert_eq!(all_tasks[0].title, "Buy milk");
 }
 
 #[tokio::test]
@@ -410,4 +417,98 @@ async fn test_ipc_args_with_literal_ipc_value() {
 
     let config = load_blocklist();
     assert!(config.title_keywords.contains(&"ipc".to_string()));
+}
+
+#[tokio::test]
+async fn test_ipc_target_end_timestamp_and_countdown() {
+    let _lock = TEST_LOCK.lock().await;
+    let _ctx = TestContext::new("target_end_ts");
+    let mut state = RuntimeState::default();
+    state.state = "stopped".to_string();
+    state.mode = "work".to_string();
+    state.remaining_seconds = 1500;
+    state.total_seconds = 1500;
+    save_runtime_state(&state).unwrap();
+
+    // Start timer: target_end_timestamp should be set
+    execute_ipc_command(&["timer".to_string(), "start".to_string()])
+        .await
+        .expect("timer start");
+    let started = load_runtime_state();
+    assert_eq!(started.state, "running");
+    assert!(started.target_end_timestamp.is_some());
+    let target = started.target_end_timestamp.unwrap();
+    let now = Utc::now().timestamp();
+    assert!(target >= now + 1495 && target <= now + 1505);
+
+    // Simulate 50 seconds passing by modifying target_end_timestamp
+    let mut simulated = load_runtime_state();
+    simulated.target_end_timestamp = Some(now + 1450);
+    save_runtime_state(&simulated).unwrap();
+
+    // Loading should dynamically calculate remaining_seconds = ~1450
+    let reloaded = load_runtime_state();
+    assert!(reloaded.remaining_seconds >= 1448 && reloaded.remaining_seconds <= 1452);
+
+    // Pause timer: target_end_timestamp should become None and remaining_seconds frozen
+    execute_ipc_command(&["timer".to_string(), "pause".to_string()])
+        .await
+        .expect("timer pause");
+    let paused = load_runtime_state();
+    assert_eq!(paused.state, "paused");
+    assert_eq!(paused.target_end_timestamp, None);
+    assert!(paused.remaining_seconds >= 1448 && paused.remaining_seconds <= 1452);
+}
+
+#[tokio::test]
+async fn test_ipc_headless_stats_recording() {
+    let _lock = TEST_LOCK.lock().await;
+    let ctx = TestContext::new("headless_stats");
+    let mut state = RuntimeState::default();
+    state.state = "running".to_string();
+    state.mode = "work".to_string();
+    state.remaining_seconds = 1500;
+    state.total_seconds = 1500;
+    state.active_task_id = Some("active_task_1".to_string());
+    save_runtime_state(&state).unwrap();
+
+    // Skip should transition work -> short_break and record pomodoro in stats.json
+    execute_ipc_command(&["timer".to_string(), "skip".to_string()])
+        .await
+        .expect("timer skip");
+
+    let stats_path = ctx.temp_dir.join("stats.json");
+    assert!(stats_path.exists());
+    let stats_data = fs::read_to_string(&stats_path).unwrap();
+    let stats: pomotask_cli::app::Stats = serde_json::from_str(&stats_data).unwrap();
+    assert_eq!(stats.lifetime_pomodoros, 1);
+    assert_eq!(stats.task_pomodoros.get("active_task_1"), Some(&1));
+
+    // Also complete task should record lifetime_tasks_done
+    let cache_path = ctx.temp_dir.join("tasks_cache.json");
+    let mut map: HashMap<String, Vec<Task>> = HashMap::new();
+    map.insert(
+        "default".to_string(),
+        vec![Task {
+            id: "t_done".to_string(),
+            list_id: "default".to_string(),
+            title: "Task Done".to_string(),
+            completed: false,
+            due: None,
+            updated: Utc::now(),
+            completed_at: None,
+            notes: None,
+            parent_id: None,
+            pomodoros: 0,
+        }],
+    );
+    fs::write(&cache_path, serde_json::to_string(&map).unwrap()).unwrap();
+
+    execute_ipc_command(&["task".to_string(), "complete".to_string(), "t_done".to_string()])
+        .await
+        .expect("task complete");
+
+    let stats_data_2 = fs::read_to_string(&stats_path).unwrap();
+    let stats_2: pomotask_cli::app::Stats = serde_json::from_str(&stats_data_2).unwrap();
+    assert_eq!(stats_2.lifetime_tasks_done, 1);
 }
