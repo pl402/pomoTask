@@ -72,7 +72,7 @@ fi
 
 if command -v omarchy &> /dev/null; then
     echo -e "${BLUE}==>${NC} Habilitando widget en la barra de Omarchy..."
-    omarchy plugin enable "$PLUGIN_ID" --section center || true
+    omarchy plugin enable "$PLUGIN_ID" --section right || true
 fi
 
 # 8. Mensaje final e instrucciones de uso
@@ -87,8 +87,8 @@ if [[ ":$PATH:" != *":$INSTALL_BIN_DIR:"* ]]; then
 fi
 
 echo -e "Para activar el widget en tu barra de Omarchy, ejecuta:"
-echo -e "  ${BLUE}omarchy plugin enable ${PLUGIN_ID} --section center${NC}"
+echo -e "  ${BLUE}omarchy plugin enable ${PLUGIN_ID} --section right${NC}"
 echo -e "\nO para moverlo si ya está activo:"
-echo -e "  ${BLUE}omarchy bar move ${PLUGIN_ID} --section center${NC}"
+echo -e "  ${BLUE}omarchy bar move ${PLUGIN_ID} --section right${NC}"
 echo -e "\nPuedes probar la interfaz CLI / IPC ejecutando:"
 echo -e "  ${GREEN}pomotask-cli ipc status${NC}\n"

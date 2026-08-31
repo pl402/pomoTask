@@ -104,9 +104,9 @@ Esto compilará `pomotask-cli`, lo instalará en `~/.local/bin`, copiará los co
 
 Para activar el widget en tu barra de Omarchy:
 ```bash
-omarchy plugin enable io.github.pl402.pomotask --section center
+omarchy plugin enable io.github.pl402.pomotask --section right
 # O para moverlo si ya está activo:
-omarchy bar move io.github.pl402.pomotask --section center
+omarchy bar move io.github.pl402.pomotask --section right
 ```
 
 ## 🧩 Plugin para Omarchy Quattro

@@ -16,6 +16,6 @@
     "displayName": "PomoTask",
     "category": "Productivity",
     "allowMultiple": false,
-    "defaultSection": "center"
+    "defaultSection": "right"
   }
 }
