@@ -55,10 +55,11 @@ Panel {
   }
 
   function openTui() {
+    var cmd = "omarchy-launch-or-focus-tui pomotask-cli || omarchy-launch-terminal pomotask-cli || xdg-terminal-exec pomotask-cli || alacritty -e pomotask-cli || kitty -e pomotask-cli || foot -e pomotask-cli"
     if (root.bar && typeof root.bar.run === "function") {
-      root.bar.run("pomotask-cli")
+      root.bar.run(cmd)
     } else {
-      Quickshell.execDetached(["xdg-terminal-exec", "pomotask-cli"])
+      Util.execDetached(cmd)
     }
     root.close()
   }
