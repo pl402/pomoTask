@@ -55,7 +55,7 @@ impl ApiClient {
 
     async fn ensure_full_permissions(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Some(auth) = &self.auth {
-            let scopes = &["https://www.googleapis.com/auth/tasks", "https://www.googleapis.com/auth/tasks.readonly"];
+            let scopes = &["https://www.googleapis.com/auth/tasks"];
             auth.token(scopes).await?;
         }
         Ok(())
@@ -119,9 +119,11 @@ impl ApiClient {
         let hub = match &self.hub { Some(h) => h, None => return Ok(()) };
         let task = api::Task {
             status: Some(if completed { "completed".to_string() } else { "needsAction".to_string() }),
+            completed: if completed { Some(Utc::now().to_rfc3339()) } else { None },
             ..Default::default()
         };
-        hub.tasks().patch(task, list_id, task_id).doit().await?;
+        let effective_list_id = if list_id.is_empty() || list_id == "@all" { "@default" } else { list_id };
+        hub.tasks().patch(task, effective_list_id, task_id).doit().await?;
         Ok(())
     }
 
@@ -136,7 +138,8 @@ impl ApiClient {
             ..Default::default()
         };
 
-        let mut call = hub.tasks().insert(task, list_id);
+        let effective_list_id = if list_id.is_empty() || list_id == "@all" { "@default" } else { list_id };
+        let mut call = hub.tasks().insert(task, effective_list_id);
         if let Some(ref pid) = parent_id {
             call = call.parent(pid);
         }
@@ -155,7 +158,8 @@ impl ApiClient {
             due: due.map(|d| d.to_rfc3339()),
             ..Default::default()
         };
-        hub.tasks().patch(task, list_id, task_id).doit().await?;
+        let effective_list_id = if list_id.is_empty() || list_id == "@all" { "@default" } else { list_id };
+        hub.tasks().patch(task, effective_list_id, task_id).doit().await?;
         Ok(())
     }
 

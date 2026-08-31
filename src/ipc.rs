@@ -620,8 +620,12 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
                             if t.id == task_id {
                                 t.completed = true;
                                 t.completed_at = Some(Utc::now());
-                                if found_list_id.is_none() && lid != "@all" {
-                                    found_list_id = Some(t.list_id.clone());
+                                if found_list_id.is_none() {
+                                    if !t.list_id.is_empty() && t.list_id != "@all" {
+                                        found_list_id = Some(t.list_id.clone());
+                                    } else if lid != "@all" {
+                                        found_list_id = Some(lid.clone());
+                                    }
                                 }
                             }
                         }
@@ -632,14 +636,16 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
 
                     // Intentar sincronizar con Google Tasks API en segundo plano si el token existe
                     if get_config_dir().join("pomotask_token.json").exists() {
-                        if let Some(lid) = found_list_id {
-                            let (sender, _) = tokio::sync::mpsc::unbounded_channel();
-                            let client = ApiClient::new(sender).await;
-                            let _ = tokio::time::timeout(
-                                Duration::from_secs(5),
-                                client.toggle_task_completion(&lid, task_id, true),
-                            )
-                            .await;
+                        let lid = found_list_id.unwrap_or_else(|| "@default".to_string());
+                        let (sender, _) = tokio::sync::mpsc::unbounded_channel();
+                        let client = ApiClient::new(sender).await;
+                        let res = tokio::time::timeout(
+                            Duration::from_secs(10),
+                            client.toggle_task_completion(&lid, task_id, true),
+                        )
+                        .await;
+                        if let Ok(Err(e)) = res {
+                            eprintln!("Warning: failed to sync task completion with Google Tasks: {}", e);
                         }
                     }
 

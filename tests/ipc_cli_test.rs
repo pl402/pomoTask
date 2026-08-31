@@ -233,6 +233,45 @@ async fn test_ipc_task_complete() {
 }
 
 #[tokio::test]
+async fn test_ipc_task_complete_in_all_list() {
+    let _lock = TEST_LOCK.lock().await;
+    let ctx = TestContext::new("task_complete_all");
+    let cache_path = ctx.temp_dir.join("tasks_cache.json");
+    let mut map: HashMap<String, Vec<Task>> = HashMap::new();
+    map.insert(
+        "@all".to_string(),
+        vec![Task {
+            id: "t_all_1".to_string(),
+            list_id: "list_real".to_string(),
+            title: "Task in All".to_string(),
+            completed: false,
+            due: None,
+            updated: Utc::now(),
+            completed_at: None,
+            notes: None,
+            parent_id: None,
+            pomodoros: 0,
+        }],
+    );
+    fs::write(&cache_path, serde_json::to_string(&map).unwrap()).unwrap();
+
+    execute_ipc_command(&["task".to_string(), "complete".to_string(), "t_all_1".to_string()])
+        .await
+        .expect("complete task in all");
+
+    let cache_data = fs::read_to_string(&cache_path).unwrap();
+    let loaded_map: HashMap<String, Vec<Task>> = serde_json::from_str(&cache_data).unwrap();
+    let task = loaded_map
+        .get("@all")
+        .unwrap()
+        .iter()
+        .find(|t| t.id == "t_all_1")
+        .unwrap();
+    assert!(task.completed);
+    assert!(task.completed_at.is_some());
+}
+
+#[tokio::test]
 async fn test_ipc_task_create() {
     let _lock = TEST_LOCK.lock().await;
     let ctx = TestContext::new("task_create");

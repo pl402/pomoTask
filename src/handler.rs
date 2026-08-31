@@ -52,14 +52,17 @@ pub async fn handle_key_events(
                         app.tasks.get(app.selected_task).cloned()
                     };
 
-                    if let Some(mut task) = task_to_toggle {
+                    if let Some(task) = task_to_toggle {
                         let task_id = task.id.clone();
                         let is_completed = task.completed;
-                        let task_list_id = task.list_id.clone();
+                        let task_list_id = if task.list_id.is_empty() || task.list_id == "@all" {
+                            app.task_lists.iter().find(|l| l.id != "@all").map(|l| l.id.clone()).unwrap_or_else(|| "@default".to_string())
+                        } else {
+                            task.list_id.clone()
+                        };
                         let selected_list_id = app.task_lists.get(app.selected_list_idx).map(|l| l.id.clone()).unwrap_or_default();
                         let api = api_client.clone();
                         let sender_clone = sender.clone();
-                        let show_comp = app.config.show_completed;
                         let timer_active = app.timer_active;
 
                         let is_main_task = if let Some(current) = app.tasks.get(app.selected_task) { current.id == task_id } else { false };
@@ -70,8 +73,24 @@ pub async fn handle_key_events(
                         if !is_completed {
                             // La estadística se registra al completar, con o sin temporizador activo.
                             app.record_task_done();
-                            // Solo marcamos visualmente de inmediato si no hay un pomodoro en curso.
-                            if !app.timer_active { task.completed = true; }
+                            // Marcamos de inmediato en las tareas en memoria y caché local
+                            if let Some(t) = app.all_tasks.iter_mut().find(|t| t.id == task_id) {
+                                t.completed = true;
+                                t.completed_at = Some(Utc::now());
+                            }
+                            if let Some(t) = app.tasks.iter_mut().find(|t| t.id == task_id) {
+                                t.completed = true;
+                                t.completed_at = Some(Utc::now());
+                            }
+                            for list_tasks in app.list_cache.values_mut() {
+                                for t in list_tasks.iter_mut() {
+                                    if t.id == task_id {
+                                        t.completed = true;
+                                        t.completed_at = Some(Utc::now());
+                                    }
+                                }
+                            }
+                            app.save_tasks_cache();
                         }
 
                         let x = 3; 
@@ -90,7 +109,7 @@ pub async fn handle_key_events(
                                 if selected_list_id == "@all" {
                                     let _ = sender_clone.send(Event::Sync);
                                 } else {
-                                    let tasks: Vec<Task> = api.fetch_tasks(&selected_list_id, show_comp).await.unwrap_or_default();
+                                    let tasks: Vec<Task> = api.fetch_tasks(&selected_list_id, true).await.unwrap_or_default();
                                     let _ = sender_clone.send(Event::ApiUpdate(selected_list_id, tasks));
                                 }
 
