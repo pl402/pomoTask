@@ -55,7 +55,11 @@ Panel {
   }
 
   function openTui() {
-    Quickshell.execDetached(["alacritty", "-e", "pomotask-cli"])
+    if (root.bar && typeof root.bar.run === "function") {
+      root.bar.run("pomotask-cli")
+    } else {
+      Quickshell.execDetached(["xdg-terminal-exec", "pomotask-cli"])
+    }
     root.close()
   }
 
@@ -193,8 +197,9 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
-      blocked: newTaskField.activeFocus
+      blocked: newTaskField.activeFocus || (listDropdown && listDropdown.popupOpen)
 
+      onActivateRequested: pomotaskService.timerToggle()
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(t) {
