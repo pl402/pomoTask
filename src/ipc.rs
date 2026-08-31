@@ -39,7 +39,7 @@ impl Default for RuntimeState {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BlocklistConfig {
     pub title_keywords: Vec<String>,
     pub blocked_classes: Vec<String>,
@@ -48,6 +48,12 @@ pub struct BlocklistConfig {
     #[serde(default = "default_allowed_classes")]
     pub allowed_classes: Vec<String>,
     pub action: String, // "warn", "warn_and_unfocus", "minimize"
+    #[serde(default = "default_overlay_dimming")]
+    pub overlay_dimming: f64, // 0.0 to 1.0 (default 0.40 = 60% background visibility)
+}
+
+fn default_overlay_dimming() -> f64 {
+    0.40
 }
 
 fn default_allowed_title_keywords() -> Vec<String> {
@@ -74,9 +80,10 @@ impl Default for BlocklistConfig {
                 "x.com".to_string(),
                 "instagram".to_string(),
                 "reddit".to_string(),
-                "youtube.com".to_string(),
+                "youtube".to_string(),
                 "tiktok".to_string(),
                 "netflix".to_string(),
+                "twitch".to_string(),
             ],
             blocked_classes: vec![
                 "steam".to_string(),
@@ -86,6 +93,7 @@ impl Default for BlocklistConfig {
             allowed_title_keywords: default_allowed_title_keywords(),
             allowed_classes: default_allowed_classes(),
             action: "warn".to_string(),
+            overlay_dimming: default_overlay_dimming(),
         }
     }
 }
@@ -752,7 +760,7 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
         "blocklist" => {
             if clean_args.len() < 2 {
                 return Err(
-                    "Missing blocklist action: get, toggle-strict, toggle-anti-distraction, set-action, add-title, add-class, remove-title, remove-class".to_string(),
+                    "Missing blocklist action: get, toggle-strict, toggle-anti-distraction, set-action, set-dimming, add-title, add-class, remove-title, remove-class".to_string(),
                 );
             }
 
@@ -779,6 +787,19 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
                     }
                     let mut config = load_blocklist();
                     config.action = clean_args[2].to_string();
+                    save_blocklist(&config).map_err(|e| e.to_string())?;
+                    serde_json::to_string_pretty(&config).map_err(|e| e.to_string())
+                }
+                "set-dimming" => {
+                    if clean_args.len() < 3 {
+                        return Err("Missing dimming value (0.0 to 1.0)".to_string());
+                    }
+                    let val: f64 = clean_args[2]
+                        .parse()
+                        .map_err(|_| "Invalid dimming value, expected number between 0.0 and 1.0".to_string())?;
+                    let clamped = val.clamp(0.0, 1.0);
+                    let mut config = load_blocklist();
+                    config.overlay_dimming = clamped;
                     save_blocklist(&config).map_err(|e| e.to_string())?;
                     serde_json::to_string_pretty(&config).map_err(|e| e.to_string())
                 }

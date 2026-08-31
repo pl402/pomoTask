@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Layouts
 import Quickshell
 import qs.Commons
 import qs.Ui
@@ -904,6 +905,51 @@ Panel {
               value: (pomotaskService.blocklist && pomotaskService.blocklist.action) ? pomotaskService.blocklist.action : "warn"
               options: root.actionOptions
               onChanged: function(v) { pomotaskService.blocklistSetAction(v) }
+            }
+
+            // Overlay Dimming / Visibility Slider
+            Column {
+              width: parent.width
+              spacing: Style.space(6)
+
+              Item {
+                width: parent.width
+                height: dimmingTitleText.implicitHeight
+
+                Text {
+                  id: dimmingTitleText
+                  anchors.left: parent.left
+                  anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
+                  text: "Oscurecimiento del fondo (" + Math.round(((pomotaskService.blocklist && typeof pomotaskService.blocklist.overlay_dimming === "number") ? pomotaskService.blocklist.overlay_dimming : 0.40) * 100) + "%)"
+                  color: root.contentForeground
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.bodySmall
+                }
+
+                Text {
+                  anchors.right: parent.right
+                  anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
+                  text: Math.round((1.0 - ((pomotaskService.blocklist && typeof pomotaskService.blocklist.overlay_dimming === "number") ? pomotaskService.blocklist.overlay_dimming : 0.40)) * 100) + "% visibilidad"
+                  color: Color.accent
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.caption
+                }
+              }
+
+              PanelSlider {
+                width: parent.width
+                minimum: 0.0
+                maximum: 0.95
+                step: 0.05
+                value: (pomotaskService.blocklist && typeof pomotaskService.blocklist.overlay_dimming === "number")
+                  ? pomotaskService.blocklist.overlay_dimming
+                  : 0.40
+                onReleased: function(val) {
+                  pomotaskService.blocklistSetDimming(val)
+                }
+              }
             }
 
             PanelSeparator {

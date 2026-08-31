@@ -1100,8 +1100,32 @@ impl App {
 mod tests {
     use super::*;
 
-    /// Constructor mínimo para tests (sin I/O de disco).
+    struct TestContext {
+        temp_dir: PathBuf,
+    }
+
+    impl TestContext {
+        fn new(name: &str) -> Self {
+            let temp_dir = std::env::temp_dir().join(format!(
+                "pomotask_app_test_{}_{}",
+                name,
+                rand::random::<u64>()
+            ));
+            let _ = std::fs::create_dir_all(&temp_dir);
+            std::env::set_var("POMOTASK_CONFIG_DIR", temp_dir.to_str().unwrap());
+            Self { temp_dir }
+        }
+    }
+
+    impl Drop for TestContext {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.temp_dir);
+        }
+    }
+
+    /// Constructor mínimo para tests.
     fn blank_app() -> App {
+        let _ = TestContext::new("blank_app");
         App {
             running: true,
             mode: AppMode::Timer,

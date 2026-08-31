@@ -64,8 +64,11 @@ else
     echo -e "${YELLOW}Nota:${NC} Comando 'omarchy' no detectado en PATH. Se omitió la validación automática."
 fi
 
-# 7. Notificar a omarchy-shell para recargar plugins y habilitar el widget
-if command -v omarchy-shell &> /dev/null; then
+# 7. Notificar a omarchy-shell para recargar plugins y reiniciar shell
+if command -v omarchy-restart-shell &> /dev/null; then
+    echo -e "${BLUE}==>${NC} Reiniciando Omarchy Shell para aplicar cambios en caliente..."
+    omarchy-restart-shell || true
+elif command -v omarchy-shell &> /dev/null; then
     echo -e "${BLUE}==>${NC} Notificando a Omarchy Shell para reescanear plugins..."
     omarchy-shell -q shell rescanPlugins || true
 fi

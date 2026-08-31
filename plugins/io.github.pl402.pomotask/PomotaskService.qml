@@ -314,6 +314,11 @@ Item {
     runAction(["blocklist", "set-action", String(action).trim()], "Updating distraction action…")
   }
 
+  function blocklistSetDimming(dimming) {
+    var val = Math.max(0.0, Math.min(1.0, parseFloat(dimming) || 0.40))
+    runAction(["blocklist", "set-dimming", val.toFixed(2)], "Updating overlay dimming…")
+  }
+
   function blocklistAddTitle(keyword) {
     var kw = String(keyword || "").trim()
     if (kw === "") return

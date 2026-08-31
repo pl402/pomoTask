@@ -7,10 +7,9 @@ Item {
   id: root
 
   property var service: null
-  property int alertCooldownMs: 10000
-  property double lastAlertTime: 0
-  property string lastAlertAddress: ""
-  property string lastAlertTitle: ""
+  property bool distractionActive: false
+  property string currentDistractionTitle: ""
+  property string currentDistractionAddress: ""
 
   readonly property bool monitorActive: service !== null
     && service.isWork
@@ -21,7 +20,7 @@ Item {
   readonly property var fallbackBlocklist: ({
     title_keywords: [
       "facebook", "twitter", "x.com", "instagram",
-      "reddit", "youtube.com", "tiktok", "netflix"
+      "reddit", "youtube", "tiktok", "netflix", "twitch"
     ],
     blocked_classes: [
       "steam", "discord", "spotify"
@@ -88,41 +87,14 @@ Item {
   }
 
   function handleDistraction(windowObj) {
-    var now = Date.now()
     var address = String(windowObj.address || "")
     var title = String(windowObj.title || windowObj.initialTitle || "Distracción detectada")
 
-    // Check cooldown
-    if (address !== "" && address === root.lastAlertAddress && (now - root.lastAlertTime) < root.alertCooldownMs) {
-      return
-    }
-    if ((now - root.lastAlertTime) < (root.alertCooldownMs / 2)) {
-      return
-    }
+    root.distractionActive = true
+    root.currentDistractionAddress = address
+    root.currentDistractionTitle = title
 
-    root.lastAlertTime = now
-    root.lastAlertAddress = address
-    root.lastAlertTitle = title
-
-    // Build notification
-    var taskMsg = (service && service.activeTaskTitle && service.activeTaskTitle !== "")
-      ? "Estás trabajando en: \"" + service.activeTaskTitle + "\"."
-      : "Sesión de concentración activa."
-    var displayTitle = title.length > 35 ? title.substring(0, 32) + "…" : title
-    var body = taskMsg + " Evita distracciones (" + displayTitle + ")."
-    var headline = "⚠️ Concentración activa"
-
-    // Send notification via Omarchy notification sender
-    Quickshell.execDetached([
-      "omarchy-notification-send",
-      "-u", "critical",
-      "-g", "󰢌",
-      "--app-name", "PomoTask",
-      headline,
-      body
-    ])
-
-    // Handle action
+    // Optional workspace action if configured
     var action = String(root.activeBlocklist.action || "warn")
     if (action === "warn_and_unfocus" || action === "unfocus") {
       Quickshell.execDetached(["hyprctl", "dispatch", "workspace", "previous"])
@@ -131,8 +103,18 @@ Item {
     }
   }
 
+  function clearDistraction() {
+    root.distractionActive = false
+    root.currentDistractionAddress = ""
+    root.currentDistractionTitle = ""
+  }
+
   function checkActiveWindow() {
-    if (!root.monitorActive || activeWindowProc.running) return
+    if (!root.monitorActive) {
+      clearDistraction()
+      return
+    }
+    if (activeWindowProc.running) return
     activeWindowProc.command = ["hyprctl", "-j", "activewindow"]
     activeWindowProc.running = true
   }
@@ -146,9 +128,15 @@ Item {
       waitForEnd: true
     }
     onExited: function(exitCode) {
-      if (exitCode !== 0) return
+      if (exitCode !== 0 || !root.monitorActive) {
+        root.clearDistraction()
+        return
+      }
       var out = String(activeWindowStdout.text || "").trim()
-      if (out === "" || out === "{}") return
+      if (out === "" || out === "{}") {
+        root.clearDistraction()
+        return
+      }
       try {
         var win = JSON.parse(out)
         if (win && typeof win === "object") {
@@ -159,10 +147,14 @@ Item {
 
           if (root.isDistraction(title, initialTitle, appClass, initialClass)) {
             root.handleDistraction(win)
+          } else {
+            root.clearDistraction()
           }
+        } else {
+          root.clearDistraction()
         }
       } catch (e) {
-        // Ignore parse error
+        root.clearDistraction()
       }
     }
   }
@@ -173,7 +165,7 @@ Item {
     function onRawEvent(event) {
       if (!root.monitorActive) return
       var name = String(event && event.name ? event.name : "")
-      if (name === "activewindow" || name === "activewindowv2" || name === "openwindow" || name === "focusedmon") {
+      if (name === "activewindow" || name === "activewindowv2" || name === "openwindow" || name === "focusedmon" || name === "closewindow") {
         pollDebounce.restart()
       }
     }
@@ -181,7 +173,7 @@ Item {
 
   Timer {
     id: pollDebounce
-    interval: 200
+    interval: 150
     repeat: false
     onTriggered: root.checkActiveWindow()
   }
@@ -189,7 +181,7 @@ Item {
   // Periodic watchdog timer during work sessions
   Timer {
     id: watchdogTimer
-    interval: 2000
+    interval: 1000
     repeat: true
     running: root.monitorActive
     onTriggered: root.checkActiveWindow()
@@ -199,7 +191,7 @@ Item {
     if (monitorActive) {
       checkActiveWindow()
     } else {
-      lastAlertAddress = ""
+      clearDistraction()
     }
   }
 }

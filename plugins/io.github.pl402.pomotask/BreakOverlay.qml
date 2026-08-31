@@ -152,8 +152,8 @@ Item {
         width: Math.min(Style.space(520), parent.width - Style.space(48))
         height: Math.min(contentLayout.implicitHeight + Style.space(48), parent.height - Style.space(48))
         radius: Style.cornerRadius * 1.5
-        color: Color.surface
-        borderSpec: Border.surfaceSpec("menu", "border", Color.border, Math.max(1, Style.space(2)))
+        color: Color.menu.background
+        borderSpec: Border.surfaceSpec("menu", "border", Color.menu.border, Math.max(1, Style.space(2)))
         padding: Style.space(24)
 
         // Swallow inner clicks
@@ -247,7 +247,8 @@ Item {
               Text {
                 textFormat: Text.PlainText
                 text: "Ciclo: " + (root.service ? root.service.sessionPomodoros : 0) + " completados"
-                color: Color.dim
+                color: Color.menu.text
+                opacity: 0.7
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
                 Layout.fillWidth: true
@@ -357,7 +358,8 @@ Item {
                 Text {
                   textFormat: Text.PlainText
                   text: parent.currentTip.text
-                  color: Color.dim
+                  color: Color.menu.text
+                  opacity: 0.7
                   font.family: Style.font.family
                   font.pixelSize: Style.font.caption
                   wrapMode: Text.Wrap

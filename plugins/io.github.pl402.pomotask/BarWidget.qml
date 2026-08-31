@@ -21,6 +21,14 @@ BarWidget {
 
   readonly property alias distractionMonitor: distractionMonitor
 
+  DistractionOverlay {
+    id: distractionOverlay
+    service: root.service
+    active: distractionMonitor.distractionActive
+  }
+
+  readonly property alias distractionOverlay: distractionOverlay
+
   BreakOverlay {
     id: breakOverlay
     service: root.service
@@ -38,6 +46,32 @@ BarWidget {
     return s.substring(0, Math.max(1, maxLen - 1)) + "…"
   }
 
+  function wrapText(str, maxLineLen, indent) {
+    if (!str) return ""
+    var s = String(str).trim()
+    if (s.length <= maxLineLen) return s
+    var words = s.split(/\s+/)
+    var lines = []
+    var currentLine = ""
+    var ind = indent || ""
+
+    for (var i = 0; i < words.length; i++) {
+      var word = words[i]
+      if (currentLine === "") {
+        currentLine = word
+      } else if ((currentLine.length + 1 + word.length) <= maxLineLen) {
+        currentLine += " " + word
+      } else {
+        lines.push(currentLine)
+        currentLine = ind + word
+      }
+    }
+    if (currentLine !== "") {
+      lines.push(currentLine)
+    }
+    return lines.join("\n")
+  }
+
   readonly property string statusIcon: {
     if (service.isPaused) return ""
     return service.modeIcon
@@ -47,18 +81,14 @@ BarWidget {
     ? " | " + truncateText(service.activeTaskTitle, 20)
     : ""
 
-  readonly property string displayText: statusIcon + " " + service.formattedTime + activeSnippet
+  readonly property string displayText: statusIcon + "  " + service.formattedTime + activeSnippet
   readonly property var verticalLines: [statusIcon, service.formattedTime]
 
   readonly property string tooltipStatusText: {
-    var lines = []
-    lines.push("PomoTask: " + service.modeLabel + " (" + (service.isRunning ? "Running" : (service.isPaused ? "Paused" : "Stopped")) + ")")
-    lines.push("Time Remaining: " + service.formattedTime)
-    lines.push("Completed Cycles: " + service.sessionPomodoros)
     if (service.activeTaskTitle && service.activeTaskTitle !== "") {
-      lines.push("Active Task: " + service.activeTaskTitle)
+      return wrapText(service.activeTaskTitle, 38)
     }
-    return lines.join("\n")
+    return ""
   }
 
   // -------------------------------------------------------------------------

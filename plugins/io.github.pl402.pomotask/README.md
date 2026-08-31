@@ -30,6 +30,7 @@ plugins/io.github.pl402.pomotask/
 ├── BarWidget.qml         # Componente de la barra de estado
 ├── Panel.qml             # Panel emergente con temporizador y tareas
 ├── DistractionMonitor.qml# Monitor de ventanas de Hyprland
+├── DistractionOverlay.qml# Overlay inferior visual de distracción activa
 ├── BreakOverlay.qml      # Overlay de descanso y bloqueo estricto
 └── README.md             # Este archivo
 ```
