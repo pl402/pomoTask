@@ -39,7 +39,7 @@ BarWidget {
   }
 
   readonly property string statusIcon: {
-    if (service.isPaused) return "󰏤"
+    if (service.isPaused) return ""
     return service.modeIcon
   }
 

@@ -59,9 +59,9 @@ Item {
   }
 
   readonly property string modeIcon: {
-    if (mode === "short_break") return "󰅟"
-    if (mode === "long_break") return "󰒲"
-    return "󰔚"
+    if (mode === "short_break") return ""
+    if (mode === "long_break") return ""
+    return ""
   }
 
   // -------------------------------------------------------------------------

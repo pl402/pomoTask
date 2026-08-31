@@ -183,7 +183,7 @@ Item {
 
                 Text {
                   textFormat: Text.PlainText
-                  text: root.service ? root.service.modeIcon : "󰅟"
+                  text: root.service ? root.service.modeIcon : ""
                   font.pixelSize: Style.font.body
                 }
 
@@ -374,7 +374,7 @@ Item {
 
             Button {
               text: root.service && root.service.isRunning ? "Pausar" : "Reanudar"
-              iconText: root.service && root.service.isRunning ? "󰏤" : "󰐊"
+              iconText: root.service && root.service.isRunning ? "" : ""
               bordered: true
               Layout.fillWidth: true
               onClicked: if (root.service) root.service.timerToggle()
@@ -382,7 +382,7 @@ Item {
 
             Button {
               text: "Omitir Descanso"
-              iconText: "󰒭"
+              iconText: ""
               bordered: true
               Layout.fillWidth: true
               onClicked: if (root.service) root.service.timerSkip()
@@ -390,7 +390,7 @@ Item {
 
             Button {
               text: "Ocultar (Esc)"
-              iconText: "󰅙"
+              iconText: ""
               bordered: true
               Layout.fillWidth: true
               onClicked: root.dismiss()
