@@ -1,30 +1,47 @@
-use chrono::{DateTime, Utc, Local, Datelike, TimeZone};
-use serde::{Serialize, Deserialize};
-use std::collections::{BTreeMap, HashMap};
-use std::path::PathBuf;
-use std::fs;
 use crate::ui::palette::{Theme, ThemeColors};
+use chrono::{DateTime, Datelike, Local, TimeZone, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, HashMap};
+use std::fs;
+use std::path::PathBuf;
 
 mod i18n;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
-pub enum TimerMode { Focus, ShortBreak, LongBreak }
+pub enum TimerMode {
+    Focus,
+    ShortBreak,
+    LongBreak,
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
-pub enum CalendarView { Standard, Heatmap, Progress }
+pub enum CalendarView {
+    Standard,
+    Heatmap,
+    Progress,
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
-pub enum CalendarRange { Month, Week, Day }
+pub enum CalendarRange {
+    Month,
+    Week,
+    Day,
+}
 
 /// Cuánta historia de estadísticas locales (registros horarios) se conserva al arrancar.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Default)]
-pub enum StatsRetention { Month, #[default] Year, Forever }
+pub enum StatsRetention {
+    Month,
+    #[default]
+    Year,
+    Forever,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Config { 
-    pub focus_duration: u32, 
-    pub short_break_duration: u32, 
-    pub long_break_duration: u32, 
+pub struct Config {
+    pub focus_duration: u32,
+    pub short_break_duration: u32,
+    pub long_break_duration: u32,
     pub language: Language,
     pub theme: Theme,
     pub custom_theme: Option<ThemeColors>,
@@ -42,14 +59,16 @@ pub struct Config {
     pub sync_interval_minutes: u32,
 }
 
-fn default_sync_interval() -> u32 { 15 }
+fn default_sync_interval() -> u32 {
+    15
+}
 
-impl Default for Config { 
-    fn default() -> Self { 
-        Self { 
-            focus_duration: 25 * 60, 
-            short_break_duration: 5 * 60, 
-            long_break_duration: 15 * 60, 
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            focus_duration: 25 * 60,
+            short_break_duration: 5 * 60,
+            long_break_duration: 15 * 60,
             language: Language::Spanish,
             theme: Theme::CatppuccinMocha,
             custom_theme: None,
@@ -64,39 +83,81 @@ impl Default for Config {
     }
 }
 
-impl TimerMode { pub fn duration(&self, config: &Config) -> u32 { match self { TimerMode::Focus => config.focus_duration, TimerMode::ShortBreak => config.short_break_duration, TimerMode::LongBreak => config.long_break_duration } } }
+impl TimerMode {
+    pub fn duration(&self, config: &Config) -> u32 {
+        match self {
+            TimerMode::Focus => config.focus_duration,
+            TimerMode::ShortBreak => config.short_break_duration,
+            TimerMode::LongBreak => config.long_break_duration,
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
-pub struct TaskTimerState { pub remaining: u32, pub mode: TimerMode }
+pub struct TaskTimerState {
+    pub remaining: u32,
+    pub mode: TimerMode,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
     pub id: String,
     pub list_id: String, // Nuevo campo
-    pub title: String, 
-    pub completed: bool, 
-    pub due: Option<DateTime<Utc>>, 
-    pub updated: DateTime<Utc>, // Nuevo campo
+    pub title: String,
+    pub completed: bool,
+    pub due: Option<DateTime<Utc>>,
+    pub updated: DateTime<Utc>,              // Nuevo campo
     pub completed_at: Option<DateTime<Utc>>, // Nuevo campo
-    pub notes: Option<String>, 
+    pub notes: Option<String>,
     pub parent_id: Option<String>,
     pub pomodoros: u64,
 }
 
 #[derive(Debug, Clone)]
-pub struct TaskList { pub id: String, pub title: String }
+pub struct TaskList {
+    pub id: String,
+    pub title: String,
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
-pub enum Language { English, Spanish }
+pub enum Language {
+    English,
+    Spanish,
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum AppMode { Loading, Timer, Auth, AuthSuccess, ListSelector, Input, SubtaskInput, Edit, ConfirmComplete, Help, Settings, ConfirmLogout, Stats, Search }
+pub enum AppMode {
+    Loading,
+    Timer,
+    Auth,
+    AuthSuccess,
+    ListSelector,
+    Input,
+    SubtaskInput,
+    Edit,
+    ConfirmComplete,
+    Help,
+    Settings,
+    ConfirmLogout,
+    Stats,
+    Search,
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum InputField { Title, Notes, Due, List }
+pub enum InputField {
+    Title,
+    Notes,
+    Due,
+    List,
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum DatePreset { Today, Tomorrow, Custom, None }
+pub enum DatePreset {
+    Today,
+    Tomorrow,
+    Custom,
+    None,
+}
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Stats {
@@ -119,7 +180,12 @@ pub struct Stats {
 }
 
 #[derive(Debug, Clone)]
-pub struct DayStats { pub label: String, pub pomodoros: u64, pub tasks_done: u64, pub focus_seconds: u64 }
+pub struct DayStats {
+    pub label: String,
+    pub pomodoros: u64,
+    pub tasks_done: u64,
+    pub focus_seconds: u64,
+}
 
 /// Conserva solo las entradas cuya clave (fecha "YYYY-MM-DD HH:00") es >= `cutoff` ("YYYY-MM-DD").
 /// La comparación léxica equivale a comparar fechas por el formato fijo ISO con ceros a la izquierda.
@@ -128,7 +194,14 @@ fn prune_before(map: &mut BTreeMap<String, u64>, cutoff: &str) {
 }
 
 #[derive(Debug, Clone)]
-pub struct Particle { pub x: f64, pub y: f64, pub vx: f64, pub vy: f64, pub life: f32, pub char: char }
+pub struct Particle {
+    pub x: f64,
+    pub y: f64,
+    pub vx: f64,
+    pub vy: f64,
+    pub life: f32,
+    pub char: char,
+}
 
 #[derive(Default)]
 pub struct AnimationState {
@@ -191,13 +264,21 @@ pub struct App {
     pub sync_tick_counter: u32,
 }
 
+impl Default for App {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl App {
     pub fn new() -> Self {
         let config = Self::load_config().unwrap_or_default();
         let stats = Self::load_stats().unwrap_or_default();
         // Caché por lista desde disco; mostramos la última lista usada de inmediato.
         let list_cache = Self::load_tasks_cache();
-        let cached_tasks = config.last_list_id.as_ref()
+        let cached_tasks = config
+            .last_list_id
+            .as_ref()
             .and_then(|id| list_cache.get(id).cloned())
             .unwrap_or_default();
         let mut app = Self {
@@ -284,19 +365,26 @@ impl App {
             StatsRetention::Year => 12,
             StatsRetention::Forever => return false,
         };
-        let cutoff = match Local::now().date_naive().checked_sub_months(chrono::Months::new(months)) {
+        let cutoff = match Local::now()
+            .date_naive()
+            .checked_sub_months(chrono::Months::new(months))
+        {
             Some(d) => d.format("%Y-%m-%d").to_string(),
             None => return false,
         };
         // Las claves tienen formato fijo "YYYY-MM-DD HH:00", así que la comparación léxica equivale
         // a comparar fechas. Conservamos las entradas con fecha >= corte.
-        let count = |s: &Stats| s.hourly_pomodoros.len() + s.hourly_seconds.len() + s.hourly_tasks_done.len();
+        let count = |s: &Stats| {
+            s.hourly_pomodoros.len() + s.hourly_seconds.len() + s.hourly_tasks_done.len()
+        };
         let before = count(&self.stats);
         prune_before(&mut self.stats.hourly_pomodoros, &cutoff);
         prune_before(&mut self.stats.hourly_seconds, &cutoff);
         prune_before(&mut self.stats.hourly_tasks_done, &cutoff);
         let removed = before != count(&self.stats);
-        if removed { self.save_stats(); }
+        if removed {
+            self.save_stats();
+        }
         removed
     }
 
@@ -304,7 +392,9 @@ impl App {
     /// el filtro de búsqueda por texto y la organización jerárquica.
     pub fn rebuild_visible_tasks(&mut self) {
         let filter = self.task_filter.to_lowercase();
-        let filtered: Vec<Task> = self.all_tasks.iter()
+        let filtered: Vec<Task> = self
+            .all_tasks
+            .iter()
             .filter(|t| self.config.show_completed || !t.completed)
             .filter(|t| filter.is_empty() || t.title.to_lowercase().contains(&filter))
             .cloned()
@@ -358,7 +448,11 @@ impl App {
     pub fn switch_list(&mut self, new_idx: usize) {
         self.selected_list_idx = new_idx;
         self.selected_task = 0;
-        let id = self.task_lists.get(new_idx).map(|l| l.id.clone()).unwrap_or_default();
+        let id = self
+            .task_lists
+            .get(new_idx)
+            .map(|l| l.id.clone())
+            .unwrap_or_default();
         // Tareas conocidas de esa lista (vacío si nunca se ha visto en esta sesión).
         self.all_tasks = self.list_cache.get(&id).cloned().unwrap_or_default();
         self.rebuild_visible_tasks();
@@ -367,22 +461,22 @@ impl App {
 
     /// `true` cuando la lista seleccionada es la vista virtual "Todas" (@all).
     pub fn is_all_view(&self) -> bool {
-        self.task_lists.get(self.selected_list_idx).is_some_and(|l| l.id == "@all")
+        self.task_lists
+            .get(self.selected_list_idx)
+            .is_some_and(|l| l.id == "@all")
     }
 
     /// Título de la lista real a la que pertenece una tarea (para mostrar su origen en la vista @all).
     pub fn list_title_for(&self, list_id: &str) -> String {
-        self.task_lists.iter()
+        self.task_lists
+            .iter()
             .find(|l| l.id == list_id && l.id != "@all")
             .map(|l| l.title.clone())
             .unwrap_or_else(|| "---".to_string())
     }
 
     pub fn get_config_dir() -> PathBuf {
-        let mut path = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
-        path.push("pomotask");
-        let _ = fs::create_dir_all(&path);
-        path
+        crate::ipc::get_config_dir()
     }
 
     fn load_config() -> Option<Config> {
@@ -395,7 +489,9 @@ impl App {
     pub fn save_config(&self) {
         let mut path = Self::get_config_dir();
         path.push("config.json");
-        if let Ok(data) = serde_json::to_string_pretty(&self.config) { let _ = fs::write(path, data); }
+        if let Ok(data) = serde_json::to_string_pretty(&self.config) {
+            let _ = fs::write(path, data);
+        }
     }
 
     fn load_stats() -> Option<Stats> {
@@ -409,7 +505,10 @@ impl App {
     fn load_tasks_cache() -> HashMap<String, Vec<Task>> {
         let mut path = Self::get_config_dir();
         path.push("tasks_cache.json");
-        let data = match fs::read_to_string(path) { Ok(d) => d, Err(_) => return HashMap::new() };
+        let data = match fs::read_to_string(path) {
+            Ok(d) => d,
+            Err(_) => return HashMap::new(),
+        };
 
         // Formato nuevo: mapa id → tareas.
         if let Ok(map) = serde_json::from_str::<HashMap<String, Vec<Task>>>(&data) {
@@ -435,25 +534,33 @@ impl App {
     pub fn save_tasks_cache(&self) {
         let mut path = Self::get_config_dir();
         path.push("tasks_cache.json");
-        if let Ok(data) = serde_json::to_string(&self.list_cache) { let _ = fs::write(path, data); }
+        if let Ok(data) = serde_json::to_string(&self.list_cache) {
+            let _ = fs::write(path, data);
+        }
     }
 
     pub fn save_stats(&self) {
         let mut path = Self::get_config_dir();
         path.push("stats.json");
-        if let Ok(data) = serde_json::to_string_pretty(&self.stats) { let _ = fs::write(path, data); }
+        if let Ok(data) = serde_json::to_string_pretty(&self.stats) {
+            let _ = fs::write(path, data);
+        }
     }
 
-
     pub fn toggle_language(&mut self) {
-        self.config.language = match self.config.language { Language::Spanish => Language::English, Language::English => Language::Spanish };
+        self.config.language = match self.config.language {
+            Language::Spanish => Language::English,
+            Language::English => Language::Spanish,
+        };
         self.save_config();
     }
 
     pub fn logout(&mut self) {
         let mut path = Self::get_config_dir();
         path.push("pomotask_token.json");
-        if path.exists() { let _ = fs::remove_file(path); }
+        if path.exists() {
+            let _ = fs::remove_file(path);
+        }
     }
 
     pub fn format_full_date(&self, dt: DateTime<Utc>) -> String {
@@ -464,7 +571,7 @@ impl App {
 
         let month_key = format!("month_{}", month);
         let day_key = format!("day_{}", weekday);
-        
+
         let month_name = self.translate(&month_key);
         let day_name = self.translate(&day_key);
 
@@ -479,13 +586,22 @@ impl App {
         let day = local_dt.day();
         let month = local_dt.month();
         let month_key = match month {
-            1 => "month_1", 2 => "month_2", 3 => "month_3", 4 => "month_4",
-            5 => "month_5", 6 => "month_6", 7 => "month_7", 8 => "month_8",
-            9 => "month_9", 10 => "month_10", 11 => "month_11", 12 => "month_12",
+            1 => "month_1",
+            2 => "month_2",
+            3 => "month_3",
+            4 => "month_4",
+            5 => "month_5",
+            6 => "month_6",
+            7 => "month_7",
+            8 => "month_8",
+            9 => "month_9",
+            10 => "month_10",
+            11 => "month_11",
+            12 => "month_12",
             _ => "month_1",
         };
         let month_name = self.translate(month_key);
-        
+
         match self.config.language {
             Language::Spanish => format!("{} {}", day, month_name),
             Language::English => format!("{} {}", month_name, day),
@@ -498,13 +614,22 @@ impl App {
         let day = dt.day();
         let month = dt.month();
         let month_key = match month {
-            1 => "month_1", 2 => "month_2", 3 => "month_3", 4 => "month_4",
-            5 => "month_5", 6 => "month_6", 7 => "month_7", 8 => "month_8",
-            9 => "month_9", 10 => "month_10", 11 => "month_11", 12 => "month_12",
+            1 => "month_1",
+            2 => "month_2",
+            3 => "month_3",
+            4 => "month_4",
+            5 => "month_5",
+            6 => "month_6",
+            7 => "month_7",
+            8 => "month_8",
+            9 => "month_9",
+            10 => "month_10",
+            11 => "month_11",
+            12 => "month_12",
             _ => "month_1",
         };
         let month_name = self.translate(month_key);
-        
+
         match self.config.language {
             Language::Spanish => format!("{} {}", day, month_name),
             Language::English => format!("{} {}", month_name, day),
@@ -518,15 +643,18 @@ impl App {
         self.animation.spawn_x = x;
         self.animation.spawn_y = y;
         self.animation.spawn_w = w;
-        
+
         let chars = ['✨', '⭐', '💥', '•', '·'];
-        for _ in 0..40 { // Menos partículas, más localizadas
-            let vx = (rand::random::<f64>() - 0.5) * 1.0; 
-            let vy = (rand::random::<f64>() - 0.5) * 0.5; 
+        for _ in 0..40 {
+            // Menos partículas, más localizadas
+            let vx = (rand::random::<f64>() - 0.5) * 1.0;
+            let vy = (rand::random::<f64>() - 0.5) * 0.5;
             let start_x_offset = rand::random::<f64>() * (w as f64);
             self.animation.particles.push(Particle {
-                x: start_x_offset, y: 0.0,
-                vx, vy,
+                x: start_x_offset,
+                y: 0.0,
+                vx,
+                vy,
                 life: 0.5 + rand::random::<f32>() * 0.5,
                 char: chars[rand::random::<usize>() % chars.len()],
             });
@@ -535,9 +663,15 @@ impl App {
 
     pub fn tick(&mut self) {
         self.spinner_frame = self.spinner_frame.wrapping_add(1);
-        if self.copy_feedback_frames > 0 { self.copy_feedback_frames -= 1; }
-        if self.cleaning_frames > 0 { self.cleaning_frames -= 1; }
-        if self.splash_frames > 0 { self.splash_frames -= 1; }
+        if self.copy_feedback_frames > 0 {
+            self.copy_feedback_frames -= 1;
+        }
+        if self.cleaning_frames > 0 {
+            self.cleaning_frames -= 1;
+        }
+        if self.splash_frames > 0 {
+            self.splash_frames -= 1;
+        }
         // Cuenta atrás de la pantalla de "Conexión exitosa": al agotarse pasamos al temporizador.
         if self.auth_success_frames > 0 {
             self.auth_success_frames -= 1;
@@ -545,23 +679,28 @@ impl App {
                 self.mode = AppMode::Timer;
             }
         }
-        if self.modal_anim > 0 { self.modal_anim -= 1; }
+        if self.modal_anim > 0 {
+            self.modal_anim -= 1;
+        }
         self.sync_tick_counter = self.sync_tick_counter.saturating_add(1);
         if self.animation.float_life > 0.0 {
             self.animation.float_life -= 0.02;
-            if self.animation.float_life <= 0.0 { self.animation.float_text = None; }
+            if self.animation.float_life <= 0.0 {
+                self.animation.float_text = None;
+            }
         }
-        
+
         // Update Animation
         if self.animation.task_id.is_some() {
             self.animation.progress += 0.08; // Progresión del tachado
             for p in &mut self.animation.particles {
-                p.x += p.vx; p.y += p.vy;
+                p.x += p.vx;
+                p.y += p.vy;
                 p.vy += 0.25; // Gravedad más fuerte para efecto "snappy"
                 p.life -= 0.03; // Se desvanecen un poco más rápido
             }
             self.animation.particles.retain(|p| p.life > 0.0);
-            
+
             if self.animation.progress >= 2.0 && self.animation.particles.is_empty() {
                 self.animation.task_id = None;
                 self.animation.progress = 0.0;
@@ -570,11 +709,12 @@ impl App {
 
         if self.timer_active && self.timer_seconds > 0 {
             self.tick_count += 1;
-            if self.tick_count >= 20 { // 20 ticks * 50ms = 1s
-                self.timer_seconds -= 1; 
-                self.tick_count = 0; 
+            if self.tick_count >= 20 {
+                // 20 ticks * 50ms = 1s
+                self.timer_seconds -= 1;
+                self.tick_count = 0;
                 self.save_runtime_state();
-                
+
                 // Grabar tiempo de enfoque (segundos) si estamos en Focus
                 if self.timer_mode == TimerMode::Focus {
                     let hour_key = Local::now().format("%Y-%m-%d %H:00").to_string();
@@ -585,18 +725,28 @@ impl App {
 
                 if self.timer_seconds.is_multiple_of(5) {
                     if let Some(task) = self.tasks.get(self.selected_task) {
-                        self.stats.task_timers.insert(task.id.clone(), TaskTimerState { remaining: self.timer_seconds, mode: self.timer_mode });
+                        self.stats.task_timers.insert(
+                            task.id.clone(),
+                            TaskTimerState {
+                                remaining: self.timer_seconds,
+                                mode: self.timer_mode,
+                            },
+                        );
                         self.save_stats();
                     }
                 }
-                if self.timer_seconds == 0 { self.on_timer_complete(); } 
+                if self.timer_seconds == 0 {
+                    self.on_timer_complete();
+                }
             }
         }
     }
 
     fn on_timer_complete(&mut self) {
         self.timer_active = false;
-        if let Some(task) = self.tasks.get(self.selected_task) { self.stats.task_timers.remove(&task.id); }
+        if let Some(task) = self.tasks.get(self.selected_task) {
+            self.stats.task_timers.remove(&task.id);
+        }
         let (title, msg) = if self.timer_mode == TimerMode::Focus {
             self.session_pomodoros += 1;
             let hour_key = Local::now().format("%Y-%m-%d %H:00").to_string();
@@ -604,7 +754,11 @@ impl App {
             *entry += 1;
             self.stats.lifetime_pomodoros += 1;
             if let Some(task) = self.tasks.get(self.selected_task) {
-                let t_entry = self.stats.task_pomodoros.entry(task.id.clone()).or_insert(0);
+                let t_entry = self
+                    .stats
+                    .task_pomodoros
+                    .entry(task.id.clone())
+                    .or_insert(0);
                 *t_entry += 1;
             }
             self.save_stats();
@@ -612,16 +766,31 @@ impl App {
             self.animation.float_text = Some("+1 🍅".to_string());
             self.animation.float_life = 1.0;
             // Técnica Pomodoro: descanso largo cada 4 pomodoros, corto el resto.
-            self.timer_mode = if self.session_pomodoros.is_multiple_of(4) { TimerMode::LongBreak } else { TimerMode::ShortBreak };
+            self.timer_mode = if self.session_pomodoros.is_multiple_of(4) {
+                TimerMode::LongBreak
+            } else {
+                TimerMode::ShortBreak
+            };
             ("PomoTask", self.translate("notify_focus_end"))
         } else {
             self.timer_mode = TimerMode::Focus;
             ("PomoTask", self.translate("notify_break_end"))
         };
-        let _ = notify_rust::Notification::new().summary(title).body(&msg).icon("alarm-clock").timeout(notify_rust::Timeout::Milliseconds(5000)).show();
+        let _ = notify_rust::Notification::new()
+            .summary(title)
+            .body(&msg)
+            .icon("alarm-clock")
+            .timeout(notify_rust::Timeout::Milliseconds(5000))
+            .show();
         self.timer_seconds = self.timer_mode.duration(&self.config);
         if let Some(task) = self.tasks.get(self.selected_task) {
-            self.stats.task_timers.insert(task.id.clone(), TaskTimerState { remaining: self.timer_seconds, mode: self.timer_mode });
+            self.stats.task_timers.insert(
+                task.id.clone(),
+                TaskTimerState {
+                    remaining: self.timer_seconds,
+                    mode: self.timer_mode,
+                },
+            );
             self.save_stats();
         }
         self.save_runtime_state();
@@ -639,24 +808,34 @@ impl App {
     /// Devuelve `(etiqueta "dd/mm", pomodoros, tareas_completadas, segundos_de_enfoque)`.
     pub fn stats_last_n_days(&self, n: i64) -> Vec<DayStats> {
         let today = Local::now().date_naive();
-        (0..n).rev().map(|i| {
-            let date = today - chrono::Duration::days(i);
-            let prefix = date.format("%Y-%m-%d").to_string();
-            let sum = |map: &BTreeMap<String, u64>| -> u64 {
-                map.iter().filter(|(k, _)| k.starts_with(&prefix)).map(|(_, v)| *v).sum()
-            };
-            DayStats {
-                label: date.format("%d/%m").to_string(),
-                pomodoros: sum(&self.stats.hourly_pomodoros),
-                tasks_done: sum(&self.stats.hourly_tasks_done),
-                focus_seconds: sum(&self.stats.hourly_seconds),
-            }
-        }).collect()
+        (0..n)
+            .rev()
+            .map(|i| {
+                let date = today - chrono::Duration::days(i);
+                let prefix = date.format("%Y-%m-%d").to_string();
+                let sum = |map: &BTreeMap<String, u64>| -> u64 {
+                    map.iter()
+                        .filter(|(k, _)| k.starts_with(&prefix))
+                        .map(|(_, v)| *v)
+                        .sum()
+                };
+                DayStats {
+                    label: date.format("%d/%m").to_string(),
+                    pomodoros: sum(&self.stats.hourly_pomodoros),
+                    tasks_done: sum(&self.stats.hourly_tasks_done),
+                    focus_seconds: sum(&self.stats.hourly_seconds),
+                }
+            })
+            .collect()
     }
 
     /// Totales históricos acumulados de por vida (no se ven afectados por la limpieza).
     pub fn stats_totals(&self) -> (u64, u64, u64) {
-        (self.stats.lifetime_pomodoros, self.stats.lifetime_tasks_done, self.stats.lifetime_focus_seconds)
+        (
+            self.stats.lifetime_pomodoros,
+            self.stats.lifetime_tasks_done,
+            self.stats.lifetime_focus_seconds,
+        )
     }
 
     /// Arma el texto de una tarea (con su descripción, fecha y todas sus subtareas) en formato
@@ -676,14 +855,22 @@ impl App {
             out.push_str(&format!("    📅 {}\n", self.format_due_date(due)));
         }
         if let Some(notes) = &task.notes {
-            for line in notes.lines() { out.push_str(&format!("    {}\n", line)); }
+            for line in notes.lines() {
+                out.push_str(&format!("    {}\n", line));
+            }
         }
 
-        let mut children: Vec<&Task> = self.all_tasks.iter()
+        let mut children: Vec<&Task> = self
+            .all_tasks
+            .iter()
             .filter(|t| t.parent_id.as_deref() == Some(task_id))
             .collect();
         // Pendientes primero; dentro de cada grupo, las más recientes al final.
-        children.sort_by(|a, b| a.completed.cmp(&b.completed).then(a.updated.cmp(&b.updated)));
+        children.sort_by(|a, b| {
+            a.completed
+                .cmp(&b.completed)
+                .then(a.updated.cmp(&b.updated))
+        });
 
         for child in children {
             out.push_str(&format!("  - {} {}\n", check(child.completed), child.title));
@@ -691,7 +878,9 @@ impl App {
                 out.push_str(&format!("      📅 {}\n", self.format_due_date(due)));
             }
             if let Some(notes) = &child.notes {
-                for line in notes.lines() { out.push_str(&format!("      {}\n", line)); }
+                for line in notes.lines() {
+                    out.push_str(&format!("      {}\n", line));
+                }
             }
         }
 
@@ -725,7 +914,9 @@ impl App {
 
     /// Cambia manualmente entre Enfoque → Descanso corto → Descanso largo (solo con el timer detenido).
     pub fn cycle_timer_mode(&mut self) {
-        if self.timer_active { return; }
+        if self.timer_active {
+            return;
+        }
         self.timer_mode = match self.timer_mode {
             TimerMode::Focus => TimerMode::ShortBreak,
             TimerMode::ShortBreak => TimerMode::LongBreak,
@@ -734,20 +925,23 @@ impl App {
         self.timer_seconds = self.timer_mode.duration(&self.config);
         self.save_runtime_state();
     }
-    pub fn reset_timer(&mut self) { 
-        self.timer_active = false; 
-        if let Some(task) = self.tasks.get(self.selected_task) { self.stats.task_timers.remove(&task.id); self.save_stats(); }
-        self.timer_seconds = self.timer_mode.duration(&self.config); 
+    pub fn reset_timer(&mut self) {
+        self.timer_active = false;
+        if let Some(task) = self.tasks.get(self.selected_task) {
+            self.stats.task_timers.remove(&task.id);
+            self.save_stats();
+        }
+        self.timer_seconds = self.timer_mode.duration(&self.config);
         self.save_runtime_state();
     }
 
-    pub fn clear_inputs(&mut self) { 
-        self.input_title.clear(); 
-        self.input_notes.clear(); 
-        self.input_due.clear(); 
-        self.editing_task_id = None; 
-        self.input_list_idx = 0; 
-        self.confirming_task_id = None; 
+    pub fn clear_inputs(&mut self) {
+        self.input_title.clear();
+        self.input_notes.clear();
+        self.input_due.clear();
+        self.editing_task_id = None;
+        self.input_list_idx = 0;
+        self.confirming_task_id = None;
     }
 
     pub fn parse_due_date(input: &str) -> Option<DateTime<Utc>> {
@@ -758,29 +952,33 @@ impl App {
             let d: u32 = parts[2].parse().ok()?;
             // Google Tasks requiere que la hora sea exactamente 00:00:00Z.
             Utc.with_ymd_and_hms(y, m, d, 0, 0, 0).single()
-        } else { None }
+        } else {
+            None
+        }
     }
 
     pub fn save_selection(&mut self) {
-        if let Some(list) = self.task_lists.get(self.selected_list_idx) { 
-            self.config.last_list_id = Some(list.id.clone()); 
+        if let Some(list) = self.task_lists.get(self.selected_list_idx) {
+            self.config.last_list_id = Some(list.id.clone());
         }
-        if let Some(task) = self.tasks.get(self.selected_task) { 
-            self.config.last_task_id = Some(task.id.clone()); 
+        if let Some(task) = self.tasks.get(self.selected_task) {
+            self.config.last_task_id = Some(task.id.clone());
         }
         self.save_config();
         self.save_runtime_state();
     }
 
     pub fn sync_active_timer_to_task(&mut self) {
-        if self.timer_active { return; }
+        if self.timer_active {
+            return;
+        }
         if let Some(task) = self.tasks.get(self.selected_task) {
-            if let Some(state) = self.stats.task_timers.get(&task.id) { 
-                self.timer_seconds = state.remaining; 
-                self.timer_mode = state.mode; 
-            } else { 
-                self.timer_mode = TimerMode::Focus; 
-                self.timer_seconds = self.timer_mode.duration(&self.config); 
+            if let Some(state) = self.stats.task_timers.get(&task.id) {
+                self.timer_seconds = state.remaining;
+                self.timer_mode = state.mode;
+            } else {
+                self.timer_mode = TimerMode::Focus;
+                self.timer_seconds = self.timer_mode.duration(&self.config);
             }
         }
         self.save_runtime_state();
@@ -789,14 +987,16 @@ impl App {
     pub fn organize_tasks_hierarchical(tasks: Vec<Task>) -> Vec<Task> {
         let mut organized = Vec::new();
         let sort_criteria = |a: &Task, b: &Task| {
-            if a.completed != b.completed { return a.completed.cmp(&b.completed); }
+            if a.completed != b.completed {
+                return a.completed.cmp(&b.completed);
+            }
             if a.due != b.due {
                 match (a.due, b.due) {
                     (Some(da), Some(db)) => {
                         let da: DateTime<Utc> = da;
                         let db: DateTime<Utc> = db;
                         return da.cmp(&db);
-                    },
+                    }
                     (Some(_), None) => return std::cmp::Ordering::Less,
                     (None, Some(_)) => return std::cmp::Ordering::Greater,
                     (None, None) => (),
@@ -804,24 +1004,35 @@ impl App {
             }
             b.updated.cmp(&a.updated)
         };
-        let mut top_level: Vec<_> = tasks.iter()
-            .filter(|t| t.parent_id.is_none() || !tasks.iter().any(|p| Some(&p.id) == t.parent_id.as_ref()))
-            .cloned().collect();
+        let mut top_level: Vec<_> = tasks
+            .iter()
+            .filter(|t| {
+                t.parent_id.is_none() || !tasks.iter().any(|p| Some(&p.id) == t.parent_id.as_ref())
+            })
+            .cloned()
+            .collect();
         top_level.sort_by(sort_criteria);
         for parent in top_level {
-            let pid = parent.id.clone(); organized.push(parent);
-            let mut children: Vec<_> = tasks.iter().filter(|t| t.parent_id.as_ref() == Some(&pid)).cloned().collect();
-            children.sort_by(sort_criteria); organized.extend(children);
+            let pid = parent.id.clone();
+            organized.push(parent);
+            let mut children: Vec<_> = tasks
+                .iter()
+                .filter(|t| t.parent_id.as_ref() == Some(&pid))
+                .cloned()
+                .collect();
+            children.sort_by(sort_criteria);
+            organized.extend(children);
         }
         organized
     }
 
     pub fn to_runtime_state(&self) -> crate::ipc::RuntimeState {
-        let (active_task_id, active_task_title) = if let Some(task) = self.tasks.get(self.selected_task) {
-            (Some(task.id.clone()), Some(task.title.clone()))
-        } else {
-            (None, None)
-        };
+        let (active_task_id, active_task_title) =
+            if let Some(task) = self.tasks.get(self.selected_task) {
+                (Some(task.id.clone()), Some(task.title.clone()))
+            } else {
+                (None, None)
+            };
 
         let state_str = if self.timer_active {
             "running"
@@ -868,20 +1079,47 @@ mod tests {
     /// Constructor mínimo para tests (sin I/O de disco).
     fn blank_app() -> App {
         App {
-            running: true, mode: AppMode::Timer, auth_url: None,
-            input_title: String::new(), input_notes: String::new(), input_due: String::new(),
-            focused_input: InputField::Title, editing_task_id: None,
-            timer_active: false, timer_seconds: 0, timer_mode: TimerMode::Focus,
-            tasks: Vec::new(), all_tasks: Vec::new(), task_lists: Vec::new(),
-            selected_list_idx: 0, selected_task: 0, selected_settings_idx: 0,
-            selected_date_preset: DatePreset::None, loading: false, spinner_frame: 0,
-            session_pomodoros: 0, tick_count: 0, config: Config::default(), stats: Stats::default(),
-            animation: AnimationState::default(), focus_subtask_idx: 0, input_list_idx: 0,
-            confirming_task_id: None, marking_done_task_id: None, creating_task_temp_id: None,
+            running: true,
+            mode: AppMode::Timer,
+            auth_url: None,
+            input_title: String::new(),
+            input_notes: String::new(),
+            input_due: String::new(),
+            focused_input: InputField::Title,
+            editing_task_id: None,
+            timer_active: false,
+            timer_seconds: 0,
+            timer_mode: TimerMode::Focus,
+            tasks: Vec::new(),
+            all_tasks: Vec::new(),
+            task_lists: Vec::new(),
+            selected_list_idx: 0,
+            selected_task: 0,
+            selected_settings_idx: 0,
+            selected_date_preset: DatePreset::None,
+            loading: false,
+            spinner_frame: 0,
+            session_pomodoros: 0,
+            tick_count: 0,
+            config: Config::default(),
+            stats: Stats::default(),
+            animation: AnimationState::default(),
+            focus_subtask_idx: 0,
+            input_list_idx: 0,
+            confirming_task_id: None,
+            marking_done_task_id: None,
+            creating_task_temp_id: None,
             calendar_date: chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
-            task_filter: String::new(), moving_task_id: None, clipboard_request: None,
-            copy_feedback_frames: 0, cleaning_frames: 0, splash_frames: 0, auth_success_frames: 0,
-            prev_mode: AppMode::Loading, modal_anim: 0, list_cache: HashMap::new(),
+            task_filter: String::new(),
+            moving_task_id: None,
+            clipboard_request: None,
+            copy_feedback_frames: 0,
+            cleaning_frames: 0,
+            splash_frames: 0,
+            auth_success_frames: 0,
+            prev_mode: AppMode::Loading,
+            modal_anim: 0,
+            list_cache: HashMap::new(),
             sync_tick_counter: 0,
         }
     }
@@ -904,7 +1142,10 @@ mod tests {
     #[test]
     fn parse_due_date_valida_fecha_correcta() {
         let dt = App::parse_due_date("2026-06-29").expect("debe parsear");
-        assert_eq!(dt.format("%Y-%m-%d %H:%M:%S").to_string(), "2026-06-29 00:00:00");
+        assert_eq!(
+            dt.format("%Y-%m-%d %H:%M:%S").to_string(),
+            "2026-06-29 00:00:00"
+        );
     }
 
     #[test]
@@ -943,13 +1184,20 @@ mod tests {
     #[test]
     fn rebuild_oculta_completadas_por_defecto() {
         let mut app = blank_app(); // Config::default() => show_completed = false
-        assert!(!app.config.show_completed, "el default debe ser ocultar completadas");
+        assert!(
+            !app.config.show_completed,
+            "el default debe ser ocultar completadas"
+        );
         app.all_tasks = vec![
             task("pendiente", None, false, None),
             task("hecha", None, true, None),
         ];
         app.rebuild_visible_tasks();
-        assert_eq!(app.tasks.len(), 1, "las completadas deben ocultarse por defecto");
+        assert_eq!(
+            app.tasks.len(),
+            1,
+            "las completadas deben ocultarse por defecto"
+        );
         assert_eq!(app.tasks[0].id, "pendiente");
     }
 
@@ -964,25 +1212,44 @@ mod tests {
             "last_list_id": null, "last_task_id": null, "show_completed": true
         }"#;
         let config: Config = serde_json::from_str(json).expect("config válida");
-        assert!(!config.show_completed, "show_completed nunca debe cargarse desde disco");
+        assert!(
+            !config.show_completed,
+            "show_completed nunca debe cargarse desde disco"
+        );
         let saved = serde_json::to_string(&config).expect("serializa");
-        assert!(!saved.contains("show_completed"), "show_completed no debe persistirse");
+        assert!(
+            !saved.contains("show_completed"),
+            "show_completed no debe persistirse"
+        );
     }
 
     #[test]
     fn switch_list_muestra_cache_local_al_instante() {
         let mut app = blank_app();
         app.task_lists = vec![
-            TaskList { id: "L1".to_string(), title: "L1".to_string() },
-            TaskList { id: "L2".to_string(), title: "L2".to_string() },
+            TaskList {
+                id: "L1".to_string(),
+                title: "L1".to_string(),
+            },
+            TaskList {
+                id: "L2".to_string(),
+                title: "L2".to_string(),
+            },
         ];
-        app.list_cache.insert("L2".to_string(), vec![task("a", None, false, None), task("b", None, false, None)]);
+        app.list_cache.insert(
+            "L2".to_string(),
+            vec![task("a", None, false, None), task("b", None, false, None)],
+        );
         app.config.show_completed = true;
 
         app.switch_list(1); // cambiar a L2
 
         assert_eq!(app.selected_list_idx, 1);
-        assert_eq!(app.tasks.len(), 2, "switch_list debe mostrar la caché local de L2 sin esperar a la red");
+        assert_eq!(
+            app.tasks.len(),
+            2,
+            "switch_list debe mostrar la caché local de L2 sin esperar a la red"
+        );
     }
 
     #[test]
@@ -992,9 +1259,9 @@ mod tests {
         map.insert("2026-06-29 09:00".to_string(), 5u64); // reciente
         map.insert("2026-05-29 00:00".to_string(), 1u64); // justo en el corte
         prune_before(&mut map, "2026-05-29");
-        assert!(!map.contains_key("2025-01-15 10:00"));   // eliminado
-        assert!(map.contains_key("2026-06-29 09:00"));     // conservado
-        assert!(map.contains_key("2026-05-29 00:00"));     // el día del corte se conserva
+        assert!(!map.contains_key("2025-01-15 10:00")); // eliminado
+        assert!(map.contains_key("2026-06-29 09:00")); // conservado
+        assert!(map.contains_key("2026-05-29 00:00")); // el día del corte se conserva
         assert_eq!(map.len(), 2);
     }
 
@@ -1030,4 +1297,3 @@ mod tests {
         assert_eq!(state.active_task_title.as_deref(), Some("t1"));
     }
 }
-
