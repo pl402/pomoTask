@@ -337,16 +337,44 @@ Panel {
                 }
               }
 
-              Text {
+              Row {
                 visible: pomotaskService.activeTaskTitle && pomotaskService.activeTaskTitle !== ""
-                textFormat: Text.PlainText
-                text: "🎯 " + pomotaskService.activeTaskTitle
-                color: root.contentForeground
-                font.family: root.contentFontFamily
-                font.pixelSize: Style.font.bodySmall
-                font.bold: true
-                elide: Text.ElideRight
+                spacing: Style.space(6)
                 width: parent.width
+
+                BorderSurface {
+                  color: Style.hoverFillFor(root.contentForeground, Color.accent)
+                  radius: Style.cornerRadius
+                  implicitHeight: Style.space(22)
+                  implicitWidth: Math.min(parent.width, activeTaskBadgeRow.implicitWidth + Style.space(12))
+
+                  Row {
+                    id: activeTaskBadgeRow
+                    anchors.centerIn: parent
+                    spacing: Style.space(6)
+
+                    Text {
+                      textFormat: Text.PlainText
+                      text: "🎯 Foco:"
+                      color: Color.accent
+                      font.family: root.contentFontFamily
+                      font.pixelSize: Style.font.caption
+                      font.bold: true
+                      anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    Text {
+                      textFormat: Text.PlainText
+                      text: pomotaskService.activeTaskTitle
+                      color: root.contentForeground
+                      font.family: root.contentFontFamily
+                      font.pixelSize: Style.font.caption
+                      elide: Text.ElideRight
+                      width: Math.min(implicitWidth, Style.space(220))
+                      anchors.verticalCenter: parent.verticalCenter
+                    }
+                  }
+                }
               }
             }
 
