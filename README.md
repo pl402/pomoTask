@@ -45,6 +45,10 @@ Este método se fundamenta en la idea de que las pausas frecuentes pueden mejora
 - **🍅 Modo Concentración Inmersivo**: Pantalla completa con reloj digital gigante y gestión de subtareas.
 - **⏳ Ciclo Pomodoro Completo**: Descanso corto tras cada enfoque y **descanso largo automático cada 4 pomodoros** (o cambio manual de modo con `m`).
 - **🔔 Notificaciones**: Avisos nativos del sistema al finalizar sesiones.
+- **🧩 Integración Nativa con Omarchy Quattro**: Plugin oficial (`io.github.pl402.pomotask`) con widget para la barra de estado y panel flotante para gestionar Pomodoro y tareas sin abrir la terminal.
+- **🛡️ Monitor Anti-distracciones (Hyprland)**: Detección activa de ventanas y páginas bloqueadas (Facebook, YouTube, Reddit, Discord, etc.) durante las sesiones de trabajo con alertas OSD y desenfoque preventivo.
+- **🔒 Bloqueo Estricto en Descansos**: Opción para bloquear la pantalla automáticamente (`omarchy system lock`) o mostrar overlay de descanso activo para asegurar pausas reales.
+- **⚡ Interfaz IPC / Subcomandos CLI**: Control headless (`pomotask-cli ipc ...`) con salida JSON para integraciones externas, scripts y barras de estado.
 
 ## 🛠️ Stack Tecnológico y Arquitectura
 
@@ -88,6 +92,65 @@ cd pomoTask
 
 El script compilará el proyecto en modo `release` e instalará el binario en `~/.local/bin`.
 
+### 4. Instalación del Plugin para Omarchy Quattro (Opcional)
+
+Si utilizas el entorno de escritorio **Omarchy**, puedes instalar el plugin oficial para la barra de estado y el panel interactivo:
+
+```bash
+./install-plugin.sh
+```
+
+Esto compilará `pomotask-cli`, lo instalará en `~/.local/bin`, copiará los componentes QML a `~/.config/omarchy/plugins/io.github.pl402.pomotask/` y registrará el plugin en Omarchy Shell.
+
+Para activar el widget en tu barra de Omarchy:
+```bash
+omarchy plugin enable io.github.pl402.pomotask --section center
+# O para moverlo si ya está activo:
+omarchy bar move io.github.pl402.pomotask --section center
+```
+
+## 🧩 Plugin para Omarchy Quattro
+
+El plugin de PomoTask para **Omarchy Quattro** (`io.github.pl402.pomotask`) proporciona una experiencia visual e integrada en el escritorio:
+
+- **BarWidget (`BarWidget.qml`)**: Muestra en la barra el estado del Pomodoro (🍅 / ☕ / 🌴), tiempo restante y la tarea en foco. Clic izquierdo para desplegar el panel; clic central o scroll para iniciar/pausar.
+- **Panel Interactivo (`Panel.qml`)**:
+  - Reloj de cuenta regresiva con barra de progreso y selector de ciclo.
+  - Gestión completa de Google Tasks con selector de lista, creación rápida de tareas y foco en tareas individuales (🎯).
+  - Toggles para modo anti-distracciones y bloqueo estricto de descansos.
+  - Botón de acceso directo para abrir la TUI completa en terminal.
+- **Monitor Anti-distracciones (`DistractionMonitor.qml`)**: Monitorea eventos de Hyprland en tiempo real; si se abre una ventana o pestaña bloqueada durante el enfoque, emite advertencias OSD y desenfoca la distracción.
+- **Overlay de Descanso (`BreakOverlay.qml`)**: Pantalla de pausa activa y estiramientos durante los descansos o bloqueo de pantalla si el modo estricto está habilitado.
+
+### Configuración del Monitor Anti-distracciones
+
+Las reglas de bloqueo se configuran en `~/.config/pomotask/blocklist.json`:
+```json
+{
+  "title_keywords": ["facebook", "twitter", "x.com", "instagram", "reddit", "youtube.com", "tiktok", "netflix", "twitch.tv"],
+  "blocked_classes": ["steam", "discord", "spotify"],
+  "action": "warn_and_unfocus"
+}
+```
+Acciones disponibles: `"warn"`, `"warn_and_unfocus"`, `"minimize"`.
+
+## 💻 Interfaz IPC y Subcomandos CLI
+
+PomoTask-CLI incluye subcomandos headless pensados para scripts, automatización e integración con barras de estado o extensiones:
+
+| Subcomando | Descripción |
+| :--- | :--- |
+| `pomotask-cli ipc status` | Obtiene el estado actual del temporizador y tarea activa en JSON |
+| `pomotask-cli ipc timer <start\|pause\|toggle\|skip\|reset>` | Controla el temporizador de Pomodoro |
+| `pomotask-cli ipc tasks list [--list-id <id>]` | Lista las tareas en formato JSON estructurado |
+| `pomotask-cli ipc task complete <task_id>` | Marca una tarea como completada (optimistic + sync) |
+| `pomotask-cli ipc task create --title "<t>" [--list-id <id>] [--parent <id>]` | Crea una nueva tarea o subtarea |
+| `pomotask-cli ipc task focus <task_id\|clear>` | Asigna o remueve la tarea activa del temporizador |
+| `pomotask-cli ipc sync` | Fuerza la sincronización de listas con Google Tasks |
+| `pomotask-cli ipc blocklist get` | Consulta la configuración actual del bloqueador |
+| `pomotask-cli ipc blocklist add [--keyword <k>] [--class <c>]` | Añade palabras clave o clases bloqueadas |
+| `pomotask-cli ipc blocklist remove [--keyword <k>] [--class <c>]` | Remueve reglas del bloqueador |
+
 ## ⌨️ Atajos de Teclado (Hotkeys)
 
 | Tecla | Acción |
@@ -122,6 +185,8 @@ Arquitectura diseñada para ser modular, legible y fácil de extender:
 - `src/app/i18n.rs`: Motor de internacionalización (Español/Inglés).
 - `src/handler.rs`: Lógica centralizada de teclado + sincronización (`sync_tasks` / `sync_all_lists`).
 - `src/api.rs`: Integración asíncrona con Google Tasks API.
+- `src/ipc.rs`: Controlador de comandos IPC (`status`, `timer`, `task`, `blocklist`, `sync`) y persistencia de runtime.
+- `plugins/io.github.pl402.pomotask/`: Plugin nativo QML para Omarchy Quattro (BarWidget, Panel, DistractionMonitor, BreakOverlay).
 
 > **Desarrollo**: `cargo run` (TUI), `cargo test` (tests unitarios de lógica pura), `cargo clippy`
 > (0 warnings), `cargo fmt`. Requiere `client_secret.json` en la raíz para compilar (o se usa un
