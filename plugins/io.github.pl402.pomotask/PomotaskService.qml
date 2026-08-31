@@ -309,6 +309,59 @@ Item {
   }
   function blocklistToggleAntiDistraction() { toggleAntiDistraction() }
 
+  function blocklistSetAction(action) {
+    if (!action || String(action).trim() === "") return
+    runAction(["blocklist", "set-action", String(action).trim()], "Updating distraction action…")
+  }
+
+  function blocklistAddTitle(keyword) {
+    var kw = String(keyword || "").trim()
+    if (kw === "") return
+    runAction(["blocklist", "add-title", kw], "Adding blocked keyword…")
+  }
+
+  function blocklistRemoveTitle(keyword) {
+    var kw = String(keyword || "").trim()
+    if (kw === "") return
+    runAction(["blocklist", "remove-title", kw], "Removing blocked keyword…")
+  }
+
+  function blocklistAddClass(className) {
+    var cls = String(className || "").trim()
+    if (cls === "") return
+    runAction(["blocklist", "add-class", cls], "Adding blocked app…")
+  }
+
+  function blocklistRemoveClass(className) {
+    var cls = String(className || "").trim()
+    if (cls === "") return
+    runAction(["blocklist", "remove-class", cls], "Removing blocked app…")
+  }
+
+  function blocklistAddAllowedTitle(keyword) {
+    var kw = String(keyword || "").trim()
+    if (kw === "") return
+    runAction(["blocklist", "add-allowed-title", kw], "Adding allowed exception…")
+  }
+
+  function blocklistRemoveAllowedTitle(keyword) {
+    var kw = String(keyword || "").trim()
+    if (kw === "") return
+    runAction(["blocklist", "remove-allowed-title", kw], "Removing allowed exception…")
+  }
+
+  function blocklistAddAllowedClass(className) {
+    var cls = String(className || "").trim()
+    if (cls === "") return
+    runAction(["blocklist", "add-allowed-class", cls], "Adding allowed app exception…")
+  }
+
+  function blocklistRemoveAllowedClass(className) {
+    var cls = String(className || "").trim()
+    if (cls === "") return
+    runAction(["blocklist", "remove-allowed-class", cls], "Removing allowed app exception…")
+  }
+
   function syncTasks() {
     runAction(["sync"], "Syncing tasks with Google…")
   }

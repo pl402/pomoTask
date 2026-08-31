@@ -27,6 +27,29 @@ Panel {
 
   property string selectedListId: "@all"
   property bool showCompletedTasks: false
+  property string activeTab: "tasks" // "tasks" | "distractions"
+
+  readonly property var actionOptions: [
+    { value: "warn", label: "Solo advertir (OSD)" },
+    { value: "warn_and_unfocus", label: "Advertir y desenfocar" },
+    { value: "minimize", label: "Minimizar ventana" }
+  ]
+
+  readonly property var blockedTitles: (pomotaskService.blocklist && Array.isArray(pomotaskService.blocklist.title_keywords))
+    ? pomotaskService.blocklist.title_keywords
+    : []
+
+  readonly property var blockedApps: (pomotaskService.blocklist && Array.isArray(pomotaskService.blocklist.blocked_classes))
+    ? pomotaskService.blocklist.blocked_classes
+    : []
+
+  readonly property var allowedTitles: (pomotaskService.blocklist && Array.isArray(pomotaskService.blocklist.allowed_title_keywords))
+    ? pomotaskService.blocklist.allowed_title_keywords
+    : []
+
+  readonly property var allowedApps: (pomotaskService.blocklist && Array.isArray(pomotaskService.blocklist.allowed_classes))
+    ? pomotaskService.blocklist.allowed_classes
+    : []
 
   function open() {
     refresh()
@@ -72,6 +95,30 @@ Panel {
       : (root.listOptions.length > 1 ? root.listOptions[1].value : "@default")
     pomotaskService.createTask(title, targetList, "")
     newTaskField.text = ""
+  }
+
+  function addBlockedTitle() {
+    if (!newBlockedTitleField) return
+    var text = String(newBlockedTitleField.text || "").trim()
+    if (text === "") return
+    pomotaskService.blocklistAddTitle(text)
+    newBlockedTitleField.text = ""
+  }
+
+  function addBlockedClass() {
+    if (!newBlockedClassField) return
+    var text = String(newBlockedClassField.text || "").trim()
+    if (text === "") return
+    pomotaskService.blocklistAddClass(text)
+    newBlockedClassField.text = ""
+  }
+
+  function addAllowedTitle() {
+    if (!newAllowedTitleField) return
+    var text = String(newAllowedTitleField.text || "").trim()
+    if (text === "") return
+    pomotaskService.blocklistAddAllowedTitle(text)
+    newAllowedTitleField.text = ""
   }
 
   // -------------------------------------------------------------------------
@@ -201,7 +248,12 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
-      blocked: newTaskField.activeFocus || (listDropdown && listDropdown.popupOpen)
+      blocked: (typeof newTaskField !== "undefined" && newTaskField && newTaskField.activeFocus)
+        || (typeof newBlockedTitleField !== "undefined" && newBlockedTitleField && newBlockedTitleField.activeFocus)
+        || (typeof newBlockedClassField !== "undefined" && newBlockedClassField && newBlockedClassField.activeFocus)
+        || (typeof newAllowedTitleField !== "undefined" && newAllowedTitleField && newAllowedTitleField.activeFocus)
+        || (typeof listDropdown !== "undefined" && listDropdown && listDropdown.popupOpen)
+        || (typeof actionDropdown !== "undefined" && actionDropdown && actionDropdown.popupOpen)
 
       onActivateRequested: pomotaskService.timerToggle()
       onCloseRequested: root.close()
@@ -466,258 +518,610 @@ Panel {
           }
 
           // -----------------------------------------------------------------
-          // 2. Google Tasks Section
+          // Tab Navigation Selector
           // -----------------------------------------------------------------
-          PanelSeparator {
-            foreground: root.contentForeground
-          }
-
-          Item {
-            width: parent.width
-            implicitHeight: Math.max(tasksHeaderTitle.implicitHeight, toggleCompletedBtn.implicitHeight)
-
-            PanelSectionHeader {
-              id: tasksHeaderTitle
-              text: "TAREAS"
-              foreground: root.contentForeground
-              fontFamily: root.contentFontFamily
-              anchors.left: parent.left
-              anchors.verticalCenter: parent.verticalCenter
-            }
-
-            Button {
-              id: toggleCompletedBtn
-              anchors.right: parent.right
-              anchors.verticalCenter: parent.verticalCenter
-              text: root.showCompletedTasks ? "Ocultar hechas" : "Ver hechas"
-              fontSize: Style.font.caption
-              bordered: false
-              foreground: root.dimColor
-              accent: Color.accent
-              onClicked: root.showCompletedTasks = !root.showCompletedTasks
-            }
-          }
-
-          // List Selector Dropdown (if multiple lists available)
-          Dropdown {
-            id: listDropdown
-            label: "Lista"
-            showLabel: false
-            visible: pomotaskService.taskLists && pomotaskService.taskLists.length > 1
-            width: parent.width
-            value: root.selectedListId
-            options: root.listOptions
-            onChanged: function(v) { root.selectedListId = v }
-          }
-
-          // Tasks List Column
-          Column {
-            width: parent.width
-            spacing: Style.space(4)
-
-            Repeater {
-              model: root.visibleTaskItems
-
-              delegate: BorderSurface {
-                id: taskRow
-                required property var modelData
-                required property int index
-
-                readonly property var itemData: modelData
-                readonly property bool isFocused: pomotaskService.activeTaskId === itemData.task.id
-
-                width: panelColumn.width
-                implicitHeight: taskContent.implicitHeight + Style.space(10)
-                radius: Style.cornerRadius
-                color: isFocused
-                  ? Style.selectedFillFor(root.contentForeground, Color.accent)
-                  : (taskMouse.containsMouse ? Style.hoverFillFor(root.contentForeground, Color.accent) : "transparent")
-                borderSpec: isFocused
-                  ? Border.controlSpec("focus", root.contentForeground, Color.accent)
-                  : (taskMouse.containsMouse ? Border.controlSpec("hover-cursor", root.contentForeground, Color.accent) : Border.none())
-
-                Row {
-                  id: taskContent
-                  anchors.left: parent.left
-                  anchors.right: parent.right
-                  anchors.verticalCenter: parent.verticalCenter
-                  anchors.leftMargin: (itemData.isSubtask ? Style.space(24) : Style.space(8))
-                  anchors.rightMargin: Style.space(8)
-                  spacing: Style.space(8)
-
-                  // Complete / Checkbox Button
-                  PanelActionButton {
-                    size: Style.space(22)
-                    iconText: itemData.task.completed ? "󰄲" : "󰄱"
-                    foreground: itemData.task.completed ? Color.accent : root.contentForeground
-                    hoverColor: Color.accent
-                    tooltipText: itemData.task.completed ? "Completada" : "Marcar como completada"
-                    anchors.verticalCenter: parent.verticalCenter
-                    onClicked: pomotaskService.completeTask(itemData.task.id)
-                  }
-
-                  // Task Title and Badges
-                  Column {
-                    width: parent.width - Style.space(22) * 2 - parent.spacing * 2 - (itemData.isSubtask ? Style.space(16) : 0)
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: Style.space(2)
-
-                    Text {
-                      textFormat: Text.PlainText
-                      text: (itemData.isSubtask ? "↳ " : "") + itemData.task.title
-                      color: itemData.task.completed ? root.dimColor : root.contentForeground
-                      font.family: root.contentFontFamily
-                      font.pixelSize: Style.font.body
-                      font.strikeout: itemData.task.completed
-                      elide: Text.ElideRight
-                      width: parent.width
-                    }
-
-                    Row {
-                      spacing: Style.space(6)
-                      visible: (itemData.task.due && itemData.task.due !== "") || (itemData.task.notes && itemData.task.notes !== "") || itemData.task.pomodoros > 0
-
-                      // Due date badge
-                      BorderSurface {
-                        visible: !!itemData.task.due && itemData.task.due !== ""
-                        color: Style.hoverFillFor(root.contentForeground, Color.accent)
-                        radius: Style.cornerRadius
-                        implicitWidth: dueLabel.implicitWidth + Style.space(8)
-                        implicitHeight: dueLabel.implicitHeight + Style.space(2)
-
-                        Text {
-                          id: dueLabel
-                          textFormat: Text.PlainText
-                          anchors.centerIn: parent
-                          text: "📅 " + root.formatDueDate(itemData.task.due)
-                          color: root.contentForeground
-                          font.family: root.contentFontFamily
-                          font.pixelSize: Style.font.caption
-                        }
-                      }
-
-                      // Notes badge
-                      Text {
-                        visible: !!itemData.task.notes && itemData.task.notes !== ""
-                        textFormat: Text.PlainText
-                        text: "📝"
-                        color: root.dimColor
-                        font.family: root.contentFontFamily
-                        font.pixelSize: Style.font.caption
-                        anchors.verticalCenter: parent.verticalCenter
-                      }
-
-                      // Pomodoros count badge
-                      Text {
-                        visible: itemData.task.pomodoros > 0
-                        textFormat: Text.PlainText
-                        text: "🍅 " + itemData.task.pomodoros
-                        color: Color.accent
-                        font.family: root.contentFontFamily
-                        font.pixelSize: Style.font.caption
-                        font.bold: true
-                        anchors.verticalCenter: parent.verticalCenter
-                      }
-                    }
-                  }
-
-                  // Focus Target Button (🎯)
-                  PanelActionButton {
-                    size: Style.space(22)
-                    iconText: "🎯"
-                    foreground: isFocused ? Color.accent : root.dimColor
-                    hoverColor: Color.accent
-                    tooltipText: isFocused ? "Quitar enfoque activo" : "Enfocar esta tarea"
-                    anchors.verticalCenter: parent.verticalCenter
-                    onClicked: {
-                      if (isFocused) {
-                        pomotaskService.clearFocusTask()
-                      } else {
-                        pomotaskService.focusTask(itemData.task.id)
-                      }
-                    }
-                  }
-                }
-
-                MouseArea {
-                  id: taskMouse
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  acceptedButtons: Qt.NoButton
-                }
-              }
-            }
-
-            Text {
-              visible: root.visibleTaskItems.length === 0
-              textFormat: Text.PlainText
-              text: "No hay tareas para mostrar"
-              color: root.dimColor
-              font.family: root.contentFontFamily
-              font.pixelSize: Style.font.bodySmall
-              horizontalAlignment: Text.AlignHCenter
-              width: parent.width
-              topPadding: Style.space(8)
-              bottomPadding: Style.space(8)
-            }
-          }
-
-          // Quick Task Creation Row
           Row {
             width: parent.width
             spacing: Style.space(8)
 
-            TextField {
-              id: newTaskField
-              width: parent.width - addTaskBtn.width - parent.spacing
-              placeholderText: "Nueva tarea..."
-              foreground: root.contentForeground
-              accent: Color.accent
-              onAccepted: root.addNewTask()
-            }
-
             Button {
-              id: addTaskBtn
-              text: "Añadir"
-              iconText: "󰐕"
+              width: (parent.width - Style.space(8)) / 2
+              iconText: "📋"
+              text: "Tareas"
+              selected: root.activeTab === "tasks"
               bordered: true
               foreground: root.contentForeground
               accent: Color.accent
-              onClicked: root.addNewTask()
+              onClicked: root.activeTab = "tasks"
+            }
+
+            Button {
+              width: (parent.width - Style.space(8)) / 2
+              iconText: "🛡️"
+              text: "Anti-distracciones"
+              selected: root.activeTab === "distractions"
+              bordered: true
+              foreground: root.contentForeground
+              accent: Color.accent
+              onClicked: root.activeTab = "distractions"
             }
           }
 
           // -----------------------------------------------------------------
-          // 3. Settings & Quick Toggles Section
+          // 2. Google Tasks Tab
+          // -----------------------------------------------------------------
+          Column {
+            id: tasksTabColumn
+            visible: root.activeTab === "tasks"
+            width: parent.width
+            spacing: Style.space(12)
+
+            PanelSeparator {
+              foreground: root.contentForeground
+            }
+
+            Item {
+              width: parent.width
+              implicitHeight: Math.max(tasksHeaderTitle.implicitHeight, toggleCompletedBtn.implicitHeight)
+
+              PanelSectionHeader {
+                id: tasksHeaderTitle
+                text: "TAREAS"
+                foreground: root.contentForeground
+                fontFamily: root.contentFontFamily
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+              }
+
+              Button {
+                id: toggleCompletedBtn
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.showCompletedTasks ? "Ocultar hechas" : "Ver hechas"
+                fontSize: Style.font.caption
+                bordered: false
+                foreground: root.dimColor
+                accent: Color.accent
+                onClicked: root.showCompletedTasks = !root.showCompletedTasks
+              }
+            }
+
+            // List Selector Dropdown (if multiple lists available)
+            Dropdown {
+              id: listDropdown
+              label: "Lista"
+              showLabel: false
+              visible: root.listOptions.length > 2
+              width: parent.width
+              value: root.selectedListId
+              options: root.listOptions
+              onChanged: function(v) { root.selectedListId = v }
+            }
+
+            // Tasks List Column
+            Column {
+              width: parent.width
+              spacing: Style.space(4)
+
+              Repeater {
+                model: root.visibleTaskItems
+
+                delegate: BorderSurface {
+                  id: taskRow
+                  required property var modelData
+                  required property int index
+
+                  readonly property var itemData: modelData
+                  readonly property bool isFocused: pomotaskService.activeTaskId === itemData.task.id
+
+                  width: panelColumn.width
+                  implicitHeight: taskContent.implicitHeight + Style.space(10)
+                  radius: Style.cornerRadius
+                  color: isFocused
+                    ? Style.selectedFillFor(root.contentForeground, Color.accent)
+                    : (taskMouse.containsMouse ? Style.hoverFillFor(root.contentForeground, Color.accent) : "transparent")
+                  borderSpec: isFocused
+                    ? Border.controlSpec("focus", root.contentForeground, Color.accent)
+                    : (taskMouse.containsMouse ? Border.controlSpec("hover-cursor", root.contentForeground, Color.accent) : Border.none())
+
+                  Row {
+                    id: taskContent
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.leftMargin: (itemData.isSubtask ? Style.space(24) : Style.space(8))
+                    anchors.rightMargin: Style.space(8)
+                    spacing: Style.space(8)
+
+                    // Complete / Checkbox Button
+                    PanelActionButton {
+                      size: Style.space(22)
+                      iconText: itemData.task.completed ? "󰄲" : "󰄱"
+                      foreground: itemData.task.completed ? Color.accent : root.contentForeground
+                      hoverColor: Color.accent
+                      tooltipText: itemData.task.completed ? "Completada" : "Marcar como completada"
+                      anchors.verticalCenter: parent.verticalCenter
+                      onClicked: pomotaskService.completeTask(itemData.task.id)
+                    }
+
+                    // Task Title and Badges
+                    Column {
+                      width: parent.width - Style.space(22) * 2 - parent.spacing * 2 - (itemData.isSubtask ? Style.space(16) : 0)
+                      anchors.verticalCenter: parent.verticalCenter
+                      spacing: Style.space(2)
+
+                      Text {
+                        textFormat: Text.PlainText
+                        text: (itemData.isSubtask ? "↳ " : "") + itemData.task.title
+                        color: itemData.task.completed ? root.dimColor : root.contentForeground
+                        font.family: root.contentFontFamily
+                        font.pixelSize: Style.font.body
+                        font.strikeout: itemData.task.completed
+                        elide: Text.ElideRight
+                        width: parent.width
+                      }
+
+                      Row {
+                        spacing: Style.space(6)
+                        visible: (itemData.task.due && itemData.task.due !== "") || (itemData.task.notes && itemData.task.notes !== "") || itemData.task.pomodoros > 0
+
+                        // Due date badge
+                        BorderSurface {
+                          visible: !!itemData.task.due && itemData.task.due !== ""
+                          color: Style.hoverFillFor(root.contentForeground, Color.accent)
+                          radius: Style.cornerRadius
+                          implicitWidth: dueLabel.implicitWidth + Style.space(8)
+                          implicitHeight: dueLabel.implicitHeight + Style.space(2)
+
+                          Text {
+                            id: dueLabel
+                            textFormat: Text.PlainText
+                            anchors.centerIn: parent
+                            text: "📅 " + root.formatDueDate(itemData.task.due)
+                            color: root.contentForeground
+                            font.family: root.contentFontFamily
+                            font.pixelSize: Style.font.caption
+                          }
+                        }
+
+                        // Notes badge
+                        Text {
+                          visible: !!itemData.task.notes && itemData.task.notes !== ""
+                          textFormat: Text.PlainText
+                          text: "📝"
+                          color: root.dimColor
+                          font.family: root.contentFontFamily
+                          font.pixelSize: Style.font.caption
+                          anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                        // Pomodoros count badge
+                        Text {
+                          visible: itemData.task.pomodoros > 0
+                          textFormat: Text.PlainText
+                          text: "🍅 " + itemData.task.pomodoros
+                          color: Color.accent
+                          font.family: root.contentFontFamily
+                          font.pixelSize: Style.font.caption
+                          font.bold: true
+                          anchors.verticalCenter: parent.verticalCenter
+                        }
+                      }
+                    }
+
+                    // Focus Target Button (🎯)
+                    PanelActionButton {
+                      size: Style.space(22)
+                      iconText: "🎯"
+                      foreground: isFocused ? Color.accent : root.dimColor
+                      hoverColor: Color.accent
+                      tooltipText: isFocused ? "Quitar enfoque activo" : "Enfocar esta tarea"
+                      anchors.verticalCenter: parent.verticalCenter
+                      onClicked: {
+                        if (isFocused) {
+                          pomotaskService.clearFocusTask()
+                        } else {
+                          pomotaskService.focusTask(itemData.task.id)
+                        }
+                      }
+                    }
+                  }
+
+                  MouseArea {
+                    id: taskMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    acceptedButtons: Qt.NoButton
+                  }
+                }
+              }
+
+              Text {
+                visible: root.visibleTaskItems.length === 0
+                textFormat: Text.PlainText
+                text: "No hay tareas para mostrar"
+                color: root.dimColor
+                font.family: root.contentFontFamily
+                font.pixelSize: Style.font.bodySmall
+                horizontalAlignment: Text.AlignHCenter
+                width: parent.width
+                topPadding: Style.space(8)
+                bottomPadding: Style.space(8)
+              }
+            }
+
+            // Quick Task Creation Row
+            Row {
+              width: parent.width
+              spacing: Style.space(8)
+
+              TextField {
+                id: newTaskField
+                width: parent.width - addTaskBtn.width - parent.spacing
+                placeholderText: "Nueva tarea..."
+                foreground: root.contentForeground
+                accent: Color.accent
+                onAccepted: root.addNewTask()
+              }
+
+              Button {
+                id: addTaskBtn
+                text: "Añadir"
+                iconText: "󰐕"
+                bordered: true
+                foreground: root.contentForeground
+                accent: Color.accent
+                onClicked: root.addNewTask()
+              }
+            }
+          }
+
+          // -----------------------------------------------------------------
+          // 3. Distractions & Rules Tab
+          // -----------------------------------------------------------------
+          Column {
+            id: distractionsTabColumn
+            visible: root.activeTab === "distractions"
+            width: parent.width
+            spacing: Style.space(12)
+
+            PanelSeparator {
+              foreground: root.contentForeground
+            }
+
+            PanelSectionHeader {
+              text: "COMPORTAMIENTO Y REGLAS"
+              foreground: root.contentForeground
+              fontFamily: root.contentFontFamily
+            }
+
+            Toggle {
+              width: parent.width
+              label: "Modo Anti-distracciones"
+              description: "Detecta sitios y apps distractoras durante el trabajo"
+              checked: pomotaskService.antiDistraction
+              foreground: root.contentForeground
+              accent: Color.accent
+              onClicked: pomotaskService.toggleAntiDistraction()
+            }
+
+            Toggle {
+              width: parent.width
+              label: "Bloqueo Estricto en Descanso"
+              description: "Bloquea la sesión del sistema al entrar en pausa activa"
+              checked: pomotaskService.strictBreak
+              foreground: root.contentForeground
+              accent: Color.accent
+              onClicked: pomotaskService.toggleStrictBreak()
+            }
+
+            // Distraction Action Dropdown
+            Dropdown {
+              id: actionDropdown
+              label: "Acción al detectar distracción"
+              showLabel: true
+              width: parent.width
+              value: (pomotaskService.blocklist && pomotaskService.blocklist.action) ? pomotaskService.blocklist.action : "warn"
+              options: root.actionOptions
+              onChanged: function(v) { pomotaskService.blocklistSetAction(v) }
+            }
+
+            PanelSeparator {
+              foreground: root.contentForeground
+            }
+
+            // Sub-section: Blocked Web Titles / Keywords
+            Column {
+              width: parent.width
+              spacing: Style.space(6)
+
+              Text {
+                textFormat: Text.PlainText
+                text: "🚫 Sitios Web y Palabras Bloqueadas"
+                color: root.contentForeground
+                font.family: root.contentFontFamily
+                font.pixelSize: Style.font.bodySmall
+                font.bold: true
+              }
+
+              Flow {
+                width: parent.width
+                spacing: Style.space(6)
+
+                Repeater {
+                  model: root.blockedTitles
+                  delegate: BorderSurface {
+                    required property var modelData
+                    color: Style.hoverFillFor(root.contentForeground, Color.accent)
+                    radius: Style.cornerRadius
+                    borderSpec: Border.controlSpec("input", root.contentForeground, Color.accent)
+                    implicitHeight: Style.space(26)
+                    implicitWidth: chipRow1.implicitWidth + Style.space(12)
+
+                    Row {
+                      id: chipRow1
+                      anchors.centerIn: parent
+                      spacing: Style.space(6)
+
+                      Text {
+                        textFormat: Text.PlainText
+                        text: modelData
+                        color: root.contentForeground
+                        font.family: root.contentFontFamily
+                        font.pixelSize: Style.font.caption
+                        anchors.verticalCenter: parent.verticalCenter
+                      }
+
+                      Text {
+                        textFormat: Text.PlainText
+                        text: "✕"
+                        color: removeMouse1.containsMouse ? Color.urgent : root.dimColor
+                        font.family: root.contentFontFamily
+                        font.pixelSize: Style.font.caption
+                        font.bold: true
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        MouseArea {
+                          id: removeMouse1
+                          anchors.fill: parent
+                          anchors.margins: -Style.space(4)
+                          hoverEnabled: true
+                          cursorShape: Qt.PointingHandCursor
+                          onClicked: pomotaskService.blocklistRemoveTitle(modelData)
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+
+              Row {
+                width: parent.width
+                spacing: Style.space(8)
+
+                TextField {
+                  id: newBlockedTitleField
+                  width: parent.width - addTitleBtn.width - parent.spacing
+                  placeholderText: "Añadir sitio (ej. facebook, reddit)..."
+                  foreground: root.contentForeground
+                  accent: Color.accent
+                  onAccepted: root.addBlockedTitle()
+                }
+
+                Button {
+                  id: addTitleBtn
+                  text: "Añadir"
+                  iconText: "󰐕"
+                  bordered: true
+                  foreground: root.contentForeground
+                  accent: Color.accent
+                  onClicked: root.addBlockedTitle()
+                }
+              }
+            }
+
+            PanelSeparator {
+              foreground: root.contentForeground
+            }
+
+            // Sub-section: Blocked Application Classes
+            Column {
+              width: parent.width
+              spacing: Style.space(6)
+
+              Text {
+                textFormat: Text.PlainText
+                text: "⛔ Aplicaciones Bloqueadas"
+                color: root.contentForeground
+                font.family: root.contentFontFamily
+                font.pixelSize: Style.font.bodySmall
+                font.bold: true
+              }
+
+              Flow {
+                width: parent.width
+                spacing: Style.space(6)
+
+                Repeater {
+                  model: root.blockedApps
+                  delegate: BorderSurface {
+                    required property var modelData
+                    color: Style.hoverFillFor(root.contentForeground, Color.accent)
+                    radius: Style.cornerRadius
+                    borderSpec: Border.controlSpec("input", root.contentForeground, Color.accent)
+                    implicitHeight: Style.space(26)
+                    implicitWidth: chipRow2.implicitWidth + Style.space(12)
+
+                    Row {
+                      id: chipRow2
+                      anchors.centerIn: parent
+                      spacing: Style.space(6)
+
+                      Text {
+                        textFormat: Text.PlainText
+                        text: modelData
+                        color: root.contentForeground
+                        font.family: root.contentFontFamily
+                        font.pixelSize: Style.font.caption
+                        anchors.verticalCenter: parent.verticalCenter
+                      }
+
+                      Text {
+                        textFormat: Text.PlainText
+                        text: "✕"
+                        color: removeMouse2.containsMouse ? Color.urgent : root.dimColor
+                        font.family: root.contentFontFamily
+                        font.pixelSize: Style.font.caption
+                        font.bold: true
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        MouseArea {
+                          id: removeMouse2
+                          anchors.fill: parent
+                          anchors.margins: -Style.space(4)
+                          hoverEnabled: true
+                          cursorShape: Qt.PointingHandCursor
+                          onClicked: pomotaskService.blocklistRemoveClass(modelData)
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+
+              Row {
+                width: parent.width
+                spacing: Style.space(8)
+
+                TextField {
+                  id: newBlockedClassField
+                  width: parent.width - addClassBtn.width - parent.spacing
+                  placeholderText: "Añadir app (ej. steam, discord)..."
+                  foreground: root.contentForeground
+                  accent: Color.accent
+                  onAccepted: root.addBlockedClass()
+                }
+
+                Button {
+                  id: addClassBtn
+                  text: "Añadir"
+                  iconText: "󰐕"
+                  bordered: true
+                  foreground: root.contentForeground
+                  accent: Color.accent
+                  onClicked: root.addBlockedClass()
+                }
+              }
+            }
+
+            PanelSeparator {
+              foreground: root.contentForeground
+            }
+
+            // Sub-section: Allowed Exceptions (Whitelist)
+            Column {
+              width: parent.width
+              spacing: Style.space(6)
+
+              Text {
+                textFormat: Text.PlainText
+                text: "✅ Excepciones Permitidas (Lista Blanca)"
+                color: root.contentForeground
+                font.family: root.contentFontFamily
+                font.pixelSize: Style.font.bodySmall
+                font.bold: true
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                text: "Tienen prioridad sobre las reglas de bloqueo (ej. YouTube Music)."
+                color: root.dimColor
+                font.family: root.contentFontFamily
+                font.pixelSize: Style.font.caption
+              }
+
+              Flow {
+                width: parent.width
+                spacing: Style.space(6)
+
+                Repeater {
+                  model: root.allowedTitles
+                  delegate: BorderSurface {
+                    required property var modelData
+                    color: Style.hoverFillFor(root.contentForeground, Color.accent)
+                    radius: Style.cornerRadius
+                    borderSpec: Border.controlSpec("input", root.contentForeground, Color.accent)
+                    implicitHeight: Style.space(26)
+                    implicitWidth: chipRow3.implicitWidth + Style.space(12)
+
+                    Row {
+                      id: chipRow3
+                      anchors.centerIn: parent
+                      spacing: Style.space(6)
+
+                      Text {
+                        textFormat: Text.PlainText
+                        text: modelData
+                        color: root.contentForeground
+                        font.family: root.contentFontFamily
+                        font.pixelSize: Style.font.caption
+                        anchors.verticalCenter: parent.verticalCenter
+                      }
+
+                      Text {
+                        textFormat: Text.PlainText
+                        text: "✕"
+                        color: removeMouse3.containsMouse ? Color.urgent : root.dimColor
+                        font.family: root.contentFontFamily
+                        font.pixelSize: Style.font.caption
+                        font.bold: true
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        MouseArea {
+                          id: removeMouse3
+                          anchors.fill: parent
+                          anchors.margins: -Style.space(4)
+                          hoverEnabled: true
+                          cursorShape: Qt.PointingHandCursor
+                          onClicked: pomotaskService.blocklistRemoveAllowedTitle(modelData)
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+
+              Row {
+                width: parent.width
+                spacing: Style.space(8)
+
+                TextField {
+                  id: newAllowedTitleField
+                  width: parent.width - addAllowedBtn.width - parent.spacing
+                  placeholderText: "Añadir excepción (ej. youtube music)..."
+                  foreground: root.contentForeground
+                  accent: Color.accent
+                  onAccepted: root.addAllowedTitle()
+                }
+
+                Button {
+                  id: addAllowedBtn
+                  text: "Añadir"
+                  iconText: "󰐕"
+                  bordered: true
+                  foreground: root.contentForeground
+                  accent: Color.accent
+                  onClicked: root.addAllowedTitle()
+                }
+              }
+            }
+          }
+
+          // -----------------------------------------------------------------
+          // 4. Global Footer Action (TUI Launcher)
           // -----------------------------------------------------------------
           PanelSeparator {
             foreground: root.contentForeground
-          }
-
-          PanelSectionHeader {
-            text: "ENFOQUE Y AJUSTES"
-            foreground: root.contentForeground
-            fontFamily: root.contentFontFamily
-          }
-
-          Toggle {
-            width: parent.width
-            label: "Modo Anti-distracciones"
-            description: "Avisa o minimiza apps distractoras en trabajo"
-            checked: pomotaskService.antiDistraction
-            foreground: root.contentForeground
-            accent: Color.accent
-            onClicked: pomotaskService.toggleAntiDistraction()
-          }
-
-          Toggle {
-            width: parent.width
-            label: "Bloqueo Estricto en Descanso"
-            description: "Impide ignorar pausas y bloquea distracciones"
-            checked: pomotaskService.strictBreak
-            foreground: root.contentForeground
-            accent: Color.accent
-            onClicked: pomotaskService.toggleStrictBreak()
           }
 
           Button {
