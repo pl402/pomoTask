@@ -135,15 +135,15 @@ Panel {
   }
 
   function modeBadgeText(mode) {
-    if (mode === "short_break") return "☕ Descanso Corto"
-    if (mode === "long_break") return "🌴 Descanso Largo"
-    return "🍅 Enfoque"
+    if (mode === "short_break") return "󰅟 Descanso Corto"
+    if (mode === "long_break") return "󰒲 Descanso Largo"
+    return "󰔚 Enfoque"
   }
 
   function stateBadgeText(state) {
-    if (state === "running") return "▶ En Curso"
-    if (state === "paused") return "⏸ Pausado"
-    return "⏹ Detenido"
+    if (state === "running") return "󰐊 En Curso"
+    if (state === "paused") return "󰏤 Pausado"
+    return "󰓛 Detenido"
   }
 
   function formatDueDate(isoStr) {
@@ -355,7 +355,7 @@ Panel {
 
                     Text {
                       textFormat: Text.PlainText
-                      text: "🎯 Foco:"
+                      text: "󰓥 Foco:"
                       color: Color.accent
                       font.family: root.contentFontFamily
                       font.pixelSize: Style.font.caption
@@ -431,7 +431,7 @@ Panel {
 
                 Text {
                   textFormat: Text.PlainText
-                  text: "Ciclo: " + (pomotaskService.sessionPomodoros % 4) + "/4 (" + pomotaskService.sessionPomodoros + " 🍅)"
+                  text: "Ciclo: " + (pomotaskService.sessionPomodoros % 4) + "/4 (" + pomotaskService.sessionPomodoros + " 󰔚)"
                   color: root.dimColor
                   font.family: root.contentFontFamily
                   font.pixelSize: Style.font.caption
@@ -473,7 +473,7 @@ Panel {
 
             Button {
               width: (parent.width - Style.space(12)) * 0.44
-              iconText: pomotaskService.isRunning ? "⏸" : "▶"
+              iconText: pomotaskService.isRunning ? "󰏤" : "󰐊"
               text: pomotaskService.isRunning ? "Pausar" : "Iniciar"
               selected: pomotaskService.isRunning
               bordered: true
@@ -484,7 +484,7 @@ Panel {
 
             Button {
               width: (parent.width - Style.space(12)) * 0.28
-              iconText: "⏭"
+              iconText: "󰒭"
               text: "Saltar"
               bordered: true
               foreground: root.contentForeground
@@ -494,7 +494,7 @@ Panel {
 
             Button {
               width: (parent.width - Style.space(12)) * 0.28
-              iconText: "↺"
+              iconText: "󰑐"
               text: "Reiniciar"
               bordered: true
               foreground: root.contentForeground
@@ -510,7 +510,7 @@ Panel {
 
             Button {
               width: (parent.width - Style.space(12)) / 3
-              iconText: "🍅"
+              iconText: "󰔚"
               text: "Trabajo"
               selected: pomotaskService.mode === "work"
               bordered: true
@@ -522,7 +522,7 @@ Panel {
 
             Button {
               width: (parent.width - Style.space(12)) / 3
-              iconText: "☕"
+              iconText: "󰅟"
               text: "Corto"
               selected: pomotaskService.mode === "short_break"
               bordered: true
@@ -534,7 +534,7 @@ Panel {
 
             Button {
               width: (parent.width - Style.space(12)) / 3
-              iconText: "🌴"
+              iconText: "󰒲"
               text: "Largo"
               selected: pomotaskService.mode === "long_break"
               bordered: true
@@ -554,7 +554,7 @@ Panel {
 
             Button {
               width: (parent.width - Style.space(8)) / 2
-              iconText: "📋"
+              iconText: "󰄬"
               text: "Tareas"
               selected: root.activeTab === "tasks"
               bordered: true
@@ -565,7 +565,7 @@ Panel {
 
             Button {
               width: (parent.width - Style.space(8)) / 2
-              iconText: "🛡️"
+              iconText: "󰒃"
               text: "Anti-distracciones"
               selected: root.activeTab === "distractions"
               bordered: true
@@ -705,7 +705,7 @@ Panel {
                             id: dueLabel
                             textFormat: Text.PlainText
                             anchors.centerIn: parent
-                            text: "📅 " + root.formatDueDate(itemData.task.due)
+                            text: "󰃭 " + root.formatDueDate(itemData.task.due)
                             color: root.contentForeground
                             font.family: root.contentFontFamily
                             font.pixelSize: Style.font.caption
@@ -716,7 +716,7 @@ Panel {
                         Text {
                           visible: !!itemData.task.notes && itemData.task.notes !== ""
                           textFormat: Text.PlainText
-                          text: "📝"
+                          text: "󰈙"
                           color: root.dimColor
                           font.family: root.contentFontFamily
                           font.pixelSize: Style.font.caption
@@ -727,7 +727,7 @@ Panel {
                         Text {
                           visible: itemData.task.pomodoros > 0
                           textFormat: Text.PlainText
-                          text: "🍅 " + itemData.task.pomodoros
+                          text: "󰔚 " + itemData.task.pomodoros
                           color: Color.accent
                           font.family: root.contentFontFamily
                           font.pixelSize: Style.font.caption
@@ -737,10 +737,10 @@ Panel {
                       }
                     }
 
-                    // Focus Target Button (🎯)
+                    // Focus Target Button (󰓥)
                     PanelActionButton {
                       size: Style.space(22)
-                      iconText: "🎯"
+                      iconText: "󰓥"
                       foreground: isFocused ? Color.accent : root.dimColor
                       hoverColor: Color.accent
                       tooltipText: isFocused ? "Quitar enfoque activo" : "Enfocar esta tarea"
@@ -865,7 +865,7 @@ Panel {
 
               Text {
                 textFormat: Text.PlainText
-                text: "🚫 Sitios Web y Palabras Bloqueadas"
+                text: "󰅘 Sitios Web y Palabras Bloqueadas"
                 color: root.contentForeground
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.bodySmall
@@ -902,7 +902,7 @@ Panel {
 
                       Text {
                         textFormat: Text.PlainText
-                        text: "✕"
+                        text: "󰅙"
                         color: removeMouse1.containsMouse ? Color.urgent : root.dimColor
                         font.family: root.contentFontFamily
                         font.pixelSize: Style.font.caption
@@ -959,7 +959,7 @@ Panel {
 
               Text {
                 textFormat: Text.PlainText
-                text: "⛔ Aplicaciones Bloqueadas"
+                text: "󰊖 Aplicaciones Bloqueadas"
                 color: root.contentForeground
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.bodySmall
@@ -996,7 +996,7 @@ Panel {
 
                       Text {
                         textFormat: Text.PlainText
-                        text: "✕"
+                        text: "󰅙"
                         color: removeMouse2.containsMouse ? Color.urgent : root.dimColor
                         font.family: root.contentFontFamily
                         font.pixelSize: Style.font.caption
@@ -1053,7 +1053,7 @@ Panel {
 
               Text {
                 textFormat: Text.PlainText
-                text: "✅ Excepciones Permitidas (Lista Blanca)"
+                text: "󰄬 Excepciones Permitidas (Lista Blanca)"
                 color: root.contentForeground
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.bodySmall
@@ -1098,7 +1098,7 @@ Panel {
 
                       Text {
                         textFormat: Text.PlainText
-                        text: "✕"
+                        text: "󰅙"
                         color: removeMouse3.containsMouse ? Color.urgent : root.dimColor
                         font.family: root.contentFontFamily
                         font.pixelSize: Style.font.caption
@@ -1154,7 +1154,7 @@ Panel {
 
           Button {
             width: parent.width
-            iconText: ""
+            iconText: "󰆍"
             text: "Abrir PomoTask TUI"
             bordered: true
             foreground: root.contentForeground
