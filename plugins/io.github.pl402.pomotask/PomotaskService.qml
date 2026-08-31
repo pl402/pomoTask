@@ -129,12 +129,19 @@ Item {
         } else {
           var all = []
           var lists = []
-          for (var listId in obj) {
-            lists.push(listId)
-            var items = obj[listId]
-            if (Array.isArray(items)) {
-              for (var i = 0; i < items.length; i++) {
-                all.push(items[i])
+          if (Array.isArray(obj["@all"]) && obj["@all"].length > 0) {
+            all = obj["@all"]
+            for (var k in obj) {
+              if (k !== "@all") lists.push(k)
+            }
+          } else {
+            for (var listId in obj) {
+              if (listId !== "@all") lists.push(listId)
+              var items = obj[listId]
+              if (Array.isArray(items)) {
+                for (var i = 0; i < items.length; i++) {
+                  all.push(items[i])
+                }
               }
             }
           }
@@ -200,12 +207,14 @@ Item {
   function timerPause() { runAction(["timer", "pause"], "Pausing timer…") }
   function timerSkip() { runAction(["timer", "skip"], "Skipping phase…") }
   function timerReset() { runAction(["timer", "reset"], "Resetting timer…") }
+  function setMode(mode) { runAction(["timer", "mode", String(mode)], "Setting mode…") }
 
   // Task operations
   function completeTask(taskId) {
     if (!taskId || taskId === "") return
     runAction(["task", "complete", String(taskId)], "Completing task…")
   }
+  function taskComplete(taskId) { completeTask(taskId) }
 
   function createTask(title, listId, parentId) {
     if (!title || String(title).trim() === "") return
@@ -220,11 +229,13 @@ Item {
     }
     runAction(args, "Creating task…")
   }
+  function taskCreate(title, listId, parentId) { createTask(title, listId, parentId) }
 
   function focusTask(taskId) {
     if (!taskId || taskId === "") return
     runAction(["task", "focus", String(taskId)], "Setting active task…")
   }
+  function taskFocus(taskId) { focusTask(taskId) }
 
   function clearFocusTask() {
     runAction(["task", "focus", "clear"], "Clearing active task…")
@@ -234,14 +245,17 @@ Item {
   function toggleStrictBreak() {
     runAction(["blocklist", "toggle-strict"], "Toggling strict break…")
   }
+  function blocklistToggleStrictBreak() { toggleStrictBreak() }
 
   function toggleAntiDistraction() {
     runAction(["blocklist", "toggle-anti-distraction"], "Toggling anti-distraction…")
   }
+  function blocklistToggleAntiDistraction() { toggleAntiDistraction() }
 
   function syncTasks() {
     runAction(["sync"], "Syncing tasks with Google…")
   }
+  function forceSync() { syncTasks() }
 
   // -------------------------------------------------------------------------
   // File Watchers

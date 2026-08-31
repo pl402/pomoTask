@@ -114,6 +114,24 @@ async fn test_ipc_timer_commands() {
     let updated = load_runtime_state();
     assert_eq!(updated.remaining_seconds, updated.total_seconds);
     assert_ne!(updated.state, "running");
+
+    // Mode switch
+    execute_ipc_command(&[
+        "timer".to_string(),
+        "mode".to_string(),
+        "long_break".to_string(),
+    ])
+    .await
+    .expect("timer mode long_break");
+    let updated = load_runtime_state();
+    assert_eq!(updated.mode, "long_break");
+    assert_eq!(updated.state, "stopped");
+
+    execute_ipc_command(&["timer".to_string(), "mode".to_string(), "work".to_string()])
+        .await
+        .expect("timer mode work");
+    let updated = load_runtime_state();
+    assert_eq!(updated.mode, "work");
 }
 
 #[tokio::test]

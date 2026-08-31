@@ -57,6 +57,7 @@ BarWidget {
     if ("settings" in target) target.settings = root.settings
     if ("anchorItem" in target) target.anchorItem = button
     if ("hostWidget" in target) target.hostWidget = root
+    if ("service" in target) target.service = root.service
   }
 
   onBarChanged: injectPanel()

@@ -330,9 +330,37 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
                     state.remaining_seconds = state.total_seconds;
                     state.state = "stopped".to_string();
                 }
+                "mode" | "set-mode" => {
+                    if clean_args.len() < 3 {
+                        return Err("Missing mode: work, short_break, long_break".to_string());
+                    }
+                    let target_mode = clean_args[2];
+                    match target_mode {
+                        "work" => {
+                            state.mode = "work".to_string();
+                            state.total_seconds = focus_dur;
+                        }
+                        "short_break" | "short" => {
+                            state.mode = "short_break".to_string();
+                            state.total_seconds = short_dur;
+                        }
+                        "long_break" | "long" => {
+                            state.mode = "long_break".to_string();
+                            state.total_seconds = long_dur;
+                        }
+                        other => {
+                            return Err(format!(
+                                "Unknown mode: '{}'. Expected work, short_break, long_break",
+                                other
+                            ));
+                        }
+                    }
+                    state.remaining_seconds = state.total_seconds;
+                    state.state = "stopped".to_string();
+                }
                 other => {
                     return Err(format!(
-                        "Unknown timer command: '{}'. Expected start, pause, toggle, skip, reset",
+                        "Unknown timer command: '{}'. Expected start, pause, toggle, skip, reset, mode",
                         other
                     ));
                 }
