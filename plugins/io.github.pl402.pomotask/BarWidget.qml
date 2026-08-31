@@ -14,6 +14,20 @@ BarWidget {
 
   readonly property alias service: service
 
+  DistractionMonitor {
+    id: distractionMonitor
+    service: root.service
+  }
+
+  readonly property alias distractionMonitor: distractionMonitor
+
+  BreakOverlay {
+    id: breakOverlay
+    service: root.service
+  }
+
+  readonly property alias breakOverlay: breakOverlay
+
   // -------------------------------------------------------------------------
   // Status Formatting & Helpers
   // -------------------------------------------------------------------------
