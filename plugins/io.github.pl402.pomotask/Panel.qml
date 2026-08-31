@@ -27,12 +27,113 @@ Panel {
 
   // Navigation view: "main" (ultra-clean timer + active task) | "settings" (modes + anti-distraction rules)
   property string currentView: "main"
+  property string selectedListId: "@all"
+  property bool showCompletedTasks: false
 
   readonly property var actionOptions: [
     { value: "warn", label: "Solo advertir (OSD)" },
     { value: "warn_and_unfocus", label: "Advertir y desenfocar" },
     { value: "minimize", label: "Minimizar ventana" }
   ]
+
+  readonly property var listOptions: {
+    var opts = [{ value: "@all", label: "Todas las listas" }]
+    var lists = pomotaskService.taskLists || []
+    for (var i = 0; i < lists.length; i++) {
+      var item = lists[i]
+      if (!item) continue
+      var id = (typeof item === "object" && item.id) ? String(item.id) : String(item)
+      var label = (typeof item === "object" && item.title && String(item.title).trim() !== "") ? String(item.title) : id
+      if (id !== "@all") {
+        opts.push({ value: id, label: label })
+      }
+    }
+    return opts
+  }
+
+  function formatDueDate(isoStr) {
+    if (!isoStr) return ""
+    try {
+      var d = new Date(isoStr)
+      if (isNaN(d.getTime())) return ""
+      var now = new Date()
+      var isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
+      if (isToday) return "Hoy"
+      var tomorrow = new Date(now.getTime() + 86400000)
+      var isTomorrow = d.getFullYear() === tomorrow.getFullYear() && d.getMonth() === tomorrow.getMonth() && d.getDate() === tomorrow.getDate()
+      if (isTomorrow) return "Mañana"
+      return (d.getMonth() + 1) + "/" + d.getDate()
+    } catch (e) {
+      return ""
+    }
+  }
+
+  function buildTaskTree(taskList, listFilter, showCompleted) {
+    var list = []
+    var topLevel = []
+    var subtaskMap = {}
+    var arr = taskList || []
+
+    for (var i = 0; i < arr.length; i++) {
+      var t = arr[i]
+      if (!t) continue
+      if (listFilter && listFilter !== "" && listFilter !== "@all" && t.list_id !== listFilter) {
+        continue
+      }
+      if (!showCompleted && t.completed) {
+        continue
+      }
+
+      if (t.parent_id && t.parent_id !== "") {
+        if (!subtaskMap[t.parent_id]) subtaskMap[t.parent_id] = []
+        subtaskMap[t.parent_id].push(t)
+      } else {
+        topLevel.push(t)
+      }
+    }
+
+    for (var j = 0; j < topLevel.length; j++) {
+      var parent = topLevel[j]
+      list.push({ task: parent, isSubtask: false, depth: 0 })
+      if (subtaskMap[parent.id]) {
+        var children = subtaskMap[parent.id]
+        for (var k = 0; k < children.length; k++) {
+          list.push({ task: children[k], isSubtask: true, depth: 1 })
+        }
+      }
+    }
+
+    for (var pId in subtaskMap) {
+      var alreadyIncluded = false
+      for (var m = 0; m < topLevel.length; m++) {
+        if (topLevel[m].id === pId) {
+          alreadyIncluded = true
+          break
+        }
+      }
+      if (!alreadyIncluded) {
+        var orphans = subtaskMap[pId]
+        for (var o = 0; o < orphans.length; o++) {
+          list.push({ task: orphans[o], isSubtask: true, depth: 1 })
+        }
+      }
+    }
+
+    return list
+  }
+
+  readonly property var visibleTaskItems: buildTaskTree(pomotaskService.tasks, root.selectedListId, root.showCompletedTasks)
+
+  function addNewTask() {
+    if (!newTaskField) return
+    var title = String(newTaskField.text || "").trim()
+    if (title === "") return
+    var targetList = (root.selectedListId && root.selectedListId !== "" && root.selectedListId !== "@all")
+      ? root.selectedListId
+      : (root.listOptions.length > 1 ? root.listOptions[1].value : "@default")
+    pomotaskService.createTask(title, targetList, "")
+    newTaskField.text = ""
+  }
 
   readonly property var blockedTitles: (pomotaskService.blocklist && Array.isArray(pomotaskService.blocklist.title_keywords))
     ? pomotaskService.blocklist.title_keywords
@@ -151,9 +252,11 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
-      blocked: (typeof newBlockedTitleField !== "undefined" && newBlockedTitleField && newBlockedTitleField.activeFocus)
+      blocked: (typeof newTaskField !== "undefined" && newTaskField && newTaskField.activeFocus)
+        || (typeof newBlockedTitleField !== "undefined" && newBlockedTitleField && newBlockedTitleField.activeFocus)
         || (typeof newBlockedClassField !== "undefined" && newBlockedClassField && newBlockedClassField.activeFocus)
         || (typeof newAllowedTitleField !== "undefined" && newAllowedTitleField && newAllowedTitleField.activeFocus)
+        || (typeof listDropdown !== "undefined" && listDropdown && listDropdown.popupOpen)
         || (typeof actionDropdown !== "undefined" && actionDropdown && actionDropdown.popupOpen)
 
       onActivateRequested: pomotaskService.timerToggle()
@@ -427,6 +530,235 @@ Panel {
                 foreground: root.contentForeground
                 accent: Color.accent
                 onClicked: pomotaskService.timerReset()
+              }
+            }
+
+            // -----------------------------------------------------------------
+            // Google Tasks Section (Visible solo cuando NO está en curso)
+            // -----------------------------------------------------------------
+            Column {
+              id: tasksSection
+              visible: !pomotaskService.isRunning
+              width: parent.width
+              spacing: Style.space(10)
+
+              PanelSeparator {
+                foreground: root.contentForeground
+              }
+
+              Item {
+                width: parent.width
+                implicitHeight: Math.max(tasksHeaderTitle.implicitHeight, toggleCompletedBtn.implicitHeight)
+
+                PanelSectionHeader {
+                  id: tasksHeaderTitle
+                  text: "TAREAS"
+                  foreground: root.contentForeground
+                  fontFamily: root.contentFontFamily
+                  anchors.left: parent.left
+                  anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Button {
+                  id: toggleCompletedBtn
+                  anchors.right: parent.right
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: root.showCompletedTasks ? "Ocultar hechas" : "Ver hechas"
+                  fontSize: Style.font.caption
+                  bordered: false
+                  foreground: root.dimColor
+                  accent: Color.accent
+                  onClicked: root.showCompletedTasks = !root.showCompletedTasks
+                }
+              }
+
+              // List Selector Dropdown (con nombres reales)
+              Dropdown {
+                id: listDropdown
+                label: "Lista"
+                showLabel: false
+                visible: root.listOptions.length > 2
+                width: parent.width
+                value: root.selectedListId
+                options: root.listOptions
+                onChanged: function(v) { root.selectedListId = v }
+              }
+
+              // Tasks List Column
+              Column {
+                width: parent.width
+                spacing: Style.space(4)
+
+                Repeater {
+                  model: root.visibleTaskItems
+
+                  delegate: BorderSurface {
+                    id: taskRow
+                    required property var modelData
+                    required property int index
+
+                    readonly property var itemData: modelData
+                    readonly property bool isFocused: pomotaskService.activeTaskId === itemData.task.id
+
+                    width: panelColumn.width
+                    implicitHeight: taskContent.implicitHeight + Style.space(10)
+                    radius: Style.cornerRadius
+                    color: isFocused
+                      ? Style.selectedFillFor(root.contentForeground, Color.accent)
+                      : (taskMouse.containsMouse ? Style.hoverFillFor(root.contentForeground, Color.accent) : "transparent")
+                    borderSpec: isFocused
+                      ? Border.controlSpec("focus", root.contentForeground, Color.accent)
+                      : (taskMouse.containsMouse ? Border.controlSpec("hover-cursor", root.contentForeground, Color.accent) : Border.none())
+
+                    Row {
+                      id: taskContent
+                      anchors.left: parent.left
+                      anchors.right: parent.right
+                      anchors.verticalCenter: parent.verticalCenter
+                      anchors.leftMargin: (itemData.isSubtask ? Style.space(24) : Style.space(8))
+                      anchors.rightMargin: Style.space(8)
+                      spacing: Style.space(8)
+
+                      // Complete / Checkbox Button
+                      PanelActionButton {
+                        size: Style.space(22)
+                        iconText: itemData.task.completed ? "󰄲" : "󰄱"
+                        foreground: itemData.task.completed ? Color.accent : root.contentForeground
+                        hoverColor: Color.accent
+                        tooltipText: itemData.task.completed ? "Completada" : "Marcar como completada"
+                        anchors.verticalCenter: parent.verticalCenter
+                        onClicked: pomotaskService.completeTask(itemData.task.id)
+                      }
+
+                      // Task Title and Badges
+                      Column {
+                        width: parent.width - Style.space(22) * 2 - parent.spacing * 2 - (itemData.isSubtask ? Style.space(16) : 0)
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: Style.space(2)
+
+                        Text {
+                          textFormat: Text.PlainText
+                          text: (itemData.isSubtask ? "↳ " : "") + itemData.task.title
+                          color: itemData.task.completed ? root.dimColor : root.contentForeground
+                          font.family: root.contentFontFamily
+                          font.pixelSize: Style.font.body
+                          font.strikeout: itemData.task.completed
+                          elide: Text.ElideRight
+                          width: parent.width
+                        }
+
+                        Row {
+                          spacing: Style.space(6)
+                          visible: (itemData.task.due && itemData.task.due !== "") || (itemData.task.notes && itemData.task.notes !== "") || itemData.task.pomodoros > 0
+
+                          // Due date badge
+                          BorderSurface {
+                            visible: !!itemData.task.due && itemData.task.due !== ""
+                            color: Style.hoverFillFor(root.contentForeground, Color.accent)
+                            radius: Style.cornerRadius
+                            implicitWidth: dueLabel.implicitWidth + Style.space(8)
+                            implicitHeight: dueLabel.implicitHeight + Style.space(2)
+
+                            Text {
+                              id: dueLabel
+                              textFormat: Text.PlainText
+                              anchors.centerIn: parent
+                              text: "󰃭 " + root.formatDueDate(itemData.task.due)
+                              color: root.contentForeground
+                              font.family: root.contentFontFamily
+                              font.pixelSize: Style.font.caption
+                            }
+                          }
+
+                          // Notes badge
+                          Text {
+                            visible: !!itemData.task.notes && itemData.task.notes !== ""
+                            textFormat: Text.PlainText
+                            text: "󰈙"
+                            color: root.dimColor
+                            font.family: root.contentFontFamily
+                            font.pixelSize: Style.font.caption
+                            anchors.verticalCenter: parent.verticalCenter
+                          }
+
+                          // Pomodoros count badge
+                          Text {
+                            visible: itemData.task.pomodoros > 0
+                            textFormat: Text.PlainText
+                            text: " " + itemData.task.pomodoros
+                            color: Color.accent
+                            font.family: root.contentFontFamily
+                            font.pixelSize: Style.font.caption
+                            font.bold: true
+                            anchors.verticalCenter: parent.verticalCenter
+                          }
+                        }
+                      }
+
+                      // Focus Target Button ()
+                      PanelActionButton {
+                        size: Style.space(22)
+                        iconText: ""
+                        foreground: isFocused ? Color.accent : root.dimColor
+                        hoverColor: Color.accent
+                        tooltipText: isFocused ? "Quitar enfoque activo" : "Enfocar esta tarea"
+                        anchors.verticalCenter: parent.verticalCenter
+                        onClicked: {
+                          if (isFocused) {
+                            pomotaskService.clearFocusTask()
+                          } else {
+                            pomotaskService.focusTask(itemData.task.id)
+                          }
+                        }
+                      }
+                    }
+
+                    MouseArea {
+                      id: taskMouse
+                      anchors.fill: parent
+                      hoverEnabled: true
+                      acceptedButtons: Qt.NoButton
+                    }
+                  }
+                }
+
+                Text {
+                  visible: root.visibleTaskItems.length === 0
+                  textFormat: Text.PlainText
+                  text: "No hay tareas para mostrar"
+                  color: root.dimColor
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  horizontalAlignment: Text.AlignHCenter
+                  width: parent.width
+                  topPadding: Style.space(8)
+                  bottomPadding: Style.space(8)
+                }
+              }
+
+              // Quick Task Creation Row
+              Row {
+                width: parent.width
+                spacing: Style.space(8)
+
+                TextField {
+                  id: newTaskField
+                  width: parent.width - addTaskBtn.width - parent.spacing
+                  placeholderText: "Nueva tarea..."
+                  foreground: root.contentForeground
+                  accent: Color.accent
+                  onAccepted: root.addNewTask()
+                }
+
+                Button {
+                  id: addTaskBtn
+                  text: "Añadir"
+                  iconText: ""
+                  bordered: true
+                  foreground: root.contentForeground
+                  accent: Color.accent
+                  onClicked: root.addNewTask()
+                }
               }
             }
           }
