@@ -3,6 +3,7 @@ mod ui;
 mod events;
 mod api;
 mod handler;
+pub mod ipc;
 
 use std::{io, time::Duration};
 use ratatui::{backend::CrosstermBackend, Terminal};

@@ -258,6 +258,7 @@ impl App {
         if app.cleanup_old_stats() {
             app.cleaning_frames = 30; // ~1.5 s de aviso en la barra de estado
         }
+        app.save_runtime_state();
         app
     }
 
@@ -572,6 +573,7 @@ impl App {
             if self.tick_count >= 20 { // 20 ticks * 50ms = 1s
                 self.timer_seconds -= 1; 
                 self.tick_count = 0; 
+                self.save_runtime_state();
                 
                 // Grabar tiempo de enfoque (segundos) si estamos en Focus
                 if self.timer_mode == TimerMode::Focus {
@@ -622,6 +624,7 @@ impl App {
             self.stats.task_timers.insert(task.id.clone(), TaskTimerState { remaining: self.timer_seconds, mode: self.timer_mode });
             self.save_stats();
         }
+        self.save_runtime_state();
     }
 
     pub fn record_task_done(&mut self) {
@@ -715,7 +718,10 @@ impl App {
         }
     }
 
-    pub fn toggle_timer(&mut self) { self.timer_active = !self.timer_active; }
+    pub fn toggle_timer(&mut self) {
+        self.timer_active = !self.timer_active;
+        self.save_runtime_state();
+    }
 
     /// Cambia manualmente entre Enfoque → Descanso corto → Descanso largo (solo con el timer detenido).
     pub fn cycle_timer_mode(&mut self) {
@@ -726,11 +732,13 @@ impl App {
             TimerMode::LongBreak => TimerMode::Focus,
         };
         self.timer_seconds = self.timer_mode.duration(&self.config);
+        self.save_runtime_state();
     }
     pub fn reset_timer(&mut self) { 
         self.timer_active = false; 
         if let Some(task) = self.tasks.get(self.selected_task) { self.stats.task_timers.remove(&task.id); self.save_stats(); }
         self.timer_seconds = self.timer_mode.duration(&self.config); 
+        self.save_runtime_state();
     }
 
     pub fn clear_inputs(&mut self) { 
@@ -761,6 +769,7 @@ impl App {
             self.config.last_task_id = Some(task.id.clone()); 
         }
         self.save_config();
+        self.save_runtime_state();
     }
 
     pub fn sync_active_timer_to_task(&mut self) {
@@ -774,6 +783,7 @@ impl App {
                 self.timer_seconds = self.timer_mode.duration(&self.config); 
             }
         }
+        self.save_runtime_state();
     }
 
     pub fn organize_tasks_hierarchical(tasks: Vec<Task>) -> Vec<Task> {
@@ -804,6 +814,50 @@ impl App {
             children.sort_by(sort_criteria); organized.extend(children);
         }
         organized
+    }
+
+    pub fn to_runtime_state(&self) -> crate::ipc::RuntimeState {
+        let (active_task_id, active_task_title) = if let Some(task) = self.tasks.get(self.selected_task) {
+            (Some(task.id.clone()), Some(task.title.clone()))
+        } else {
+            (None, None)
+        };
+
+        let state_str = if self.timer_active {
+            "running"
+        } else if self.timer_seconds < self.timer_mode.duration(&self.config) {
+            "paused"
+        } else {
+            "stopped"
+        };
+
+        let mode_str = match self.timer_mode {
+            TimerMode::Focus => "work",
+            TimerMode::ShortBreak => "short_break",
+            TimerMode::LongBreak => "long_break",
+        };
+
+        let total_seconds = self.timer_mode.duration(&self.config);
+
+        crate::ipc::RuntimeState {
+            state: state_str.to_string(),
+            mode: mode_str.to_string(),
+            remaining_seconds: self.timer_seconds,
+            total_seconds,
+            session_pomodoros: self.session_pomodoros,
+            active_task_id,
+            active_task_title,
+            strict_break: false,
+            anti_distraction: true,
+        }
+    }
+
+    pub fn save_runtime_state(&self) {
+        let mut state = self.to_runtime_state();
+        let existing = crate::ipc::load_runtime_state();
+        state.strict_break = existing.strict_break;
+        state.anti_distraction = existing.anti_distraction;
+        let _ = crate::ipc::save_runtime_state(&state);
     }
 }
 
@@ -955,6 +1009,25 @@ mod tests {
         let ids: Vec<&str> = out.iter().map(|t| t.id.as_str()).collect();
         // Con fecha antes que sin fecha; y la más próxima primero.
         assert_eq!(ids, vec!["pronto", "tarde", "sin_fecha"]);
+    }
+
+    #[test]
+    fn app_to_runtime_state_reflects_timer_and_selected_task() {
+        let mut app = blank_app();
+        app.tasks = vec![task("t1", None, false, None)];
+        app.selected_task = 0;
+        app.timer_active = true;
+        app.timer_seconds = 1200;
+        app.timer_mode = TimerMode::Focus;
+        app.session_pomodoros = 3;
+
+        let state = app.to_runtime_state();
+        assert_eq!(state.state, "running");
+        assert_eq!(state.mode, "work");
+        assert_eq!(state.remaining_seconds, 1200);
+        assert_eq!(state.session_pomodoros, 3);
+        assert_eq!(state.active_task_id.as_deref(), Some("t1"));
+        assert_eq!(state.active_task_title.as_deref(), Some("t1"));
     }
 }
 
