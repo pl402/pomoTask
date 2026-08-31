@@ -88,6 +88,7 @@ async fn main() -> Result<()> {
                     }];
                     all_lists.append(&mut lists);
                     app.task_lists = all_lists;
+                    app.save_task_lists_cache();
                     if let Some(last_id) = &app.config.last_list_id {
                         if let Some(idx) = app.task_lists.iter().position(|l| &l.id == last_id) {
                             app.selected_list_idx = idx;

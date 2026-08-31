@@ -66,9 +66,9 @@ Panel {
   function addNewTask() {
     var title = String(newTaskField.text || "").trim()
     if (title === "") return
-    var targetList = (root.selectedListId && root.selectedListId !== "@all")
+    var targetList = (root.selectedListId && root.selectedListId !== "" && root.selectedListId !== "@all")
       ? root.selectedListId
-      : (pomotaskService.taskLists && pomotaskService.taskLists.length > 0 ? pomotaskService.taskLists[0] : "@default")
+      : (root.listOptions.length > 1 ? root.listOptions[1].value : "@default")
     pomotaskService.createTask(title, targetList, "")
     newTaskField.text = ""
   }
@@ -119,9 +119,12 @@ Panel {
     var opts = [{ value: "@all", label: "Todas las listas" }]
     var lists = pomotaskService.taskLists || []
     for (var i = 0; i < lists.length; i++) {
-      var id = lists[i]
+      var item = lists[i]
+      if (!item) continue
+      var id = (typeof item === "object" && item.id) ? String(item.id) : String(item)
+      var label = (typeof item === "object" && item.title && String(item.title).trim() !== "") ? String(item.title) : id
       if (id !== "@all") {
-        opts.push({ value: id, label: id })
+        opts.push({ value: id, label: label })
       }
     }
     return opts

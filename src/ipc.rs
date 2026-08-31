@@ -1,5 +1,5 @@
 use crate::api::ApiClient;
-use crate::app::{Stats, Task};
+use crate::app::{Stats, Task, TaskList};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -167,6 +167,33 @@ pub fn get_blocklist_path() -> PathBuf {
 
 pub fn get_tasks_cache_path() -> PathBuf {
     get_config_dir().join("tasks_cache.json")
+}
+
+pub fn get_lists_cache_path() -> PathBuf {
+    get_config_dir().join("lists_cache.json")
+}
+
+pub fn load_task_lists_cache() -> Vec<TaskList> {
+    load_task_lists_cache_from(&get_lists_cache_path())
+}
+
+pub fn load_task_lists_cache_from(path: &Path) -> Vec<TaskList> {
+    if let Ok(data) = fs::read_to_string(path) {
+        if let Ok(lists) = serde_json::from_str::<Vec<TaskList>>(&data) {
+            return lists;
+        }
+    }
+    Vec::new()
+}
+
+pub fn save_task_lists_cache(lists: &[TaskList]) -> std::io::Result<()> {
+    save_task_lists_cache_to(lists, &get_lists_cache_path())
+}
+
+pub fn save_task_lists_cache_to(lists: &[TaskList], path: &Path) -> std::io::Result<()> {
+    let data = serde_json::to_string_pretty(lists)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    atomic_write(path, &data)
 }
 
 pub fn atomic_write(path: &Path, content: &str) -> std::io::Result<()> {
@@ -480,10 +507,19 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
             save_runtime_state(&state).map_err(|e| e.to_string())?;
             serde_json::to_string_pretty(&state).map_err(|e| e.to_string())
         }
+        "lists" => {
+            let lists = load_task_lists_cache();
+            serde_json::to_string_pretty(&lists).map_err(|e| e.to_string())
+        }
         "tasks" => {
+            if clean_args.len() > 1 && clean_args[1] == "lists" {
+                let lists = load_task_lists_cache();
+                return serde_json::to_string_pretty(&lists).map_err(|e| e.to_string());
+            }
+
             if clean_args.len() > 1 && clean_args[1] != "list" {
                 return Err(format!(
-                    "Unknown tasks command: '{}'. Expected 'list'",
+                    "Unknown tasks command: '{}'. Expected 'list' or 'lists'",
                     clean_args[1]
                 ));
             }
@@ -767,6 +803,14 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
                 .await
                 .map_err(|_| "Sync timed out fetching lists".to_string())?
                 .map_err(|e| e.to_string())?;
+
+            let mut all_lists = vec![TaskList {
+                id: "@all".to_string(),
+                title: "Todas las listas".to_string(),
+            }];
+            all_lists.extend(lists.clone());
+            let _ = save_task_lists_cache(&all_lists);
+
             let mut cache: HashMap<String, Vec<Task>> = HashMap::new();
             let mut all_tasks = Vec::new();
 
@@ -927,5 +971,37 @@ mod tests {
         let loaded = load_runtime_state_from(&non_existent_path);
         assert_eq!(loaded.state, "stopped");
         assert_eq!(loaded.remaining_seconds, 25 * 60);
+    }
+
+    #[test]
+    fn test_save_and_load_task_lists_cache() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("pomotask_test_lists_{}", rand::random::<u64>()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let lists_path = temp_dir.join("lists_cache.json");
+
+        let sample_lists = vec![
+            TaskList {
+                id: "@all".to_string(),
+                title: "Todas las listas".to_string(),
+            },
+            TaskList {
+                id: "list_1".to_string(),
+                title: "Trabajo".to_string(),
+            },
+            TaskList {
+                id: "list_2".to_string(),
+                title: "Personal".to_string(),
+            },
+        ];
+
+        save_task_lists_cache_to(&sample_lists, &lists_path).unwrap();
+        let loaded = load_task_lists_cache_from(&lists_path);
+
+        assert_eq!(loaded.len(), 3);
+        assert_eq!(loaded[1].title, "Trabajo");
+        assert_eq!(loaded[2].title, "Personal");
+
+        let _ = std::fs::remove_dir_all(temp_dir);
     }
 }

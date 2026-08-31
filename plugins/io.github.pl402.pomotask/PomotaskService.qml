@@ -18,6 +18,7 @@ Item {
 
   readonly property string runtimeStatePath: configDir + "/runtime_state.json"
   readonly property string tasksCachePath: configDir + "/tasks_cache.json"
+  readonly property string listsCachePath: configDir + "/lists_cache.json"
   readonly property string blocklistPath: configDir + "/blocklist.json"
   property string pomotaskBinary: "pomotask-cli"
 
@@ -187,11 +188,26 @@ Item {
             }
           }
           root.tasks = all
-          root.taskLists = lists
+          if (!root.taskLists || root.taskLists.length === 0) {
+            root.taskLists = lists
+          }
         }
       }
     } catch (e) {
       console.warn("PomotaskService", "Error parsing tasks cache:", e)
+    }
+  }
+
+  function parseListsCache(raw) {
+    try {
+      var content = String(raw || "").trim()
+      if (content === "") return
+      var arr = JSON.parse(content)
+      if (Array.isArray(arr) && arr.length > 0) {
+        root.taskLists = arr
+      }
+    } catch (e) {
+      console.warn("PomotaskService", "Error parsing lists cache:", e)
     }
   }
 
@@ -318,6 +334,15 @@ Item {
     printErrors: false
     onFileChanged: reload()
     onLoaded: root.parseTasksCache(text())
+  }
+
+  FileView {
+    id: listsCacheWatcher
+    path: root.listsCachePath
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.parseListsCache(text())
   }
 
   FileView {

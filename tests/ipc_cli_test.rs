@@ -512,3 +512,38 @@ async fn test_ipc_headless_stats_recording() {
     let stats_2: pomotask_cli::app::Stats = serde_json::from_str(&stats_data_2).unwrap();
     assert_eq!(stats_2.lifetime_tasks_done, 1);
 }
+
+#[tokio::test]
+async fn test_ipc_lists_command() {
+    use pomotask_cli::app::TaskList;
+    use pomotask_cli::ipc::save_task_lists_cache;
+
+    let _lock = TEST_LOCK.lock().await;
+    let _ctx = TestContext::new("lists_command");
+
+    let sample_lists = vec![
+        TaskList {
+            id: "@all".to_string(),
+            title: "Todas las listas".to_string(),
+        },
+        TaskList {
+            id: "list_work".to_string(),
+            title: "Trabajo".to_string(),
+        },
+    ];
+    save_task_lists_cache(&sample_lists).unwrap();
+
+    let output = execute_ipc_command(&["lists".to_string()])
+        .await
+        .expect("ipc lists");
+    let parsed: Vec<TaskList> = serde_json::from_str(&output).expect("parse lists output");
+    assert_eq!(parsed.len(), 2);
+    assert_eq!(parsed[1].title, "Trabajo");
+
+    let output2 = execute_ipc_command(&["tasks".to_string(), "lists".to_string()])
+        .await
+        .expect("ipc tasks lists");
+    let parsed2: Vec<TaskList> = serde_json::from_str(&output2).expect("parse tasks lists output");
+    assert_eq!(parsed2.len(), 2);
+    assert_eq!(parsed2[1].title, "Trabajo");
+}

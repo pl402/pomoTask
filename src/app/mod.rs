@@ -113,7 +113,7 @@ pub struct Task {
     pub pomodoros: u64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TaskList {
     pub id: String,
     pub title: String,
@@ -295,7 +295,7 @@ impl App {
             timer_mode: TimerMode::Focus,
             tasks: Vec::new(),
             all_tasks: cached_tasks,
-            task_lists: Vec::new(),
+            task_lists: Self::load_task_lists_cache(),
             selected_list_idx: 0,
             selected_task: 0,
             selected_settings_idx: 0,
@@ -529,6 +529,24 @@ impl App {
         }
 
         HashMap::new()
+    }
+
+    pub fn load_task_lists_cache() -> Vec<TaskList> {
+        let mut path = Self::get_config_dir();
+        path.push("lists_cache.json");
+        let data = match fs::read_to_string(path) {
+            Ok(d) => d,
+            Err(_) => return Vec::new(),
+        };
+        serde_json::from_str::<Vec<TaskList>>(&data).unwrap_or_default()
+    }
+
+    pub fn save_task_lists_cache(&self) {
+        let mut path = Self::get_config_dir();
+        path.push("lists_cache.json");
+        if let Ok(data) = serde_json::to_string_pretty(&self.task_lists) {
+            let _ = crate::ipc::atomic_write(&path, &data);
+        }
     }
 
     pub fn save_tasks_cache(&self) {
