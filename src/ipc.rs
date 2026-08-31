@@ -274,11 +274,10 @@ pub fn load_config_durations() -> (u32, u32, u32) {
 }
 
 pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
-    let clean_args: Vec<&str> = args
-        .iter()
-        .map(|s| s.as_str())
-        .filter(|&s| s != "ipc" && s != "--ipc")
-        .collect();
+    let mut clean_args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+    if !clean_args.is_empty() && (clean_args[0] == "ipc" || clean_args[0] == "--ipc") {
+        clean_args.remove(0);
+    }
 
     if clean_args.is_empty() {
         return Err("No IPC subcommand provided. Use 'pomotask-cli ipc --help'".to_string());

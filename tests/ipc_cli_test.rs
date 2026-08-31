@@ -352,3 +352,44 @@ async fn test_ipc_prefix_and_unknown_commands() {
     let err = execute_ipc_command(&["unknown_cmd".to_string()]).await;
     assert!(err.is_err());
 }
+
+#[tokio::test]
+async fn test_ipc_args_with_literal_ipc_value() {
+    let _lock = TEST_LOCK.lock().await;
+    let ctx = TestContext::new("literal_ipc");
+    let cache_path = ctx.temp_dir.join("tasks_cache.json");
+    let map: HashMap<String, Vec<Task>> = HashMap::new();
+    fs::write(&cache_path, serde_json::to_string(&map).unwrap()).unwrap();
+
+    // Create task with title "ipc"
+    execute_ipc_command(&[
+        "ipc".to_string(),
+        "task".to_string(),
+        "create".to_string(),
+        "--title".to_string(),
+        "ipc".to_string(),
+        "--list-id".to_string(),
+        "default".to_string(),
+    ])
+    .await
+    .expect("create task with ipc title");
+
+    let cache_data = fs::read_to_string(&cache_path).unwrap();
+    let loaded_map: HashMap<String, Vec<Task>> = serde_json::from_str(&cache_data).unwrap();
+    let tasks = loaded_map.get("default").expect("default list");
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0].title, "ipc");
+
+    // Add blocklist title keyword "ipc"
+    execute_ipc_command(&[
+        "ipc".to_string(),
+        "blocklist".to_string(),
+        "add-title".to_string(),
+        "ipc".to_string(),
+    ])
+    .await
+    .expect("add-title ipc");
+
+    let config = load_blocklist();
+    assert!(config.title_keywords.contains(&"ipc".to_string()));
+}
