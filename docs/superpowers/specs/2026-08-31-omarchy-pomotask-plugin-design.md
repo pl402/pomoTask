@@ -2,7 +2,7 @@
 
 **Fecha:** 31 de Agosto de 2026  
 **Estado:** Aprobado  
-**Identificador del Plugin:** `io.github.pomotask.bar`  
+**Identificador del Plugin:** `io.github.pl402.pomotask`  
 
 ---
 
@@ -24,7 +24,7 @@ El plugin no es un simple clon de la TUI, sino una experiencia de escritorio int
  ┌─────────────────────────────────────────────────────────────┐
  │                      Omarchy Quattro                        │
  │  ┌───────────────────────────────────────────────────────┐  │
- │  │        Plugin: io.github.pomotask.bar (QML)           │  │
+ │  │        Plugin: io.github.pl402.pomotask (QML)           │  │
  │  │  • BarWidget.qml (Barra de estado / Reloj)            │  │
  │  │  • Panel.qml (Panel de control, Google Tasks, Foco)   │  │
  │  │  • DistractionMonitor.qml (Hyprland socket / IPC)     │  │
@@ -93,15 +93,15 @@ El binario existente `pomotask-cli` se extiende con comandos CLI orientados a IP
 
 ---
 
-## 4. Componente 2: Plugin Nativo de Omarchy (`io.github.pomotask.bar`)
+## 4. Componente 2: Plugin Nativo de Omarchy (`io.github.pl402.pomotask`)
 
-El plugin sigue el estándar de plugins de Omarchy Quattro y se instala en `~/.config/omarchy/plugins/io.github.pomotask.bar/`.
+El plugin sigue el estándar de plugins de Omarchy Quattro y se instala en `~/.config/omarchy/plugins/io.github.pl402.pomotask/`.
 
 ### 4.1. Manifiesto (`manifest.json`)
 ```json
 {
   "schemaVersion": 1,
-  "id": "io.github.pomotask.bar",
+  "id": "io.github.pl402.pomotask",
   "name": "PomoTask",
   "version": "1.0.0",
   "author": "PomoTask Team",
@@ -191,7 +191,7 @@ El plugin sigue el estándar de plugins de Omarchy Quattro y se instala en `~/.c
   * Tests unitarios para serialización/deserialización de comandos IPC (`cargo test`).
   * Validación de ejecución de subcomandos `ipc status`, `ipc timer toggle`, `ipc tasks list`.
 * **Pruebas de QML / Omarchy Plugin:**
-  * Validación del manifiesto: `omarchy plugin validate ~/.config/omarchy/plugins/io.github.pomotask.bar`.
+  * Validación del manifiesto: `omarchy plugin validate ~/.config/omarchy/plugins/io.github.pl402.pomotask`.
   * Verificación con `qmllint` contra los módulos de `/usr/share/omarchy/shell`.
   * Prueba de apertura, renderizado de colores según tema de Omarchy, clics de tareas y actualización en vivo del reloj.
 * **Pruebas de Anti-distracciones:**
