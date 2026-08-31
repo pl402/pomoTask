@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.pl402.pomotask",
+  "name": "PomoTask",
+  "version": "1.0.0",
+  "author": "Elias",
+  "license": "MIT",
+  "description": "Pomodoro timer, Google Tasks manager, and distraction blocker for Omarchy Quattro.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "PomoTask",
+    "category": "Productivity",
+    "allowMultiple": false,
+    "defaultSection": "center"
+  }
+}
