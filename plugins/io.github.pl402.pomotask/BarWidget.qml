@@ -36,6 +36,20 @@ BarWidget {
 
   readonly property alias breakOverlay: breakOverlay
 
+  CelebrationOverlay {
+    id: celebrationOverlay
+    service: root.service
+  }
+
+  readonly property alias celebrationOverlay: celebrationOverlay
+
+  Connections {
+    target: root.service
+    function onCelebrationRequested(taskTitle) {
+      celebrationOverlay.celebrate(taskTitle)
+    }
+  }
+
   // -------------------------------------------------------------------------
   // Status Formatting & Helpers
   // -------------------------------------------------------------------------
@@ -102,6 +116,7 @@ BarWidget {
     if ("anchorItem" in target) target.anchorItem = button
     if ("hostWidget" in target) target.hostWidget = root
     if ("service" in target) target.service = root.service
+    if ("celebrationOverlay" in target) target.celebrationOverlay = celebrationOverlay
   }
 
   onBarChanged: injectPanel()

@@ -217,6 +217,11 @@ async fn test_ipc_task_complete() {
     );
     fs::write(&cache_path, serde_json::to_string(&map).unwrap()).unwrap();
 
+    let mut initial_state = load_runtime_state();
+    initial_state.active_task_id = Some("t1".to_string());
+    initial_state.active_task_title = Some("Task 1".to_string());
+    save_runtime_state(&initial_state).unwrap();
+
     execute_ipc_command(&["task".to_string(), "complete".to_string(), "t1".to_string()])
         .await
         .expect("complete task");
@@ -230,6 +235,10 @@ async fn test_ipc_task_complete() {
         .find(|t| t.id == "t1")
         .unwrap();
     assert!(task.completed);
+
+    let state = load_runtime_state();
+    assert_eq!(state.active_task_id, None);
+    assert_eq!(state.active_task_title, None);
 }
 
 #[tokio::test]

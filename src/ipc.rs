@@ -634,6 +634,14 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
                     save_tasks_cache(&cache).map_err(|e| e.to_string())?;
                     record_headless_task_done();
 
+                    // Si la tarea completada era la activa, quitarla de runtime_state
+                    let mut state = load_runtime_state();
+                    if state.active_task_id.as_deref() == Some(task_id) {
+                        state.active_task_id = None;
+                        state.active_task_title = None;
+                        let _ = save_runtime_state(&state);
+                    }
+
                     // Intentar sincronizar con Google Tasks API en segundo plano si el token existe
                     if get_config_dir().join("pomotask_token.json").exists() {
                         let lid = found_list_id.unwrap_or_else(|| "@default".to_string());

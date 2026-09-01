@@ -36,6 +36,15 @@ Item {
   property bool antiDistraction: true
 
   // -------------------------------------------------------------------------
+  // Signals & Events
+  // -------------------------------------------------------------------------
+  signal celebrationRequested(string taskTitle)
+
+  function triggerCelebration(title) {
+    celebrationRequested(title || "")
+  }
+
+  // -------------------------------------------------------------------------
   // Derived State & Helpers
   // -------------------------------------------------------------------------
   readonly property bool isRunning: state === "running"
@@ -248,27 +257,59 @@ Item {
     tasksProcess.running = true
   }
 
+  property var actionQueue: []
+
   function runAction(args, label) {
-    if (actionProcess.running) return
+    if (!args || args.length === 0) return
+    actionQueue.push({ args: args, label: label || "" })
+    processNextAction()
+  }
+
+  function processNextAction() {
+    if (actionProcess.running || actionQueue.length === 0) return
+    var item = actionQueue.shift()
     _actionOutput = ""
     _actionError = ""
-    root.actionStatus = label || ""
-    var cmd = [root.pomotaskBinary, "ipc"].concat(args)
+    root.actionStatus = item.label
+    var cmd = [root.pomotaskBinary, "ipc"].concat(item.args)
     actionProcess.command = cmd
     actionProcess.running = true
   }
 
   // Timer controls
-  function timerToggle() { runAction(["timer", "toggle"], "Toggling timer…") }
-  function timerStart() { runAction(["timer", "start"], "Starting timer…") }
-  function timerPause() { runAction(["timer", "pause"], "Pausing timer…") }
-  function timerSkip() { runAction(["timer", "skip"], "Skipping phase…") }
-  function timerReset() { runAction(["timer", "reset"], "Resetting timer…") }
+  function timerToggle() {
+    if (root.isRunning) {
+      root.state = "paused"
+    } else {
+      root.state = "running"
+    }
+    runAction(["timer", "toggle"], "Toggling timer…")
+  }
+  function timerStart() {
+    root.state = "running"
+    runAction(["timer", "start"], "Starting timer…")
+  }
+  function timerPause() {
+    root.state = "paused"
+    runAction(["timer", "pause"], "Pausing timer…")
+  }
+  function timerSkip() {
+    runAction(["timer", "skip"], "Skipping phase…")
+  }
+  function timerReset() {
+    root.state = "stopped"
+    root.remainingSeconds = root.totalSeconds
+    runAction(["timer", "reset"], "Resetting timer…")
+  }
   function setMode(mode) { runAction(["timer", "mode", String(mode)], "Setting mode…") }
 
   // Task operations
   function completeTask(taskId) {
     if (!taskId || taskId === "") return
+    if (root.activeTaskId === taskId) {
+      root.activeTaskId = ""
+      root.activeTaskTitle = ""
+    }
     runAction(["task", "complete", String(taskId)], "Completing task…")
   }
   function taskComplete(taskId) { completeTask(taskId) }
@@ -290,11 +331,20 @@ Item {
 
   function focusTask(taskId) {
     if (!taskId || taskId === "") return
+    root.activeTaskId = taskId
+    for (var i = 0; i < root.tasks.length; i++) {
+      if (root.tasks[i] && root.tasks[i].id === taskId) {
+        root.activeTaskTitle = root.tasks[i].title
+        break
+      }
+    }
     runAction(["task", "focus", String(taskId)], "Setting active task…")
   }
   function taskFocus(taskId) { focusTask(taskId) }
 
   function clearFocusTask() {
+    root.activeTaskId = ""
+    root.activeTaskTitle = ""
     runAction(["task", "focus", "clear"], "Clearing active task…")
   }
 
@@ -493,6 +543,7 @@ Item {
         root.lastError = err !== "" ? err : "Command failed"
       }
       delayedStatusRefresh.restart()
+      Qt.callLater(root.processNextAction)
     }
   }
 

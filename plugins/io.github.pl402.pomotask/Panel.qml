@@ -14,6 +14,7 @@ Panel {
   property var anchorItem: null
   property var hostWidget: null
   property var service: null
+  property var celebrationOverlay: null
   readonly property var barIdentity: hostWidget || root
 
   readonly property var pomotaskService: service || (hostWidget && hostWidget.service ? hostWidget.service : fallbackService)
@@ -25,6 +26,44 @@ Panel {
   readonly property color contentForeground: bar ? bar.foreground : Color.foreground
   readonly property color dimColor: Qt.darker(contentForeground, 1.45)
   readonly property string contentFontFamily: bar ? bar.fontFamily : Style.font.family
+
+  readonly property bool hasActiveTask: !!pomotaskService.activeTaskId && pomotaskService.activeTaskId !== ""
+
+  readonly property var firstPendingTask: {
+    var items = root.visibleTaskItems || []
+    for (var i = 0; i < items.length; i++) {
+      if (items[i] && items[i].task && !items[i].task.completed) {
+        return items[i].task
+      }
+    }
+    return null
+  }
+
+  function completeCurrentTask() {
+    var taskTitle = ""
+    var taskId = ""
+
+    if (root.hasActiveTask) {
+      taskId = pomotaskService.activeTaskId
+      taskTitle = pomotaskService.activeTaskTitle
+    } else if (root.firstPendingTask) {
+      taskId = root.firstPendingTask.id
+      taskTitle = root.firstPendingTask.title
+    }
+
+    // Reiniciar el cronómetro y tiempo restante
+    pomotaskService.timerReset()
+
+    if (taskId && taskId !== "") {
+      pomotaskService.completeTask(taskId)
+    }
+
+    var titleToCelebrate = taskTitle || "Tarea"
+    pomotaskService.triggerCelebration(titleToCelebrate)
+    if (root.celebrationOverlay && typeof root.celebrationOverlay.celebrate === "function") {
+      root.celebrationOverlay.celebrate(titleToCelebrate)
+    }
+  }
 
   // Navigation view: "main" (ultra-clean timer + active task) | "settings" (modes + anti-distraction rules)
   property string currentView: "main"
@@ -493,44 +532,58 @@ Panel {
             }
 
             // -----------------------------------------------------------------
-            // Control Action Buttons (Iniciar/Pausar, Saltar, Reiniciar)
+            // Control Action Buttons (Iniciar/Pausar, Saltar, Reiniciar, Terminar Tarea)
             // -----------------------------------------------------------------
             Row {
               width: parent.width
               spacing: Style.space(8)
 
-              // Main Play/Pause Button
+              // Main Play/Pause Button (Solo Ícono)
               Button {
-                width: (parent.width - Style.space(16)) * 0.46
+                width: (parent.width - Style.space(24)) * 0.25
                 iconText: pomotaskService.isRunning ? "" : ""
-                text: pomotaskService.isRunning ? "Pausar" : "Iniciar"
                 selected: pomotaskService.isRunning
                 bordered: true
                 foreground: root.contentForeground
                 accent: Color.accent
+                tooltipText: pomotaskService.isRunning ? "Pausar temporizador (Espacio)" : "Iniciar temporizador (Espacio)"
                 onClicked: pomotaskService.timerToggle()
               }
 
-              // Skip Button
+              // Skip Button (Solo Ícono)
               Button {
-                width: (parent.width - Style.space(16)) * 0.27
+                width: (parent.width - Style.space(24)) * 0.25
                 iconText: ""
-                text: "Saltar"
                 bordered: true
                 foreground: root.contentForeground
                 accent: Color.accent
+                tooltipText: "Saltar fase (S)"
                 onClicked: pomotaskService.timerSkip()
               }
 
-              // Reset Button
+              // Reset Button (Solo Ícono)
               Button {
-                width: (parent.width - Style.space(16)) * 0.27
+                width: (parent.width - Style.space(24)) * 0.25
                 iconText: ""
-                text: "Reiniciar"
                 bordered: true
                 foreground: root.contentForeground
                 accent: Color.accent
+                tooltipText: "Reiniciar temporizador"
                 onClicked: pomotaskService.timerReset()
+              }
+
+              // Complete Task Button (Prominente / Color Verde de Éxito)
+              Button {
+                width: (parent.width - Style.space(24)) * 0.25
+                iconText: "󰄲"
+                bordered: true
+                selected: true
+                foreground: "#10b981"
+                accent: "#10b981"
+                tooltipText: root.hasActiveTask
+                  ? ("Completar tarea activa: " + pomotaskService.activeTaskTitle)
+                  : (root.firstPendingTask ? ("Completar tarea: " + root.firstPendingTask.title) : "Marcar tarea como terminada")
+                onClicked: root.completeCurrentTask()
               }
             }
 
@@ -628,7 +681,20 @@ Panel {
                         hoverColor: Color.accent
                         tooltipText: itemData.task.completed ? "Completada" : "Marcar como completada"
                         anchors.verticalCenter: parent.verticalCenter
-                        onClicked: pomotaskService.completeTask(itemData.task.id)
+                        onClicked: {
+                          var willBeCompleted = !itemData.task.completed
+                          var taskTitle = itemData.task.title
+                          pomotaskService.completeTask(itemData.task.id)
+                          if (willBeCompleted) {
+                            if (pomotaskService.activeTaskId === itemData.task.id) {
+                              pomotaskService.clearFocusTask()
+                            }
+                            pomotaskService.triggerCelebration(taskTitle)
+                            if (root.celebrationOverlay && typeof root.celebrationOverlay.celebrate === "function") {
+                              root.celebrationOverlay.celebrate(taskTitle)
+                            }
+                          }
+                        }
                       }
 
                       // Task Title and Badges
