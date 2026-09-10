@@ -1,6 +1,7 @@
 use crate::api::ApiClient;
 use crate::app::{Stats, Task, TaskList};
 use crate::events::Event;
+use crate::outbox::{self, PendingOp};
 use chrono::Utc;
 use tokio::sync::mpsc;
 use serde::{Deserialize, Serialize};
@@ -721,26 +722,53 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
                     }
 
                     // Sincronizar con Google Tasks si hay sesión. La caché local ya quedó actualizada;
-                    // si Google falla devolvemos error (exit 1) para que el plugin lo muestre.
-                    if get_config_dir().join("pomotask_token.json").exists() {
-                        let lid = found_list_id.unwrap_or_else(|| "@default".to_string());
-                        let (client, mut rx) = ipc_api_client().await;
-                        let res = with_auth_guard(
-                            &mut rx,
-                            10,
-                            "Google Tasks completion",
-                            client.toggle_task_completion(&lid, task_id, true),
-                        )
-                        .await;
-                        match res {
-                            Ok(()) => mark_google_connected(false),
-                            Err(e) => {
-                                mark_google_error(&e);
-                                return Err(format!(
-                                    "Task {} completed locally but not synced with Google Tasks. {}",
-                                    task_id, e
-                                ));
-                            }
+                    // si Google falla, el cambio queda en el buzón de salida y devolvemos error
+                    // (exit 1) para que el plugin lo muestre.
+                    let lid = found_list_id.unwrap_or_else(|| "@default".to_string());
+                    let pending = PendingOp::Complete {
+                        task_id: task_id.to_string(),
+                        list_id: lid.clone(),
+                        completed_at: Utc::now(),
+                    };
+                    if task_id.starts_with(outbox::LOCAL_ID_PREFIX) {
+                        // Tarea aún no subida: se completará cuando su `Create` llegue a Google.
+                        outbox::enqueue(pending).map_err(|e| e.to_string())?;
+                        return Ok(format!(
+                            "Task {} marked as completed locally (queued: {} pending change(s))",
+                            task_id,
+                            outbox::pending_count()
+                        ));
+                    }
+                    if !get_config_dir().join("pomotask_token.json").exists() {
+                        // Sin sesión de Google el modo local es válido: encolamos y no es un error.
+                        outbox::enqueue(pending).map_err(|e| e.to_string())?;
+                        mark_google_error("no_token: not signed in to Google. Open the PomoTask TUI (pomotask-cli) to sign in");
+                        return Ok(format!(
+                            "Task {} marked as completed locally (queued: {} pending change(s); not signed in to Google)",
+                            task_id,
+                            outbox::pending_count()
+                        ));
+                    }
+
+                    let (client, mut rx) = ipc_api_client().await;
+                    let res = with_auth_guard(
+                        &mut rx,
+                        10,
+                        "Google Tasks completion",
+                        client.toggle_task_completion(&lid, task_id, true),
+                    )
+                    .await;
+                    match res {
+                        Ok(()) => mark_google_connected(false),
+                        Err(e) => {
+                            outbox::enqueue(pending).map_err(|e| e.to_string())?;
+                            mark_google_error(&e);
+                            return Err(format!(
+                                "Task {} completed locally and queued for upload ({} pending). {}",
+                                task_id,
+                                outbox::pending_count(),
+                                e
+                            ));
                         }
                     }
 
@@ -813,30 +841,61 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
                     }
                     save_tasks_cache(&cache).map_err(|e| e.to_string())?;
 
-                    // Crear la tarea en Google Tasks si hay sesión. Si falla, la tarea queda solo en
-                    // la caché local y devolvemos error (exit 1) para que el plugin lo muestre.
-                    if get_config_dir().join("pomotask_token.json").exists() {
-                        let (client, mut rx) = ipc_api_client().await;
-                        let res = with_auth_guard(
-                            &mut rx,
-                            10,
-                            "Google Tasks create",
-                            client.create_task(&target_list_id, &title_val, None, None, parent),
-                        )
-                        .await;
-                        match res {
-                            Ok(()) => mark_google_connected(false),
-                            Err(e) => {
-                                mark_google_error(&e);
-                                return Err(format!(
-                                    "Task '{}' created locally but not synced with Google Tasks. {}",
-                                    title_val, e
-                                ));
-                            }
-                        }
+                    // Crear la tarea en Google Tasks si hay sesión. Si falla, la tarea queda en la
+                    // caché local y en el buzón de salida, y devolvemos error (exit 1) para que el
+                    // plugin lo muestre. Si el padre es una tarea local aún no subida, también va al buzón.
+                    let pending = PendingOp::Create {
+                        temp_id: temp_id.clone(),
+                        list_id: target_list_id.clone(),
+                        title: title_val.clone(),
+                        parent_id: parent.clone(),
+                        created_at: new_task.updated,
+                    };
+                    let parent_is_local = parent
+                        .as_deref()
+                        .map(|p| p.starts_with(outbox::LOCAL_ID_PREFIX))
+                        .unwrap_or(false);
+
+                    if parent_is_local {
+                        outbox::enqueue(pending).map_err(|e| e.to_string())?;
+                        return serde_json::to_string_pretty(&new_task).map_err(|e| e.to_string());
+                    }
+                    if !get_config_dir().join("pomotask_token.json").exists() {
+                        // Sin sesión de Google el modo local es válido: encolamos y devolvemos la tarea.
+                        outbox::enqueue(pending).map_err(|e| e.to_string())?;
+                        mark_google_error("no_token: not signed in to Google. Open the PomoTask TUI (pomotask-cli) to sign in");
+                        return serde_json::to_string_pretty(&new_task).map_err(|e| e.to_string());
                     }
 
-                    serde_json::to_string_pretty(&new_task).map_err(|e| e.to_string())
+                    let (client, mut rx) = ipc_api_client().await;
+                    let res = with_auth_guard(
+                        &mut rx,
+                        10,
+                        "Google Tasks create",
+                        client.create_task_returning_id(&target_list_id, &title_val, None, None, parent),
+                    )
+                    .await;
+                    match res {
+                        Ok(new_id) => {
+                            mark_google_connected(false);
+                            let mut created = new_task;
+                            if !new_id.is_empty() {
+                                outbox::replace_temp_id(&temp_id, &new_id);
+                                created.id = new_id;
+                            }
+                            serde_json::to_string_pretty(&created).map_err(|e| e.to_string())
+                        }
+                        Err(e) => {
+                            outbox::enqueue(pending).map_err(|e| e.to_string())?;
+                            mark_google_error(&e);
+                            Err(format!(
+                                "Task '{}' saved locally and queued for upload ({} pending). {}",
+                                title_val,
+                                outbox::pending_count(),
+                                e
+                            ))
+                        }
+                    }
                 }
                 "focus" => {
                     if clean_args.len() < 3 {
@@ -1031,6 +1090,22 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
                 return Ok("Sync skipped: No active Google session token found".to_string());
             }
             let (client, mut rx) = ipc_api_client().await;
+
+            // 1) Subir primero lo que quedó pendiente sin conexión. Si la sesión expiró abortamos;
+            //    cualquier otro fallo se anota y seguimos, re-aplicando lo pendiente sobre la caché.
+            let mut push_error: Option<String> = None;
+            if outbox::pending_count() > 0 {
+                match with_auth_guard(&mut rx, 30, "Uploading pending changes", outbox::push_pending(&client)).await {
+                    Ok(_) => {}
+                    Err(e) if e.starts_with("auth_required") => {
+                        mark_google_error(&e);
+                        return Err(e);
+                    }
+                    Err(e) => push_error = Some(e),
+                }
+            }
+
+            // 2) Descargar listas y tareas.
             let lists = match with_auth_guard(&mut rx, 10, "Sync fetching lists", client.fetch_task_lists()).await {
                 Ok(l) => l,
                 Err(e) => {
@@ -1078,6 +1153,16 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
                 cache.insert("@all".to_string(), all_tasks);
             }
 
+            // 3) Lo que siga pendiente (no se pudo subir) se re-aplica para no perderlo al pisar la caché.
+            let still_pending = outbox::load_outbox();
+            if !still_pending.is_empty() {
+                outbox::apply_to_cache(&still_pending, &mut cache);
+                if let Some(all) = cache.get_mut("@all") {
+                    // `@all` es la unión: garantizamos que las locales también estén ahí.
+                    outbox::apply_to_list(&still_pending, "@all", all);
+                }
+            }
+
             save_tasks_cache(&cache).map_err(|e| e.to_string())?;
 
             if let Some(first_error) = failed_lists.first() {
@@ -1089,7 +1174,19 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
                 ));
             }
             mark_google_connected(true);
-            Ok("Sync completed successfully".to_string())
+            match push_error {
+                Some(e) => Ok(format!(
+                    "Sync completed, but {} pending change(s) could not be uploaded: {}",
+                    still_pending.len(),
+                    e
+                )),
+                None => Ok("Sync completed successfully".to_string()),
+            }
+        }
+        "outbox" => {
+            // Cambios hechos sin conexión que aún no se han subido a Google.
+            let ops = outbox::load_outbox();
+            serde_json::to_string_pretty(&ops).map_err(|e| e.to_string())
         }
         other => Err(format!("Unknown IPC command: '{}'", other)),
     }

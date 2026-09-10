@@ -654,3 +654,58 @@ async fn test_ipc_sync_without_token_is_skipped_and_marks_disconnected() {
     let persisted = load_runtime_state();
     assert_eq!(persisted.google_connected, Some(false));
 }
+
+#[tokio::test]
+async fn test_ipc_offline_changes_go_to_outbox_and_survive_in_cache() {
+    use pomotask_cli::outbox::{load_outbox, PendingOp};
+
+    let _lock = TEST_LOCK.lock().await;
+    let _ctx = TestContext::new("outbox_offline");
+
+    // Sin token: crear una tarea la deja en caché y en el buzón; el modo local no es un error.
+    let res = execute_ipc_command(&[
+        "task".to_string(),
+        "create".to_string(),
+        "--title".to_string(),
+        "Tarea sin conexión".to_string(),
+        "--list-id".to_string(),
+        "lista_x".to_string(),
+    ])
+    .await;
+    let created: Task = serde_json::from_str(&res.expect("sin sesión, crear es válido en modo local")).unwrap();
+    assert_eq!(created.title, "Tarea sin conexión");
+
+    let ops = load_outbox();
+    assert_eq!(ops.len(), 1);
+    let temp_id = match &ops[0] {
+        PendingOp::Create { temp_id, list_id, title, .. } => {
+            assert_eq!(list_id, "lista_x");
+            assert_eq!(title, "Tarea sin conexión");
+            temp_id.clone()
+        }
+        other => panic!("se esperaba Create, había {:?}", other),
+    };
+    assert!(temp_id.starts_with("task_"));
+
+    // La tarea está en la caché local y se lista.
+    let listed = execute_ipc_command(&["tasks".to_string(), "list".to_string()])
+        .await
+        .expect("tasks list");
+    let tasks: Vec<Task> = serde_json::from_str(&listed).unwrap();
+    assert!(tasks.iter().any(|t| t.id == temp_id));
+
+    // Completarla offline encola un Complete detrás del Create y no requiere sesión.
+    let out = execute_ipc_command(&["task".to_string(), "complete".to_string(), temp_id.clone()])
+        .await
+        .expect("completar una tarea local nunca falla");
+    assert!(out.contains("queued"));
+    let ops = load_outbox();
+    assert_eq!(ops.len(), 2);
+    assert!(matches!(&ops[0], PendingOp::Create { .. }));
+    assert!(matches!(&ops[1], PendingOp::Complete { task_id, .. } if task_id == &temp_id));
+
+    // El comando `outbox` expone lo pendiente.
+    let dump = execute_ipc_command(&["outbox".to_string()]).await.expect("outbox");
+    let parsed: Vec<PendingOp> = serde_json::from_str(&dump).unwrap();
+    assert_eq!(parsed, ops);
+}

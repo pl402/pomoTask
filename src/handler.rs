@@ -620,6 +620,9 @@ pub fn sync_all_lists(api: &Arc<ApiClient>, sender: UnboundedSender<Event>, app:
 
     let ids: Vec<String> = app.task_lists.iter().filter(|l| l.id != "@all").map(|l| l.id.clone()).collect();
     tokio::spawn(async move {
+        // Primero subimos lo que el plugin dejó pendiente sin conexión; si falla, main.rs lo
+        // re-aplica sobre lo descargado (Event::ApiUpdate) para que no se pierda.
+        let _ = crate::outbox::push_pending(&api).await;
         let mut all = Vec::new();
         for id in ids {
             if let Ok(tasks) = api.fetch_tasks(&id, true).await {
@@ -647,6 +650,7 @@ pub async fn sync_tasks(api: &Arc<ApiClient>, sender: UnboundedSender<Event>, ap
         if list_id == "@all" {
             let other_lists: Vec<String> = app.task_lists.iter().filter(|l| l.id != "@all").map(|l| l.id.clone()).collect();
             tokio::spawn(async move {
+                let _ = crate::outbox::push_pending(&api).await;
                 let mut all_tasks = Vec::new();
                 for id in other_lists {
                     if let Ok(tasks) = api.fetch_tasks(&id, true).await { // Siempre traer completadas

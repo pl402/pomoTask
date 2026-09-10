@@ -426,10 +426,13 @@ Panel {
             // -----------------------------------------------------------------
             BorderSurface {
               id: googleStatusBanner
-              visible: pomotaskService.googleDisconnected
+              // Rojo (urgent) si se perdió la conexión; acento si solo hay cambios pendientes de subir.
+              readonly property bool warning: pomotaskService.googleDisconnected
+              readonly property color tone: warning ? Color.urgent : Color.accent
+              visible: pomotaskService.googleDisconnected || pomotaskService.pendingChanges > 0
               width: parent.width
-              color: Util.alpha(Color.urgent, 0.14)
-              borderSpec: Border.flat(Util.alpha(Color.urgent, 0.55), 1)
+              color: Util.alpha(tone, 0.14)
+              borderSpec: Border.flat(Util.alpha(tone, 0.55), 1)
               radius: Style.cornerRadius
               implicitHeight: googleStatusRow.implicitHeight + Style.space(16)
 
@@ -446,8 +449,8 @@ Panel {
                   id: googleStatusIcon
                   textFormat: Text.PlainText
                   anchors.verticalCenter: parent.verticalCenter
-                  text: "󰀦"
-                  color: Color.urgent
+                  text: googleStatusBanner.warning ? "󰀦" : "󰕒"
+                  color: googleStatusBanner.tone
                   font.family: root.contentFontFamily
                   font.pixelSize: Style.font.body
                 }
@@ -469,14 +472,16 @@ Panel {
                 Button {
                   id: googleStatusActionBtn
                   anchors.verticalCenter: parent.verticalCenter
-                  text: pomotaskService.authRequired ? "Iniciar sesión" : "Reintentar"
+                  text: pomotaskService.authRequired
+                    ? "Iniciar sesión"
+                    : (googleStatusBanner.warning ? "Reintentar" : "Sincronizar")
                   fontSize: Style.font.caption
                   bordered: true
                   foreground: root.contentForeground
-                  accent: Color.urgent
+                  accent: googleStatusBanner.tone
                   tooltipText: pomotaskService.authRequired
                     ? "Abre la TUI en una terminal para volver a autenticarte con Google"
-                    : "Volver a intentar la sincronización"
+                    : "Sincronizar con Google y subir los cambios pendientes"
                   onClicked: {
                     if (pomotaskService.authRequired) {
                       root.openTui()

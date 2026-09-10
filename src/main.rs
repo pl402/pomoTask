@@ -113,11 +113,17 @@ async fn main() -> Result<()> {
                         app.mode = AppMode::Timer;
                     }
                 }
-                Event::ApiUpdate(list_id, tasks) => {
+                Event::ApiUpdate(list_id, mut tasks) => {
                     app.creating_task_temp_id = None;
                     if list_id == "@all" {
                         // Sincronización completa terminada: la conexión con Google está viva.
                         pomotask_cli::ipc::mark_google_connected(true);
+                    }
+                    // Cambios hechos sin conexión desde el plugin que aún no llegaron a Google:
+                    // los re-aplicamos para que esta descarga no los borre de la caché.
+                    let pending = pomotask_cli::outbox::load_outbox();
+                    if !pending.is_empty() {
+                        pomotask_cli::outbox::apply_to_list(&pending, &list_id, &mut tasks);
                     }
                     let mut tasks_with_stats = Vec::new();
                     for mut t in tasks {

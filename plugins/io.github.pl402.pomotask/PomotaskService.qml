@@ -20,6 +20,7 @@ Item {
   readonly property string tasksCachePath: configDir + "/tasks_cache.json"
   readonly property string listsCachePath: configDir + "/lists_cache.json"
   readonly property string blocklistPath: configDir + "/blocklist.json"
+  readonly property string outboxPath: configDir + "/outbox.json"
   property string pomotaskBinary: "pomotask-cli"
 
   // -------------------------------------------------------------------------
@@ -58,12 +59,32 @@ Item {
     return sameDay ? ("Última sync " + hh + ":" + mm) : ("Última sync " + (d.getMonth() + 1) + "/" + d.getDate() + " " + hh + ":" + mm)
   }
 
+  // Cambios hechos sin conexión (outbox.json) que aún no se han subido a Google.
+  property int pendingChanges: 0
+  readonly property string pendingLabel: pendingChanges === 1
+    ? "1 cambio pendiente de subir"
+    : pendingChanges + " cambios pendientes de subir"
+
   readonly property string googleStatusMessage: {
-    if (!googleDisconnected) return ""
-    if (lastSyncError.indexOf("no_token") === 0) return "No has iniciado sesión en Google Tasks."
-    if (authRequired) return "La sesión de Google expiró. Vuelve a iniciar sesión desde la TUI."
+    var pending = pendingChanges > 0 ? " " + pendingLabel + "; se subirán al reconectar." : ""
+    if (!googleDisconnected) {
+      return pendingChanges > 0 ? (pendingLabel + ". Sincroniza para subirlos a Google.") : ""
+    }
+    if (lastSyncError.indexOf("no_token") === 0) return "No has iniciado sesión en Google Tasks." + pending
+    if (authRequired) return "La sesión de Google expiró. Vuelve a iniciar sesión desde la TUI." + pending
     var detail = lastSyncError.replace(/^Error:\s*/, "")
-    return "Sin conexión con Google Tasks. " + (detail !== "" ? detail : "")
+    return "Sin conexión con Google Tasks. " + (detail !== "" ? detail : "") + pending
+  }
+
+  function parseOutbox(raw) {
+    try {
+      var content = String(raw || "").trim()
+      if (content === "") { root.pendingChanges = 0; return }
+      var arr = JSON.parse(content)
+      root.pendingChanges = Array.isArray(arr) ? arr.length : 0
+    } catch (e) {
+      console.warn("PomotaskService", "Error parsing outbox:", e)
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -504,6 +525,16 @@ Item {
     printErrors: false
     onFileChanged: reload()
     onLoaded: root.parseBlocklist(text())
+  }
+
+  FileView {
+    id: outboxWatcher
+    path: root.outboxPath
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.parseOutbox(text())
+    onLoadFailed: root.pendingChanges = 0
   }
 
   // -------------------------------------------------------------------------

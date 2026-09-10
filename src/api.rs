@@ -134,8 +134,14 @@ impl ApiClient {
     }
 
     pub async fn create_task(&self, list_id: &str, title: &str, notes: Option<String>, due: Option<DateTime<Utc>>, parent_id: Option<String>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.create_task_returning_id(list_id, title, notes, due, parent_id).await.map(|_| ())
+    }
+
+    /// Como `create_task`, pero devuelve el id que Google asignó a la tarea (vacío en modo simulado).
+    /// Lo usa el buzón de salida para sustituir el id temporal por el real.
+    pub async fn create_task_returning_id(&self, list_id: &str, title: &str, notes: Option<String>, due: Option<DateTime<Utc>>, parent_id: Option<String>) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         self.ensure_full_permissions().await?;
-        let hub = match &self.hub { Some(h) => h, None => return Ok(()) };
+        let hub = match &self.hub { Some(h) => h, None => return Ok(String::new()) };
         let task = api::Task {
             title: Some(title.to_string()),
             notes,
@@ -152,7 +158,8 @@ impl ApiClient {
 
         // No usamos eprintln! aquí: corrompería la pantalla en modo raw de la TUI.
         // El error se propaga y la UI revierte la tarea optimista (Event::ApiTaskFailed).
-        call.doit().await.map(|_| ()).map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+        let (_, created) = call.doit().await.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+        Ok(created.id.unwrap_or_default())
     }
 
     pub async fn update_task(&self, list_id: &str, task_id: &str, title: &str, notes: Option<String>, due: Option<DateTime<Utc>>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

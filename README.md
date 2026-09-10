@@ -148,6 +148,7 @@ PomoTask-CLI incluye subcomandos headless pensados para scripts, automatización
 | `pomotask-cli ipc task focus <task_id\|clear>` | Asigna o remueve la tarea activa del temporizador |
 | `pomotask-cli ipc sync` | Fuerza la sincronización de listas con Google Tasks |
 | `pomotask-cli ipc auth-status` | Comprueba si la sesión de Google sigue válida (sin abrir el navegador) y actualiza `google_connected` / `last_sync_error` en `runtime_state.json` |
+| `pomotask-cli ipc outbox` | Lista los cambios hechos sin conexión (crear/completar) que aún no se han subido a Google; `sync` los sube primero y, si no puede, los conserva en la caché |
 | `pomotask-cli ipc blocklist get` | Consulta la configuración actual del bloqueador |
 | `pomotask-cli ipc blocklist add [--keyword <k>] [--class <c>]` | Añade palabras clave o clases bloqueadas |
 | `pomotask-cli ipc blocklist remove [--keyword <k>] [--class <c>]` | Remueve reglas del bloqueador |

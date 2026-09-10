@@ -42,6 +42,11 @@ src/
 ├── handler.rs       handle_key_events() + sync_tasks() (lista puntual) + sync_all_lists() (todas, en
 │                    segundo plano). Toda la lógica de teclado vive aquí.
 ├── api.rs           ApiClient: wrapper async de Google Tasks (fetch/create/update/toggle/move + OAuth + paginación).
+├── ipc.rs           Modo headless `pomotask-cli ipc …` para el plugin de Omarchy: RuntimeState (incluye
+│                    google_connected/last_sync_*), cachés, blocklist, auth-status, sync. `with_auth_guard`
+│                    aborta con `auth_required` si OAuth pide login (nadie puede atenderlo sin TUI).
+├── outbox.rs        Buzón de salida (outbox.json): cambios hechos sin conexión (crear/completar). Se suben
+│                    antes de cada sync y lo pendiente se re-aplica sobre lo descargado para no perderlo.
 ├── app/
 │   ├── mod.rs       Estado global App, structs (Task, Config, Stats), caché por lista, persistencia de config/stats/caché.
 │   └── i18n.rs      Motor de traducción (Español/Inglés) vía App::translate(key).
