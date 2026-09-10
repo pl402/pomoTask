@@ -73,6 +73,8 @@ async fn main() -> Result<()> {
                     }
                 }
                 Event::NeedsAuth(url) => {
+                    // Avisamos también al plugin de Omarchy vía runtime_state.json.
+                    pomotask_cli::ipc::mark_google_error(pomotask_cli::ipc::AUTH_REQUIRED_MSG);
                     app.mode = AppMode::Auth;
                     app.auth_url = Some(url.clone());
                     app.loading = false;
@@ -102,6 +104,9 @@ async fn main() -> Result<()> {
                 }
                 Event::SyncFailed => {
                     // Sin conexión: salimos de la pantalla de carga y mostramos la caché local.
+                    if app.mode != AppMode::Auth {
+                        pomotask_cli::ipc::mark_google_error("sync_failed: could not reach Google Tasks");
+                    }
                     app.loading = false;
                     app.rebuild_visible_tasks();
                     if app.mode == AppMode::Loading {
@@ -110,6 +115,10 @@ async fn main() -> Result<()> {
                 }
                 Event::ApiUpdate(list_id, tasks) => {
                     app.creating_task_temp_id = None;
+                    if list_id == "@all" {
+                        // Sincronización completa terminada: la conexión con Google está viva.
+                        pomotask_cli::ipc::mark_google_connected(true);
+                    }
                     let mut tasks_with_stats = Vec::new();
                     for mut t in tasks {
                         t.pomodoros = *app.stats.task_pomodoros.get(&t.id).unwrap_or(&0);

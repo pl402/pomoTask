@@ -1,6 +1,8 @@
 use crate::api::ApiClient;
 use crate::app::{Stats, Task, TaskList};
+use crate::events::Event;
 use chrono::Utc;
+use tokio::sync::mpsc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -20,6 +22,15 @@ pub struct RuntimeState {
     pub anti_distraction: bool,
     #[serde(default)]
     pub target_end_timestamp: Option<i64>,
+    /// Estado de la conexión con Google Tasks. `None` = aún no se ha comprobado.
+    #[serde(default)]
+    pub google_connected: Option<bool>,
+    /// Timestamp (segundos Unix) de la última sincronización completa exitosa.
+    #[serde(default)]
+    pub last_sync_at: Option<i64>,
+    /// Último error de red/autenticación. Empieza por `auth_required` si hay que volver a iniciar sesión.
+    #[serde(default)]
+    pub last_sync_error: Option<String>,
 }
 
 impl Default for RuntimeState {
@@ -35,7 +46,74 @@ impl Default for RuntimeState {
             strict_break: false,
             anti_distraction: true,
             target_end_timestamp: None,
+            google_connected: None,
+            last_sync_at: None,
+            last_sync_error: None,
         }
+    }
+}
+
+/// Mensaje estable que el plugin detecta (prefijo `auth_required`) para ofrecer re-autenticación.
+pub const AUTH_REQUIRED_MSG: &str =
+    "auth_required: Google session expired or revoked. Open the PomoTask TUI (pomotask-cli) to sign in again";
+
+/// Marca la conexión con Google como activa. Si `synced` es true, también registra la hora de sincronización.
+pub fn mark_google_connected(synced: bool) {
+    let mut state = load_runtime_state();
+    state.google_connected = Some(true);
+    state.last_sync_error = None;
+    if synced {
+        state.last_sync_at = Some(Utc::now().timestamp());
+    }
+    let _ = save_runtime_state(&state);
+}
+
+/// Marca la conexión con Google como perdida y guarda el motivo para que el plugin lo muestre.
+pub fn mark_google_error(error: &str) {
+    let mut state = load_runtime_state();
+    state.google_connected = Some(false);
+    state.last_sync_error = Some(error.to_string());
+    let _ = save_runtime_state(&state);
+}
+
+/// Cliente de API para el modo IPC (headless). Conservamos el receptor de eventos para detectar
+/// cuándo yup_oauth2 intenta abrir el flujo interactivo de login (`Event::NeedsAuth`), que aquí
+/// nadie puede atender: sin esto el comando se quedaría colgado esperando al navegador.
+async fn ipc_api_client() -> (ApiClient, mpsc::UnboundedReceiver<Event>) {
+    let (sender, receiver) = mpsc::unbounded_channel();
+    let client = ApiClient::new(sender).await;
+    (client, receiver)
+}
+
+/// Espera hasta que el autenticador pida login interactivo. Si el canal se cierra, no resuelve nunca.
+async fn wait_needs_auth(rx: &mut mpsc::UnboundedReceiver<Event>) {
+    loop {
+        match rx.recv().await {
+            Some(Event::NeedsAuth(_)) => return,
+            Some(_) => continue,
+            None => std::future::pending::<()>().await,
+        }
+    }
+}
+
+/// Ejecuta una llamada a la API con timeout y aborta de inmediato con `AUTH_REQUIRED_MSG`
+/// si el flujo OAuth necesita al usuario (token expirado o revocado).
+async fn with_auth_guard<T, F>(
+    rx: &mut mpsc::UnboundedReceiver<Event>,
+    timeout_secs: u64,
+    what: &str,
+    fut: F,
+) -> Result<T, String>
+where
+    F: std::future::Future<Output = Result<T, Box<dyn std::error::Error + Send + Sync>>>,
+{
+    tokio::select! {
+        res = tokio::time::timeout(Duration::from_secs(timeout_secs), fut) => match res {
+            Ok(Ok(v)) => Ok(v),
+            Ok(Err(e)) => Err(format!("{}: {}", what, e)),
+            Err(_) => Err(format!("{}: timed out after {}s", what, timeout_secs)),
+        },
+        _ = wait_needs_auth(rx) => Err(AUTH_REQUIRED_MSG.to_string()),
     }
 }
 
@@ -642,18 +720,27 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
                         let _ = save_runtime_state(&state);
                     }
 
-                    // Intentar sincronizar con Google Tasks API en segundo plano si el token existe
+                    // Sincronizar con Google Tasks si hay sesión. La caché local ya quedó actualizada;
+                    // si Google falla devolvemos error (exit 1) para que el plugin lo muestre.
                     if get_config_dir().join("pomotask_token.json").exists() {
                         let lid = found_list_id.unwrap_or_else(|| "@default".to_string());
-                        let (sender, _) = tokio::sync::mpsc::unbounded_channel();
-                        let client = ApiClient::new(sender).await;
-                        let res = tokio::time::timeout(
-                            Duration::from_secs(10),
+                        let (client, mut rx) = ipc_api_client().await;
+                        let res = with_auth_guard(
+                            &mut rx,
+                            10,
+                            "Google Tasks completion",
                             client.toggle_task_completion(&lid, task_id, true),
                         )
                         .await;
-                        if let Ok(Err(e)) = res {
-                            eprintln!("Warning: failed to sync task completion with Google Tasks: {}", e);
+                        match res {
+                            Ok(()) => mark_google_connected(false),
+                            Err(e) => {
+                                mark_google_error(&e);
+                                return Err(format!(
+                                    "Task {} completed locally but not synced with Google Tasks. {}",
+                                    task_id, e
+                                ));
+                            }
                         }
                     }
 
@@ -726,15 +813,27 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
                     }
                     save_tasks_cache(&cache).map_err(|e| e.to_string())?;
 
-                    // Intentar crear tarea en Google Tasks API si el token existe
+                    // Crear la tarea en Google Tasks si hay sesión. Si falla, la tarea queda solo en
+                    // la caché local y devolvemos error (exit 1) para que el plugin lo muestre.
                     if get_config_dir().join("pomotask_token.json").exists() {
-                        let (sender, _) = tokio::sync::mpsc::unbounded_channel();
-                        let client = ApiClient::new(sender).await;
-                        let _ = tokio::time::timeout(
-                            Duration::from_secs(5),
+                        let (client, mut rx) = ipc_api_client().await;
+                        let res = with_auth_guard(
+                            &mut rx,
+                            10,
+                            "Google Tasks create",
                             client.create_task(&target_list_id, &title_val, None, None, parent),
                         )
                         .await;
+                        match res {
+                            Ok(()) => mark_google_connected(false),
+                            Err(e) => {
+                                mark_google_error(&e);
+                                return Err(format!(
+                                    "Task '{}' created locally but not synced with Google Tasks. {}",
+                                    title_val, e
+                                ));
+                            }
+                        }
                     }
 
                     serde_json::to_string_pretty(&new_task).map_err(|e| e.to_string())
@@ -911,16 +1010,34 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
                 )),
             }
         }
+        "auth-status" => {
+            // Comprueba (sin abrir el navegador) si la sesión de Google sigue siendo válida y
+            // actualiza runtime_state.json. Devuelve el estado completo, igual que `status`.
+            if !get_config_dir().join("pomotask_token.json").exists() {
+                mark_google_error("no_token: not signed in to Google. Open the PomoTask TUI (pomotask-cli) to sign in");
+            } else {
+                let (client, mut rx) = ipc_api_client().await;
+                match with_auth_guard(&mut rx, 8, "Google auth check", client.check_auth()).await {
+                    Ok(()) => mark_google_connected(false),
+                    Err(e) => mark_google_error(&e),
+                }
+            }
+            let state = load_runtime_state();
+            serde_json::to_string_pretty(&state).map_err(|e| e.to_string())
+        }
         "sync" => {
             if !get_config_dir().join("pomotask_token.json").exists() {
+                mark_google_error("no_token: not signed in to Google. Open the PomoTask TUI (pomotask-cli) to sign in");
                 return Ok("Sync skipped: No active Google session token found".to_string());
             }
-            let (sender, _) = tokio::sync::mpsc::unbounded_channel();
-            let client = ApiClient::new(sender).await;
-            let lists = tokio::time::timeout(Duration::from_secs(10), client.fetch_task_lists())
-                .await
-                .map_err(|_| "Sync timed out fetching lists".to_string())?
-                .map_err(|e| e.to_string())?;
+            let (client, mut rx) = ipc_api_client().await;
+            let lists = match with_auth_guard(&mut rx, 10, "Sync fetching lists", client.fetch_task_lists()).await {
+                Ok(l) => l,
+                Err(e) => {
+                    mark_google_error(&e);
+                    return Err(e);
+                }
+            };
 
             let mut all_lists = vec![TaskList {
                 id: "@all".to_string(),
@@ -929,14 +1046,31 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
             all_lists.extend(lists.clone());
             let _ = save_task_lists_cache(&all_lists);
 
+            // Partimos de la caché previa: si una lista falla conservamos sus tareas anteriores
+            // en lugar de vaciarla.
+            let previous = load_tasks_cache();
             let mut cache: HashMap<String, Vec<Task>> = HashMap::new();
             let mut all_tasks = Vec::new();
+            let mut failed_lists: Vec<String> = Vec::new();
 
             for list in lists {
                 if list.id == "@all" {
                     continue;
                 }
-                let tasks = client.fetch_tasks(&list.id, true).await.unwrap_or_default();
+                let tasks = match with_auth_guard(
+                    &mut rx,
+                    20,
+                    &format!("Sync fetching list '{}'", list.title),
+                    client.fetch_tasks(&list.id, true),
+                )
+                .await
+                {
+                    Ok(t) => t,
+                    Err(e) => {
+                        failed_lists.push(e);
+                        previous.get(&list.id).cloned().unwrap_or_default()
+                    }
+                };
                 all_tasks.extend(tasks.clone());
                 cache.insert(list.id, tasks);
             }
@@ -945,6 +1079,16 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
             }
 
             save_tasks_cache(&cache).map_err(|e| e.to_string())?;
+
+            if let Some(first_error) = failed_lists.first() {
+                mark_google_error(first_error);
+                return Err(format!(
+                    "Sync incomplete: {} list(s) failed. {}",
+                    failed_lists.len(),
+                    first_error
+                ));
+            }
+            mark_google_connected(true);
             Ok("Sync completed successfully".to_string())
         }
         other => Err(format!("Unknown IPC command: '{}'", other)),
@@ -968,6 +1112,9 @@ mod tests {
             strict_break: false,
             anti_distraction: true,
             target_end_timestamp: Some(1700000000),
+            google_connected: None,
+            last_sync_at: None,
+            last_sync_error: None,
         };
         let json = serde_json::to_string(&state).expect("serialize");
         let decoded: RuntimeState = serde_json::from_str(&json).expect("deserialize");
@@ -981,6 +1128,18 @@ mod tests {
         assert!(!decoded.strict_break);
         assert!(decoded.anti_distraction);
         assert_eq!(decoded.target_end_timestamp, Some(1700000000));
+    }
+
+    #[test]
+    fn test_runtime_state_legacy_json_without_connection_fields() {
+        // runtime_state.json escrito por versiones anteriores no trae los campos de conexión.
+        let legacy = r#"{"state":"stopped","mode":"work","remaining_seconds":1500,"total_seconds":1500,
+            "session_pomodoros":0,"active_task_id":null,"active_task_title":null,
+            "strict_break":false,"anti_distraction":true}"#;
+        let decoded: RuntimeState = serde_json::from_str(legacy).expect("legacy deserialize");
+        assert_eq!(decoded.google_connected, None);
+        assert_eq!(decoded.last_sync_at, None);
+        assert_eq!(decoded.last_sync_error, None);
     }
 
     #[test]
@@ -1051,6 +1210,9 @@ mod tests {
             strict_break: true,
             anti_distraction: false,
             target_end_timestamp: None,
+            google_connected: None,
+            last_sync_at: None,
+            last_sync_error: None,
         };
 
         save_runtime_state_to(&state, &state_path).unwrap();

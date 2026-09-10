@@ -61,6 +61,12 @@ impl ApiClient {
         Ok(())
     }
 
+    /// Comprueba que tenemos (o podemos refrescar) un token válido, sin llamar a la API de Tasks.
+    /// Si el refresh token está expirado o revocado, yup_oauth2 dispara `Event::NeedsAuth`.
+    pub async fn check_auth(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.ensure_full_permissions().await
+    }
+
     pub async fn fetch_task_lists(&self) -> Result<Vec<TaskList>, Box<dyn std::error::Error + Send + Sync>> {
         self.ensure_full_permissions().await?;
         let hub = match &self.hub { Some(h) => h, None => return Ok(vec![TaskList { id: "@default".to_string(), title: "Default".to_string() }]) };

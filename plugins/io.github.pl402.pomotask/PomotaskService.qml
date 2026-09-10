@@ -36,6 +36,37 @@ Item {
   property bool antiDistraction: true
 
   // -------------------------------------------------------------------------
+  // Google Connection State (escrito por el CLI en runtime_state.json)
+  // -------------------------------------------------------------------------
+  // null = todavía no comprobado; true/false = último resultado conocido
+  property var googleConnected: null
+  property int lastSyncAt: 0            // segundos Unix; 0 = nunca
+  property string lastSyncError: ""
+
+  readonly property bool googleDisconnected: googleConnected === false
+  // La sesión expiró / fue revocada / no existe: solo se arregla iniciando sesión en la TUI.
+  readonly property bool authRequired: googleDisconnected
+    && (lastSyncError.indexOf("auth_required") === 0 || lastSyncError.indexOf("no_token") === 0)
+
+  readonly property string lastSyncLabel: {
+    if (!lastSyncAt || lastSyncAt <= 0) return "Nunca sincronizado"
+    var d = new Date(lastSyncAt * 1000)
+    var now = new Date()
+    var hh = (d.getHours() < 10 ? "0" : "") + d.getHours()
+    var mm = (d.getMinutes() < 10 ? "0" : "") + d.getMinutes()
+    var sameDay = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
+    return sameDay ? ("Última sync " + hh + ":" + mm) : ("Última sync " + (d.getMonth() + 1) + "/" + d.getDate() + " " + hh + ":" + mm)
+  }
+
+  readonly property string googleStatusMessage: {
+    if (!googleDisconnected) return ""
+    if (lastSyncError.indexOf("no_token") === 0) return "No has iniciado sesión en Google Tasks."
+    if (authRequired) return "La sesión de Google expiró. Vuelve a iniciar sesión desde la TUI."
+    var detail = lastSyncError.replace(/^Error:\s*/, "")
+    return "Sin conexión con Google Tasks. " + (detail !== "" ? detail : "")
+  }
+
+  // -------------------------------------------------------------------------
   // Signals & Events
   // -------------------------------------------------------------------------
   signal celebrationRequested(string taskTitle)
@@ -112,8 +143,16 @@ Item {
       if (content === "") return
       var obj = JSON.parse(content)
       if (obj && typeof obj === "object") {
-        if (obj.state !== undefined) root.state = String(obj.state)
-        if (obj.mode !== undefined) root.mode = String(obj.mode)
+        // Solo aceptamos JSON de runtime_state: otras salidas (p. ej. la tarea creada por
+        // `task create`) no deben vaciar la tarea activa.
+        if (obj.state === undefined || obj.mode === undefined) return
+        root.state = String(obj.state)
+        root.mode = String(obj.mode)
+        if (obj.google_connected === true || obj.google_connected === false) {
+          root.googleConnected = obj.google_connected
+        }
+        root.lastSyncAt = obj.last_sync_at ? Number(obj.last_sync_at) : 0
+        root.lastSyncError = obj.last_sync_error ? String(obj.last_sync_error) : ""
         if (obj.total_seconds !== undefined) root.totalSeconds = Number(obj.total_seconds)
         if (obj.session_pomodoros !== undefined) root.sessionPomodoros = Number(obj.session_pomodoros)
         root.activeTaskId = obj.active_task_id ? String(obj.active_task_id) : ""
@@ -422,6 +461,11 @@ Item {
   }
   function forceSync() { syncTasks() }
 
+  // Comprueba la sesión de Google sin descargar tareas (rápido, no abre el navegador).
+  function checkAuth() {
+    runAction(["auth-status"], "Checking Google session…")
+  }
+
   // -------------------------------------------------------------------------
   // File Watchers
   // -------------------------------------------------------------------------
@@ -581,5 +625,25 @@ Item {
     interval: 300
     repeat: false
     onTriggered: root.fetchStatus()
+  }
+
+  // Comprobación de sesión poco después de arrancar la barra: detecta un token
+  // expirado sin esperar a que el usuario pulse "Sincronizar".
+  Timer {
+    id: initialAuthCheck
+    interval: 4000
+    repeat: false
+    running: true
+    onTriggered: root.checkAuth()
+  }
+
+  // Sincronización periódica en segundo plano (antes solo se sincronizaba a mano).
+  // Si Google falla, el CLI deja el motivo en runtime_state.json y el panel lo muestra.
+  Timer {
+    id: autoSyncTimer
+    interval: 10 * 60 * 1000
+    repeat: true
+    running: true
+    onTriggered: root.syncTasks()
   }
 }

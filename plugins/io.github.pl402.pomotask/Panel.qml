@@ -404,7 +404,7 @@ Panel {
                   iconText: ""
                   foreground: root.contentForeground
                   hoverColor: Color.accent
-                  tooltipText: "Sincronizar con Google Tasks (R)"
+                  tooltipText: "Sincronizar con Google Tasks (R) · " + pomotaskService.lastSyncLabel
                   onClicked: pomotaskService.syncTasks()
                 }
 
@@ -417,6 +417,73 @@ Panel {
                   hoverColor: Color.accent
                   tooltipText: "Ajustes y Anti-distracciones"
                   onClicked: root.currentView = "settings"
+                }
+              }
+            }
+
+            // -----------------------------------------------------------------
+            // Aviso de conexión con Google Tasks (token expirado, sin red, etc.)
+            // -----------------------------------------------------------------
+            BorderSurface {
+              id: googleStatusBanner
+              visible: pomotaskService.googleDisconnected
+              width: parent.width
+              color: Util.alpha(Color.urgent, 0.14)
+              borderSpec: Border.flat(Util.alpha(Color.urgent, 0.55), 1)
+              radius: Style.cornerRadius
+              implicitHeight: googleStatusRow.implicitHeight + Style.space(16)
+
+              Row {
+                id: googleStatusRow
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.leftMargin: Style.space(10)
+                anchors.rightMargin: Style.space(10)
+                spacing: Style.space(8)
+
+                Text {
+                  id: googleStatusIcon
+                  textFormat: Text.PlainText
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: "󰀦"
+                  color: Color.urgent
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.body
+                }
+
+                Text {
+                  id: googleStatusText
+                  textFormat: Text.PlainText
+                  anchors.verticalCenter: parent.verticalCenter
+                  width: parent.width - googleStatusIcon.implicitWidth - googleStatusActionBtn.implicitWidth - parent.spacing * 2
+                  text: pomotaskService.googleStatusMessage
+                  color: root.contentForeground
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.caption
+                  wrapMode: Text.WordWrap
+                  maximumLineCount: 3
+                  elide: Text.ElideRight
+                }
+
+                Button {
+                  id: googleStatusActionBtn
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: pomotaskService.authRequired ? "Iniciar sesión" : "Reintentar"
+                  fontSize: Style.font.caption
+                  bordered: true
+                  foreground: root.contentForeground
+                  accent: Color.urgent
+                  tooltipText: pomotaskService.authRequired
+                    ? "Abre la TUI en una terminal para volver a autenticarte con Google"
+                    : "Volver a intentar la sincronización"
+                  onClicked: {
+                    if (pomotaskService.authRequired) {
+                      root.openTui()
+                    } else {
+                      pomotaskService.syncTasks()
+                    }
+                  }
                 }
               }
             }

@@ -1084,14 +1084,21 @@ impl App {
             strict_break: false,
             anti_distraction: true,
             target_end_timestamp,
+            google_connected: None,
+            last_sync_at: None,
+            last_sync_error: None,
         }
     }
 
     pub fn save_runtime_state(&self) {
         let mut state = self.to_runtime_state();
         let existing = crate::ipc::load_runtime_state();
+        // Campos que no son del temporizador: los conservamos tal cual los dejó el IPC/plugin.
         state.strict_break = existing.strict_break;
         state.anti_distraction = existing.anti_distraction;
+        state.google_connected = existing.google_connected;
+        state.last_sync_at = existing.last_sync_at;
+        state.last_sync_error = existing.last_sync_error;
         let _ = crate::ipc::save_runtime_state(&state);
     }
 }

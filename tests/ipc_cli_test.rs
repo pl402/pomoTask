@@ -49,6 +49,9 @@ async fn test_ipc_status() {
         strict_break: false,
         anti_distraction: true,
         target_end_timestamp: None,
+        google_connected: None,
+        last_sync_at: None,
+        last_sync_error: None,
     };
     save_runtime_state(&state).unwrap();
 
@@ -615,4 +618,39 @@ async fn test_ipc_lists_command() {
     let parsed2: Vec<TaskList> = serde_json::from_str(&output2).expect("parse tasks lists output");
     assert_eq!(parsed2.len(), 2);
     assert_eq!(parsed2[1].title, "Trabajo");
+}
+
+#[tokio::test]
+async fn test_ipc_auth_status_without_token_marks_disconnected() {
+    let _lock = TEST_LOCK.lock().await;
+    let _ctx = TestContext::new("auth_status_no_token");
+
+    let output = execute_ipc_command(&["auth-status".to_string()])
+        .await
+        .expect("auth-status must not fail without token");
+    let parsed: RuntimeState = serde_json::from_str(&output).expect("parse runtime state JSON");
+    assert_eq!(parsed.google_connected, Some(false));
+    assert!(parsed
+        .last_sync_error
+        .as_deref()
+        .unwrap_or("")
+        .starts_with("no_token"));
+
+    // El estado persistido también refleja la desconexión.
+    let persisted = load_runtime_state();
+    assert_eq!(persisted.google_connected, Some(false));
+    assert!(persisted.last_sync_at.is_none());
+}
+
+#[tokio::test]
+async fn test_ipc_sync_without_token_is_skipped_and_marks_disconnected() {
+    let _lock = TEST_LOCK.lock().await;
+    let _ctx = TestContext::new("sync_no_token");
+
+    let output = execute_ipc_command(&["sync".to_string()])
+        .await
+        .expect("sync without token is skipped, not an error");
+    assert!(output.contains("Sync skipped"));
+    let persisted = load_runtime_state();
+    assert_eq!(persisted.google_connected, Some(false));
 }

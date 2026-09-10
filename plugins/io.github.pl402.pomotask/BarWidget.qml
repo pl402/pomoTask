@@ -95,14 +95,26 @@ BarWidget {
     ? " | " + truncateText(service.activeTaskTitle, 20)
     : ""
 
-  readonly property string displayText: statusIcon + "  " + service.formattedTime + activeSnippet
-  readonly property var verticalLines: [statusIcon, service.formattedTime]
+  // Glifo de aviso (nf-md-alert) cuando se perdió la conexión con Google Tasks.
+  readonly property string warningGlyph: service.googleDisconnected ? "󰀦" : ""
+
+  readonly property string displayText: (warningGlyph !== "" ? warningGlyph + "  " : "")
+    + statusIcon + "  " + service.formattedTime + activeSnippet
+  readonly property var verticalLines: warningGlyph !== ""
+    ? [warningGlyph, statusIcon, service.formattedTime]
+    : [statusIcon, service.formattedTime]
 
   readonly property string tooltipStatusText: {
-    if (service.activeTaskTitle && service.activeTaskTitle !== "") {
-      return wrapText(service.activeTaskTitle, 38)
+    var parts = []
+    if (service.googleDisconnected) {
+      parts.push(service.authRequired
+        ? "Google Tasks: sesión expirada. Abre la TUI para iniciar sesión."
+        : "Google Tasks: sin conexión. " + service.lastSyncLabel)
     }
-    return ""
+    if (service.activeTaskTitle && service.activeTaskTitle !== "") {
+      parts.push(wrapText(service.activeTaskTitle, 38))
+    }
+    return parts.join("\n")
   }
 
   // -------------------------------------------------------------------------
@@ -219,6 +231,8 @@ BarWidget {
     horizontalMargin: 8.75
     verticalPadding: 8.75
     tooltipText: root.tooltipStatusText
+    // Tinta el widget con el color "urgent" del tema mientras Google esté desconectado.
+    active: root.service.googleDisconnected
 
     onPressed: function(b) {
       if (b === Qt.RightButton) {

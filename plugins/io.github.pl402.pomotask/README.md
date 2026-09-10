@@ -23,6 +23,16 @@ Plugin nativo de barra y escritorio para **Omarchy Quattro** que integra la téc
 
 El plugin se comunica con el motor Rust `pomotask-cli` mediante subcomandos IPC (`pomotask-cli ipc ...`) y observación reactiva de archivos de estado compartidos (`runtime_state.json`, `tasks_cache.json`, `blocklist.json`) en `~/.config/pomotask/`.
 
+### Estado de la conexión con Google Tasks
+
+El CLI escribe en `runtime_state.json` tres campos que el plugin observa:
+
+- `google_connected` (`true`/`false`/ausente): último resultado conocido.
+- `last_sync_at`: timestamp Unix de la última sincronización completa exitosa.
+- `last_sync_error`: motivo del fallo. Si empieza por `auth_required` o `no_token`, hay que volver a iniciar sesión desde la TUI (`pomotask-cli`).
+
+Cuando `google_connected` es `false` el widget de la barra se tinta con el color *urgent* del tema y muestra un triángulo de aviso; el panel muestra un banner con el motivo y un botón para abrir la TUI (re-autenticar) o reintentar. El servicio comprueba la sesión con `pomotask-cli ipc auth-status` a los pocos segundos de arrancar y sincroniza automáticamente cada 10 minutos.
+
 ```
 plugins/io.github.pl402.pomotask/
 ├── manifest.json         # Manifiesto del plugin (schemaVersion: 1)
