@@ -5,7 +5,8 @@ Plugin nativo de barra y escritorio para **Omarchy Quattro** que integra la téc
 ## Características
 
 - 🍅 **Indicador en la Barra de Omarchy (`BarWidget.qml`):**
-  - Muestra el tiempo restante (`MM:SS`) y el estado actual (`🍅` trabajo, `☕` descanso corto, `🌴` descanso largo).
+  - Muestra el glifo de estado (trabajo, descanso corto, descanso largo o pausa), el tiempo restante (`MM:SS`) y un anillo de progreso que se llena conforme avanza la fase.
+  - Ancho siempre constante: el título de la tarea activa no va en la barra (salía cortado), se muestra en el tooltip junto con el modo, el porcentaje y el estado.
   - Clic interactivo para desplegar el panel de control o alternar el temporizador.
 - 📋 **Panel Desplegable Interactivo (`Panel.qml`):**
   - Controles del temporizador: Play / Pausa / Saltar / Reiniciar.
