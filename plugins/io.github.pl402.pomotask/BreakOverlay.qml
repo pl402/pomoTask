@@ -10,6 +10,9 @@ Item {
   id: root
 
   property var service: null
+  // false en las instancias que no son líder: el overlay se dibuja en su monitor, pero
+  // la notificación y el bloqueo de sesión solo los lanza una instancia.
+  property bool sideEffects: true
   property bool dismissedForCurrentBreak: false
   property string _lastLockedPhase: ""
   property int currentTipIndex: 0
@@ -60,6 +63,7 @@ Item {
   }
 
   function triggerStrictLock() {
+    if (!root.sideEffects) return
     Quickshell.execDetached([
       "omarchy-notification-send",
       "-u", "normal",

@@ -24,6 +24,9 @@ Item {
   readonly property string statsPath: configDir + "/stats.json"
   readonly property string configPath: configDir + "/config.json"
   property string pomotaskBinary: "pomotask-cli"
+  // false en las instancias secundarias (un widget por monitor): no lanzan la sincronización
+  // periódica ni la comprobación de sesión; leen los resultados de los archivos compartidos.
+  property bool primary: true
 
   // -------------------------------------------------------------------------
   // Runtime State Properties
@@ -769,7 +772,7 @@ Item {
     id: initialAuthCheck
     interval: 4000
     repeat: false
-    running: true
+    running: root.primary
     onTriggered: root.checkAuth()
   }
 
@@ -779,7 +782,7 @@ Item {
     id: autoSyncTimer
     interval: 10 * 60 * 1000
     repeat: true
-    running: true
+    running: root.primary
     onTriggered: root.syncTasks()
   }
 }

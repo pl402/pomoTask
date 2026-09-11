@@ -8,8 +8,30 @@ BarWidget {
   id: root
   moduleName: "io.github.pl402.pomotask"
 
+  // Hay una instancia del widget por monitor, cada una con su servicio y overlays. Los
+  // efectos globales (notificar, bloquear sesión, mover ventanas, sincronizar) solo los
+  // ejecuta la instancia "líder": la primera del registro de la barra para este módulo.
+  property bool isLeader: true
+
+  function electLeader() {
+    if (!root.bar || typeof root.bar.moduleWidgets !== "function") { root.isLeader = true; return }
+    var items = root.bar.moduleWidgets(root.moduleName) || []
+    root.isLeader = items.length === 0 || items[0] === root
+  }
+
+  Component.onCompleted: electLeader()
+
+  Timer {
+    interval: 5000
+    repeat: true
+    running: true
+    triggeredOnStart: true
+    onTriggered: root.electLeader()
+  }
+
   PomotaskService {
     id: service
+    primary: root.isLeader
   }
 
   readonly property alias service: service
@@ -17,6 +39,7 @@ BarWidget {
   DistractionMonitor {
     id: distractionMonitor
     service: root.service
+    sideEffects: root.isLeader
   }
 
   readonly property alias distractionMonitor: distractionMonitor
@@ -32,6 +55,7 @@ BarWidget {
   BreakOverlay {
     id: breakOverlay
     service: root.service
+    sideEffects: root.isLeader
   }
 
   readonly property alias breakOverlay: breakOverlay

@@ -7,6 +7,8 @@ Item {
   id: root
 
   property var service: null
+  // Solo la instancia líder ejecuta acciones sobre Hyprland (cambiar/minimizar ventana).
+  property bool sideEffects: true
   property bool distractionActive: false
   property string currentDistractionTitle: ""
   property string currentDistractionAddress: ""
@@ -94,7 +96,8 @@ Item {
     root.currentDistractionAddress = address
     root.currentDistractionTitle = title
 
-    // Optional workspace action if configured
+    // Acción opcional sobre la ventana: una sola vez, desde la instancia líder
+    if (!root.sideEffects) return
     var action = String(root.activeBlocklist.action || "warn")
     if (action === "warn_and_unfocus" || action === "unfocus") {
       Quickshell.execDetached(["hyprctl", "dispatch", "workspace", "previous"])
