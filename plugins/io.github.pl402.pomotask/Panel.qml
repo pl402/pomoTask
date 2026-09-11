@@ -620,58 +620,6 @@ Panel {
               }
             }
 
-            // Giant Digital Clock & Cycle Row
-            Column {
-              width: parent.width
-              spacing: Style.space(2)
-
-              Text {
-                textFormat: Text.PlainText
-                text: pomotaskService.formattedTime
-                color: Color.foreground
-                font.family: root.contentFontFamily
-                font.pixelSize: Style.font.displayLarge * 1.5
-                font.bold: true
-                horizontalAlignment: Text.AlignHCenter
-                width: parent.width
-              }
-
-              Text {
-                textFormat: Text.PlainText
-                text: "Ciclo: " + (pomotaskService.sessionPomodoros % 4) + "/4 (" + pomotaskService.sessionPomodoros + " completados)"
-                color: root.dimColor
-                font.family: root.contentFontFamily
-                font.pixelSize: Style.font.caption
-                horizontalAlignment: Text.AlignHCenter
-                width: parent.width
-              }
-            }
-
-            // Progress Bar Track
-            BorderSurface {
-              width: parent.width
-              height: Math.max(Style.space(8), 8)
-              radius: Style.cornerRadius
-              color: Style.selectedFillFor(root.contentForeground, Color.accent)
-              borderSpec: Border.controlSpec("normal", root.contentForeground, Color.accent)
-
-              Rectangle {
-                anchors.left: parent.left
-                anchors.top: parent.top
-                anchors.bottom: parent.bottom
-                radius: Style.cornerRadius
-                width: parent.width * Math.max(0.0, Math.min(1.0, pomotaskService.progress))
-                color: pomotaskService.isWork
-                  ? Color.accent
-                  : (pomotaskService.isShortBreak ? Qt.rgba(0.2, 0.8, 0.5, 1.0) : Qt.rgba(0.2, 0.6, 0.9, 1.0))
-
-                Behavior on width {
-                  NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
-                }
-              }
-
-            }
-
             // -----------------------------------------------------------------
             // Héroe: anillo de progreso con el tiempo dentro + puntos de ciclo
             // -----------------------------------------------------------------
