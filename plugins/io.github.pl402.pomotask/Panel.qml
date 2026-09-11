@@ -1273,14 +1273,23 @@ Panel {
                 onChanged: function(v) { root.selectedListId = v; root.cursorIndex = -1 }
               }
 
-              // Lista con scroll propio: ocupa lo que sobra del panel y nada más
-              Flickable {
-                id: listScroll
+              // Lista con scroll propio dentro de un marco con borde: ocupa lo que sobra del panel
+              BorderSurface {
+                id: listFrame
                 width: parent.width
+                readonly property int inset: Style.space(4)
                 readonly property real maxHeight: root.panelMaxContentHeight
                   - (root.visibleHeightExcept(mainViewColumn, tasksSection) + mainViewColumn.spacing)
-                  - (root.visibleHeightExcept(tasksSection, listScroll) + tasksSection.spacing)
-                height: Math.max(Style.space(96), Math.min(listColumn.implicitHeight, maxHeight))
+                  - (root.visibleHeightExcept(tasksSection, listFrame) + tasksSection.spacing)
+                height: Math.max(Style.space(96), Math.min(listColumn.implicitHeight + inset * 2, maxHeight))
+                radius: Style.cornerRadius
+                color: "transparent"
+                borderSpec: Border.controlSpec("normal", root.contentForeground, Color.accent)
+
+              Flickable {
+                id: listScroll
+                anchors.fill: parent
+                anchors.margins: listFrame.inset
                 contentWidth: width
                 contentHeight: listColumn.implicitHeight
                 clip: true
@@ -1460,6 +1469,7 @@ Panel {
                       bottomPadding: Style.space(6)
                     }
                   }
+              }
               }
 
               // Alta rápida
