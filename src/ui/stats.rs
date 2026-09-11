@@ -7,8 +7,8 @@ use ratatui::{
 };
 
 use crate::app::App;
-use crate::ui::palette::Palette;
 use crate::ui::anim_rect;
+use crate::ui::palette::Palette;
 
 pub fn render_stats_screen(app: &App, frame: &mut Frame) {
     let area = anim_rect(app, frame.size());
@@ -22,10 +22,10 @@ pub fn render_stats_screen(app: &App, frame: &mut Frame) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(2),  // Subtítulo
-            Constraint::Min(8),     // Gráfica de barras (pomodoros/día)
-            Constraint::Length(4),  // Totales históricos
-            Constraint::Length(1),  // Pie
+            Constraint::Length(2), // Subtítulo
+            Constraint::Min(8),    // Gráfica de barras (pomodoros/día)
+            Constraint::Length(4), // Totales históricos
+            Constraint::Length(1), // Pie
         ])
         .margin(2)
         .split(area);
@@ -33,7 +33,11 @@ pub fn render_stats_screen(app: &App, frame: &mut Frame) {
     frame.render_widget(
         Paragraph::new(app.translate("stats_last_7_days"))
             .alignment(Alignment::Center)
-            .style(Style::default().fg(Palette::subtext0(app)).add_modifier(Modifier::ITALIC)),
+            .style(
+                Style::default()
+                    .fg(Palette::subtext0(app))
+                    .add_modifier(Modifier::ITALIC),
+            ),
         chunks[0],
     );
 
@@ -44,39 +48,61 @@ pub fn render_stats_screen(app: &App, frame: &mut Frame) {
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(chunks[1]);
 
-    let pomo_bars: Vec<Bar> = days.iter().map(|d| {
-        Bar::default()
-            .value(d.pomodoros)
-            .label(Line::from(d.label.clone()))
-            .text_value(format!("{}", d.pomodoros))
-            .style(Style::default().fg(Palette::red(app)))
-            .value_style(Style::default().fg(Palette::base(app)).bg(Palette::red(app)))
-    }).collect();
+    let pomo_bars: Vec<Bar> = days
+        .iter()
+        .map(|d| {
+            Bar::default()
+                .value(d.pomodoros)
+                .label(Line::from(d.label.clone()))
+                .text_value(format!("{}", d.pomodoros))
+                .style(Style::default().fg(Palette::red(app)))
+                .value_style(
+                    Style::default()
+                        .fg(Palette::base(app))
+                        .bg(Palette::red(app)),
+                )
+        })
+        .collect();
     frame.render_widget(
         BarChart::default()
-            .block(Block::default()
-                .title(format!(" 🍅 {} ", app.translate("stats_pomodoros_per_day")))
-                .borders(Borders::ALL).border_type(BorderType::Rounded))
+            .block(
+                Block::default()
+                    .title(format!(" 🍅 {} ", app.translate("stats_pomodoros_per_day")))
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded),
+            )
             .data(BarGroup::default().bars(&pomo_bars))
-            .bar_width(3).bar_gap(1),
+            .bar_width(3)
+            .bar_gap(1),
         charts[0],
     );
 
-    let task_bars: Vec<Bar> = days.iter().map(|d| {
-        Bar::default()
-            .value(d.tasks_done)
-            .label(Line::from(d.label.clone()))
-            .text_value(format!("{}", d.tasks_done))
-            .style(Style::default().fg(Palette::green(app)))
-            .value_style(Style::default().fg(Palette::base(app)).bg(Palette::green(app)))
-    }).collect();
+    let task_bars: Vec<Bar> = days
+        .iter()
+        .map(|d| {
+            Bar::default()
+                .value(d.tasks_done)
+                .label(Line::from(d.label.clone()))
+                .text_value(format!("{}", d.tasks_done))
+                .style(Style::default().fg(Palette::green(app)))
+                .value_style(
+                    Style::default()
+                        .fg(Palette::base(app))
+                        .bg(Palette::green(app)),
+                )
+        })
+        .collect();
     frame.render_widget(
         BarChart::default()
-            .block(Block::default()
-                .title(format!(" ✅ {} ", app.translate("stats_tasks_per_day")))
-                .borders(Borders::ALL).border_type(BorderType::Rounded))
+            .block(
+                Block::default()
+                    .title(format!(" ✅ {} ", app.translate("stats_tasks_per_day")))
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded),
+            )
             .data(BarGroup::default().bars(&task_bars))
-            .bar_width(3).bar_gap(1),
+            .bar_width(3)
+            .bar_gap(1),
         charts[1],
     );
 
@@ -86,23 +112,52 @@ pub fn render_stats_screen(app: &App, frame: &mut Frame) {
     let focus_mins = (total_focus % 3600) / 60;
     let totals = vec![
         Line::from(vec![
-            Span::styled(format!("🍅 {}: ", app.translate("stats_total_pomodoros")), Style::default().fg(Palette::subtext0(app))),
-            Span::styled(format!("{}", total_pomo), Style::default().fg(Palette::peach(app)).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                format!("🍅 {}: ", app.translate("stats_total_pomodoros")),
+                Style::default().fg(Palette::subtext0(app)),
+            ),
+            Span::styled(
+                format!("{}", total_pomo),
+                Style::default()
+                    .fg(Palette::peach(app))
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::raw("    "),
-            Span::styled(format!("✅ {}: ", app.translate("stats_total_tasks")), Style::default().fg(Palette::subtext0(app))),
-            Span::styled(format!("{}", total_tasks), Style::default().fg(Palette::green(app)).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                format!("✅ {}: ", app.translate("stats_total_tasks")),
+                Style::default().fg(Palette::subtext0(app)),
+            ),
+            Span::styled(
+                format!("{}", total_tasks),
+                Style::default()
+                    .fg(Palette::green(app))
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]),
         Line::from(vec![
-            Span::styled(format!("⏱️ {}: ", app.translate("stats_total_focus")), Style::default().fg(Palette::subtext0(app))),
-            Span::styled(format!("{}h {}m", focus_hours, focus_mins), Style::default().fg(Palette::blue(app)).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                format!("⏱️ {}: ", app.translate("stats_total_focus")),
+                Style::default().fg(Palette::subtext0(app)),
+            ),
+            Span::styled(
+                format!("{}h {}m", focus_hours, focus_mins),
+                Style::default()
+                    .fg(Palette::blue(app))
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::raw("    "),
-            Span::styled(format!("📆 {}: ", app.translate("stats_focus_today")), Style::default().fg(Palette::subtext0(app))),
+            Span::styled(
+                format!("📆 {}: ", app.translate("stats_focus_today")),
+                Style::default().fg(Palette::subtext0(app)),
+            ),
             Span::styled(
                 {
                     let today_focus = days.last().map(|d| d.focus_seconds).unwrap_or(0);
                     format!("{}h {}m", today_focus / 3600, (today_focus % 3600) / 60)
                 },
-                Style::default().fg(Palette::yellow(app)).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Palette::yellow(app))
+                    .add_modifier(Modifier::BOLD),
             ),
         ]),
     ];

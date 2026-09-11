@@ -1,19 +1,19 @@
-use ratatui::style::Color;
-use serde::{Serialize, Deserialize};
 use crate::app::App;
+use ratatui::style::Color;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
-pub enum Theme { 
-    CatppuccinMocha, 
-    Nord, 
-    Gruvbox, 
-    Dracula, 
+pub enum Theme {
+    CatppuccinMocha,
+    Nord,
+    Gruvbox,
+    Dracula,
     Monokai,
     SolarizedDark,
     Ocean,
     TokyoNight,
     RosePine,
-    Custom
+    Custom,
 }
 
 impl Theme {
@@ -71,12 +71,21 @@ impl Palette {
     /// Color del temporizador según la fracción de tiempo restante (1.0 = lleno, 0.0 = agotado):
     /// verde cuando queda holgura, amarillo a la mitad, rojo cuando está por terminar.
     pub fn timer_color(app: &App, remaining_ratio: f64) -> Color {
-        if remaining_ratio <= 0.20 { Self::red(app) }
-        else if remaining_ratio <= 0.50 { Self::peach(app) }
-        else { Self::green(app) }
+        if remaining_ratio <= 0.20 {
+            Self::red(app)
+        } else if remaining_ratio <= 0.50 {
+            Self::peach(app)
+        } else {
+            Self::green(app)
+        }
     }
 
-    fn get_color(theme: Theme, custom: &Option<ThemeColors>, getter: impl Fn(&ThemeColors) -> (u8, u8, u8), preset: impl Fn(Theme) -> Color) -> Color {
+    fn get_color(
+        theme: Theme,
+        custom: &Option<ThemeColors>,
+        getter: impl Fn(&ThemeColors) -> (u8, u8, u8),
+        preset: impl Fn(Theme) -> Color,
+    ) -> Color {
         if theme == Theme::Custom {
             if let Some(c) = custom {
                 let rgb = getter(c);
@@ -87,157 +96,212 @@ impl Palette {
     }
 
     pub fn mauve(app: &App) -> Color {
-        Self::get_color(app.config.theme, &app.config.custom_theme, |c| c.mauve, |t| match t {
-            Theme::CatppuccinMocha => Color::Rgb(203, 166, 247),
-            Theme::Nord => Color::Rgb(180, 142, 173),
-            Theme::Gruvbox => Color::Rgb(211, 134, 155),
-            Theme::Dracula => Color::Rgb(189, 147, 249),
-            Theme::Monokai => Color::Rgb(174, 129, 255),
-            Theme::SolarizedDark => Color::Rgb(108, 113, 196),
-            Theme::Ocean => Color::Rgb(192, 151, 187),
-            Theme::TokyoNight => Color::Rgb(187, 154, 247),
-            Theme::RosePine => Color::Rgb(196, 167, 231),
-            _ => Color::Rgb(203, 166, 247),
-        })
+        Self::get_color(
+            app.config.theme,
+            &app.config.custom_theme,
+            |c| c.mauve,
+            |t| match t {
+                Theme::CatppuccinMocha => Color::Rgb(203, 166, 247),
+                Theme::Nord => Color::Rgb(180, 142, 173),
+                Theme::Gruvbox => Color::Rgb(211, 134, 155),
+                Theme::Dracula => Color::Rgb(189, 147, 249),
+                Theme::Monokai => Color::Rgb(174, 129, 255),
+                Theme::SolarizedDark => Color::Rgb(108, 113, 196),
+                Theme::Ocean => Color::Rgb(192, 151, 187),
+                Theme::TokyoNight => Color::Rgb(187, 154, 247),
+                Theme::RosePine => Color::Rgb(196, 167, 231),
+                _ => Color::Rgb(203, 166, 247),
+            },
+        )
     }
     pub fn red(app: &App) -> Color {
-        Self::get_color(app.config.theme, &app.config.custom_theme, |c| c.red, |t| match t {
-            Theme::CatppuccinMocha => Color::Rgb(243, 139, 168),
-            Theme::Nord => Color::Rgb(191, 97, 106),
-            Theme::Gruvbox => Color::Rgb(251, 73, 52),
-            Theme::Dracula => Color::Rgb(255, 85, 85),
-            Theme::Monokai => Color::Rgb(249, 38, 114),
-            Theme::SolarizedDark => Color::Rgb(220, 50, 47),
-            Theme::Ocean => Color::Rgb(191, 97, 106),
-            Theme::TokyoNight => Color::Rgb(247, 118, 142),
-            Theme::RosePine => Color::Rgb(235, 111, 146),
-            _ => Color::Rgb(243, 139, 168),
-        })
+        Self::get_color(
+            app.config.theme,
+            &app.config.custom_theme,
+            |c| c.red,
+            |t| match t {
+                Theme::CatppuccinMocha => Color::Rgb(243, 139, 168),
+                Theme::Nord => Color::Rgb(191, 97, 106),
+                Theme::Gruvbox => Color::Rgb(251, 73, 52),
+                Theme::Dracula => Color::Rgb(255, 85, 85),
+                Theme::Monokai => Color::Rgb(249, 38, 114),
+                Theme::SolarizedDark => Color::Rgb(220, 50, 47),
+                Theme::Ocean => Color::Rgb(191, 97, 106),
+                Theme::TokyoNight => Color::Rgb(247, 118, 142),
+                Theme::RosePine => Color::Rgb(235, 111, 146),
+                _ => Color::Rgb(243, 139, 168),
+            },
+        )
     }
     pub fn green(app: &App) -> Color {
-        Self::get_color(app.config.theme, &app.config.custom_theme, |c| c.green, |t| match t {
-            Theme::CatppuccinMocha => Color::Rgb(166, 227, 161),
-            Theme::Nord => Color::Rgb(163, 190, 140),
-            Theme::Gruvbox => Color::Rgb(184, 187, 38),
-            Theme::Dracula => Color::Rgb(80, 250, 123),
-            Theme::Monokai => Color::Rgb(166, 226, 46),
-            Theme::SolarizedDark => Color::Rgb(133, 153, 0),
-            Theme::Ocean => Color::Rgb(163, 190, 140),
-            Theme::TokyoNight => Color::Rgb(158, 206, 106),
-            Theme::RosePine => Color::Rgb(156, 207, 216),
-            _ => Color::Rgb(166, 227, 161),
-        })
+        Self::get_color(
+            app.config.theme,
+            &app.config.custom_theme,
+            |c| c.green,
+            |t| match t {
+                Theme::CatppuccinMocha => Color::Rgb(166, 227, 161),
+                Theme::Nord => Color::Rgb(163, 190, 140),
+                Theme::Gruvbox => Color::Rgb(184, 187, 38),
+                Theme::Dracula => Color::Rgb(80, 250, 123),
+                Theme::Monokai => Color::Rgb(166, 226, 46),
+                Theme::SolarizedDark => Color::Rgb(133, 153, 0),
+                Theme::Ocean => Color::Rgb(163, 190, 140),
+                Theme::TokyoNight => Color::Rgb(158, 206, 106),
+                Theme::RosePine => Color::Rgb(156, 207, 216),
+                _ => Color::Rgb(166, 227, 161),
+            },
+        )
     }
     pub fn peach(app: &App) -> Color {
-        Self::get_color(app.config.theme, &app.config.custom_theme, |c| c.peach, |t| match t {
-            Theme::CatppuccinMocha => Color::Rgb(250, 179, 135),
-            Theme::Nord => Color::Rgb(208, 135, 112),
-            Theme::Gruvbox => Color::Rgb(254, 128, 25),
-            Theme::Dracula => Color::Rgb(255, 184, 108),
-            Theme::Monokai => Color::Rgb(253, 151, 31),
-            Theme::SolarizedDark => Color::Rgb(203, 75, 22),
-            Theme::Ocean => Color::Rgb(208, 135, 112),
-            Theme::TokyoNight => Color::Rgb(255, 158, 100),
-            Theme::RosePine => Color::Rgb(235, 188, 186),
-            _ => Color::Rgb(250, 179, 135),
-        })
+        Self::get_color(
+            app.config.theme,
+            &app.config.custom_theme,
+            |c| c.peach,
+            |t| match t {
+                Theme::CatppuccinMocha => Color::Rgb(250, 179, 135),
+                Theme::Nord => Color::Rgb(208, 135, 112),
+                Theme::Gruvbox => Color::Rgb(254, 128, 25),
+                Theme::Dracula => Color::Rgb(255, 184, 108),
+                Theme::Monokai => Color::Rgb(253, 151, 31),
+                Theme::SolarizedDark => Color::Rgb(203, 75, 22),
+                Theme::Ocean => Color::Rgb(208, 135, 112),
+                Theme::TokyoNight => Color::Rgb(255, 158, 100),
+                Theme::RosePine => Color::Rgb(235, 188, 186),
+                _ => Color::Rgb(250, 179, 135),
+            },
+        )
     }
     pub fn yellow(app: &App) -> Color {
-        Self::get_color(app.config.theme, &app.config.custom_theme, |c| c.yellow, |t| match t {
-            Theme::CatppuccinMocha => Color::Rgb(249, 226, 175),
-            Theme::Nord => Color::Rgb(235, 203, 139),
-            Theme::Gruvbox => Color::Rgb(250, 189, 47),
-            Theme::Dracula => Color::Rgb(241, 250, 140),
-            Theme::Monokai => Color::Rgb(230, 219, 116),
-            Theme::SolarizedDark => Color::Rgb(181, 137, 0),
-            Theme::Ocean => Color::Rgb(235, 203, 139),
-            Theme::TokyoNight => Color::Rgb(224, 175, 104),
-            Theme::RosePine => Color::Rgb(246, 193, 119),
-            _ => Color::Rgb(249, 226, 175),
-        })
+        Self::get_color(
+            app.config.theme,
+            &app.config.custom_theme,
+            |c| c.yellow,
+            |t| match t {
+                Theme::CatppuccinMocha => Color::Rgb(249, 226, 175),
+                Theme::Nord => Color::Rgb(235, 203, 139),
+                Theme::Gruvbox => Color::Rgb(250, 189, 47),
+                Theme::Dracula => Color::Rgb(241, 250, 140),
+                Theme::Monokai => Color::Rgb(230, 219, 116),
+                Theme::SolarizedDark => Color::Rgb(181, 137, 0),
+                Theme::Ocean => Color::Rgb(235, 203, 139),
+                Theme::TokyoNight => Color::Rgb(224, 175, 104),
+                Theme::RosePine => Color::Rgb(246, 193, 119),
+                _ => Color::Rgb(249, 226, 175),
+            },
+        )
     }
     pub fn blue(app: &App) -> Color {
-        Self::get_color(app.config.theme, &app.config.custom_theme, |c| c.blue, |t| match t {
-            Theme::CatppuccinMocha => Color::Rgb(137, 180, 250),
-            Theme::Nord => Color::Rgb(129, 161, 193),
-            Theme::Gruvbox => Color::Rgb(131, 165, 152),
-            Theme::Dracula => Color::Rgb(139, 233, 253),
-            Theme::Monokai => Color::Rgb(102, 217, 239),
-            Theme::SolarizedDark => Color::Rgb(38, 139, 210),
-            Theme::Ocean => Color::Rgb(136, 192, 208),
-            Theme::TokyoNight => Color::Rgb(122, 162, 247),
-            Theme::RosePine => Color::Rgb(49, 116, 143),
-            _ => Color::Rgb(137, 180, 250),
-        })
+        Self::get_color(
+            app.config.theme,
+            &app.config.custom_theme,
+            |c| c.blue,
+            |t| match t {
+                Theme::CatppuccinMocha => Color::Rgb(137, 180, 250),
+                Theme::Nord => Color::Rgb(129, 161, 193),
+                Theme::Gruvbox => Color::Rgb(131, 165, 152),
+                Theme::Dracula => Color::Rgb(139, 233, 253),
+                Theme::Monokai => Color::Rgb(102, 217, 239),
+                Theme::SolarizedDark => Color::Rgb(38, 139, 210),
+                Theme::Ocean => Color::Rgb(136, 192, 208),
+                Theme::TokyoNight => Color::Rgb(122, 162, 247),
+                Theme::RosePine => Color::Rgb(49, 116, 143),
+                _ => Color::Rgb(137, 180, 250),
+            },
+        )
     }
     pub fn text(app: &App) -> Color {
-        Self::get_color(app.config.theme, &app.config.custom_theme, |c| c.text, |t| match t {
-            Theme::CatppuccinMocha => Color::Rgb(205, 214, 244),
-            Theme::Nord => Color::Rgb(236, 239, 244),
-            Theme::Gruvbox => Color::Rgb(235, 219, 178),
-            Theme::Dracula => Color::Rgb(248, 248, 242),
-            Theme::Monokai => Color::Rgb(248, 248, 242),
-            Theme::SolarizedDark => Color::Rgb(131, 148, 150),
-            Theme::Ocean => Color::Rgb(236, 239, 244),
-            Theme::TokyoNight => Color::Rgb(192, 202, 245),
-            Theme::RosePine => Color::Rgb(224, 222, 244),
-            _ => Color::Rgb(205, 214, 244),
-        })
+        Self::get_color(
+            app.config.theme,
+            &app.config.custom_theme,
+            |c| c.text,
+            |t| match t {
+                Theme::CatppuccinMocha => Color::Rgb(205, 214, 244),
+                Theme::Nord => Color::Rgb(236, 239, 244),
+                Theme::Gruvbox => Color::Rgb(235, 219, 178),
+                Theme::Dracula => Color::Rgb(248, 248, 242),
+                Theme::Monokai => Color::Rgb(248, 248, 242),
+                Theme::SolarizedDark => Color::Rgb(131, 148, 150),
+                Theme::Ocean => Color::Rgb(236, 239, 244),
+                Theme::TokyoNight => Color::Rgb(192, 202, 245),
+                Theme::RosePine => Color::Rgb(224, 222, 244),
+                _ => Color::Rgb(205, 214, 244),
+            },
+        )
     }
     pub fn subtext0(app: &App) -> Color {
-        Self::get_color(app.config.theme, &app.config.custom_theme, |c| c.subtext0, |t| match t {
-            Theme::CatppuccinMocha => Color::Rgb(166, 173, 200),
-            Theme::Nord => Color::Rgb(216, 222, 233),
-            Theme::Gruvbox => Color::Rgb(168, 153, 132),
-            Theme::Dracula => Color::Rgb(98, 114, 164),
-            Theme::Monokai => Color::Rgb(117, 113, 94),
-            Theme::SolarizedDark => Color::Rgb(101, 123, 131),
-            Theme::Ocean => Color::Rgb(216, 222, 233),
-            Theme::TokyoNight => Color::Rgb(169, 177, 214),
-            Theme::RosePine => Color::Rgb(144, 140, 170),
-            _ => Color::Rgb(166, 173, 200),
-        })
+        Self::get_color(
+            app.config.theme,
+            &app.config.custom_theme,
+            |c| c.subtext0,
+            |t| match t {
+                Theme::CatppuccinMocha => Color::Rgb(166, 173, 200),
+                Theme::Nord => Color::Rgb(216, 222, 233),
+                Theme::Gruvbox => Color::Rgb(168, 153, 132),
+                Theme::Dracula => Color::Rgb(98, 114, 164),
+                Theme::Monokai => Color::Rgb(117, 113, 94),
+                Theme::SolarizedDark => Color::Rgb(101, 123, 131),
+                Theme::Ocean => Color::Rgb(216, 222, 233),
+                Theme::TokyoNight => Color::Rgb(169, 177, 214),
+                Theme::RosePine => Color::Rgb(144, 140, 170),
+                _ => Color::Rgb(166, 173, 200),
+            },
+        )
     }
     pub fn overlay0(app: &App) -> Color {
-        Self::get_color(app.config.theme, &app.config.custom_theme, |c| c.overlay0, |t| match t {
-            Theme::CatppuccinMocha => Color::Rgb(108, 112, 134),
-            Theme::Nord => Color::Rgb(76, 86, 106),
-            Theme::Gruvbox => Color::Rgb(146, 131, 116),
-            Theme::Dracula => Color::Rgb(68, 71, 90),
-            Theme::Monokai => Color::Rgb(73, 72, 62),
-            Theme::SolarizedDark => Color::Rgb(88, 110, 117),
-            Theme::Ocean => Color::Rgb(76, 86, 106),
-            Theme::TokyoNight => Color::Rgb(86, 95, 137),
-            Theme::RosePine => Color::Rgb(110, 106, 134),
-            _ => Color::Rgb(108, 112, 134),
-        })
+        Self::get_color(
+            app.config.theme,
+            &app.config.custom_theme,
+            |c| c.overlay0,
+            |t| match t {
+                Theme::CatppuccinMocha => Color::Rgb(108, 112, 134),
+                Theme::Nord => Color::Rgb(76, 86, 106),
+                Theme::Gruvbox => Color::Rgb(146, 131, 116),
+                Theme::Dracula => Color::Rgb(68, 71, 90),
+                Theme::Monokai => Color::Rgb(73, 72, 62),
+                Theme::SolarizedDark => Color::Rgb(88, 110, 117),
+                Theme::Ocean => Color::Rgb(76, 86, 106),
+                Theme::TokyoNight => Color::Rgb(86, 95, 137),
+                Theme::RosePine => Color::Rgb(110, 106, 134),
+                _ => Color::Rgb(108, 112, 134),
+            },
+        )
     }
     pub fn surface0(app: &App) -> Color {
-        Self::get_color(app.config.theme, &app.config.custom_theme, |c| c.surface0, |t| match t {
-            Theme::CatppuccinMocha => Color::Rgb(49, 50, 68),
-            Theme::Nord => Color::Rgb(59, 66, 82),
-            Theme::Gruvbox => Color::Rgb(60, 56, 54),
-            Theme::Dracula => Color::Rgb(40, 42, 54),
-            Theme::Monokai => Color::Rgb(39, 40, 34),
-            Theme::SolarizedDark => Color::Rgb(7, 54, 66),
-            Theme::Ocean => Color::Rgb(59, 66, 82),
-            Theme::TokyoNight => Color::Rgb(41, 46, 66),
-            Theme::RosePine => Color::Rgb(31, 29, 46),
-            _ => Color::Rgb(49, 50, 68),
-        })
+        Self::get_color(
+            app.config.theme,
+            &app.config.custom_theme,
+            |c| c.surface0,
+            |t| match t {
+                Theme::CatppuccinMocha => Color::Rgb(49, 50, 68),
+                Theme::Nord => Color::Rgb(59, 66, 82),
+                Theme::Gruvbox => Color::Rgb(60, 56, 54),
+                Theme::Dracula => Color::Rgb(40, 42, 54),
+                Theme::Monokai => Color::Rgb(39, 40, 34),
+                Theme::SolarizedDark => Color::Rgb(7, 54, 66),
+                Theme::Ocean => Color::Rgb(59, 66, 82),
+                Theme::TokyoNight => Color::Rgb(41, 46, 66),
+                Theme::RosePine => Color::Rgb(31, 29, 46),
+                _ => Color::Rgb(49, 50, 68),
+            },
+        )
     }
     pub fn base(app: &App) -> Color {
-        Self::get_color(app.config.theme, &app.config.custom_theme, |c| c.base, |t| match t {
-            Theme::CatppuccinMocha => Color::Rgb(30, 30, 46),
-            Theme::Nord => Color::Rgb(46, 52, 64),
-            Theme::Gruvbox => Color::Rgb(40, 40, 40),
-            Theme::Dracula => Color::Rgb(40, 42, 54),
-            Theme::Monokai => Color::Rgb(39, 40, 34),
-            Theme::SolarizedDark => Color::Rgb(0, 43, 54),
-            Theme::Ocean => Color::Rgb(46, 52, 64),
-            Theme::TokyoNight => Color::Rgb(26, 27, 38),
-            Theme::RosePine => Color::Rgb(25, 23, 36),
-            _ => Color::Rgb(30, 30, 46),
-        })
+        Self::get_color(
+            app.config.theme,
+            &app.config.custom_theme,
+            |c| c.base,
+            |t| match t {
+                Theme::CatppuccinMocha => Color::Rgb(30, 30, 46),
+                Theme::Nord => Color::Rgb(46, 52, 64),
+                Theme::Gruvbox => Color::Rgb(40, 40, 40),
+                Theme::Dracula => Color::Rgb(40, 42, 54),
+                Theme::Monokai => Color::Rgb(39, 40, 34),
+                Theme::SolarizedDark => Color::Rgb(0, 43, 54),
+                Theme::Ocean => Color::Rgb(46, 52, 64),
+                Theme::TokyoNight => Color::Rgb(26, 27, 38),
+                Theme::RosePine => Color::Rgb(25, 23, 36),
+                _ => Color::Rgb(30, 30, 46),
+            },
+        )
     }
 }

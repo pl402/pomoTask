@@ -1,12 +1,12 @@
-use crossterm::event::{KeyCode, KeyEvent};
-use std::time::Duration;
-use crate::app::{App, AppMode, InputField, DatePreset, Task};
-use crate::ui::palette::Theme;
-use crate::events::Event;
 use crate::api::{ApiClient, MoveTaskData};
+use crate::app::{App, AppMode, DatePreset, InputField, Task};
+use crate::events::Event;
+use crate::ui::palette::Theme;
+use chrono::{DateTime, Duration as ChronoDuration, Local, Utc};
+use crossterm::event::{KeyCode, KeyEvent};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
-use chrono::{Local, Utc, DateTime, Duration as ChronoDuration};
 
 pub async fn handle_key_events(
     key: KeyEvent,
@@ -21,29 +21,27 @@ pub async fn handle_key_events(
     }
 
     match app.mode {
-        AppMode::Loading => {},
-        
-        AppMode::Auth => {
-            match key.code {
-                KeyCode::Char('q') => app.running = false,
-                KeyCode::Enter if app.auth_url.is_none() => { 
-                    sync_tasks(api_client, sender.clone(), app).await; 
-                }
-                _ => {}
+        AppMode::Loading => {}
+
+        AppMode::Auth => match key.code {
+            KeyCode::Char('q') => app.running = false,
+            KeyCode::Enter if app.auth_url.is_none() => {
+                sync_tasks(api_client, sender.clone(), app).await;
             }
+            _ => {}
         },
 
         // Cualquier tecla salta la pantalla de éxito y entra directo al temporizador.
         AppMode::AuthSuccess => {
             app.auth_success_frames = 0;
             app.mode = AppMode::Timer;
-        },
+        }
 
         AppMode::ConfirmComplete => {
             match key.code {
-                KeyCode::Esc => { 
-                    app.mode = AppMode::Timer; 
-                    app.confirming_task_id = None; 
+                KeyCode::Esc => {
+                    app.mode = AppMode::Timer;
+                    app.confirming_task_id = None;
                 }
                 KeyCode::Enter => {
                     let task_to_toggle = if let Some(id) = &app.confirming_task_id {
@@ -56,16 +54,28 @@ pub async fn handle_key_events(
                         let task_id = task.id.clone();
                         let is_completed = task.completed;
                         let task_list_id = if task.list_id.is_empty() || task.list_id == "@all" {
-                            app.task_lists.iter().find(|l| l.id != "@all").map(|l| l.id.clone()).unwrap_or_else(|| "@default".to_string())
+                            app.task_lists
+                                .iter()
+                                .find(|l| l.id != "@all")
+                                .map(|l| l.id.clone())
+                                .unwrap_or_else(|| "@default".to_string())
                         } else {
                             task.list_id.clone()
                         };
-                        let selected_list_id = app.task_lists.get(app.selected_list_idx).map(|l| l.id.clone()).unwrap_or_default();
+                        let selected_list_id = app
+                            .task_lists
+                            .get(app.selected_list_idx)
+                            .map(|l| l.id.clone())
+                            .unwrap_or_default();
                         let api = api_client.clone();
                         let sender_clone = sender.clone();
                         let timer_active = app.timer_active;
 
-                        let is_main_task = if let Some(current) = app.tasks.get(app.selected_task) { current.id == task_id } else { false };
+                        let is_main_task = if let Some(current) = app.tasks.get(app.selected_task) {
+                            current.id == task_id
+                        } else {
+                            false
+                        };
                         if is_main_task && app.timer_active && !is_completed {
                             app.reset_timer();
                         }
@@ -93,8 +103,8 @@ pub async fn handle_key_events(
                             app.save_tasks_cache();
                         }
 
-                        let x = 3; 
-                        let y = 1 + 5 + 1 + app.selected_task as u16; 
+                        let x = 3;
+                        let y = 1 + 5 + 1 + app.selected_task as u16;
                         let w = task.title.len() as u16 + 5;
 
                         app.loading = true;
@@ -103,40 +113,51 @@ pub async fn handle_key_events(
                         app.marking_done_task_id = Some(task_id.clone());
 
                         tokio::spawn(async move {
-                            if !is_completed && !timer_active { tokio::time::sleep(Duration::from_millis(1500)).await; }
-                            if api.toggle_task_completion(&task_list_id, &task_id, !is_completed).await.is_ok() {
-                                let _ = sender_clone.send(Event::ApiTaskCompleted(task_id, x, y, w));
+                            if !is_completed && !timer_active {
+                                tokio::time::sleep(Duration::from_millis(1500)).await;
+                            }
+                            if api
+                                .toggle_task_completion(&task_list_id, &task_id, !is_completed)
+                                .await
+                                .is_ok()
+                            {
+                                let _ =
+                                    sender_clone.send(Event::ApiTaskCompleted(task_id, x, y, w));
                                 if selected_list_id == "@all" {
                                     let _ = sender_clone.send(Event::Sync);
                                 } else {
-                                    let tasks: Vec<Task> = api.fetch_tasks(&selected_list_id, true).await.unwrap_or_default();
-                                    let _ = sender_clone.send(Event::ApiUpdate(selected_list_id, tasks));
+                                    let tasks: Vec<Task> = api
+                                        .fetch_tasks(&selected_list_id, true)
+                                        .await
+                                        .unwrap_or_default();
+                                    let _ = sender_clone
+                                        .send(Event::ApiUpdate(selected_list_id, tasks));
                                 }
-
                             } else {
                                 let _ = sender_clone.send(Event::ApiTaskFailed(task_id));
                                 let _ = sender_clone.send(Event::Sync);
                             }
                         });
-
                     }
                 }
                 _ => {}
             }
-        },
+        }
 
         AppMode::Help => {
             app.mode = AppMode::Timer;
-        },
+        }
 
         AppMode::Stats => {
             app.mode = AppMode::Timer;
-        },
+        }
 
         AppMode::Search => {
             match key.code {
                 // Enter o Esc cierran el buscador; Esc además limpia el filtro.
-                KeyCode::Enter => { app.mode = AppMode::Timer; }
+                KeyCode::Enter => {
+                    app.mode = AppMode::Timer;
+                }
                 KeyCode::Esc => {
                     app.task_filter.clear();
                     app.rebuild_visible_tasks();
@@ -152,157 +173,220 @@ pub async fn handle_key_events(
                 }
                 _ => {}
             }
-        },
+        }
 
-        AppMode::ConfirmLogout => {
-            match key.code {
-                KeyCode::Esc => { app.mode = AppMode::Settings; }
-                KeyCode::Enter => {
-                    app.logout();
-                    app.running = false;
-                }
-                _ => {}
+        AppMode::ConfirmLogout => match key.code {
+            KeyCode::Esc => {
+                app.mode = AppMode::Settings;
             }
+            KeyCode::Enter => {
+                app.logout();
+                app.running = false;
+            }
+            _ => {}
         },
 
-        AppMode::Settings => {
-            match key.code {
-                KeyCode::Esc => { app.mode = AppMode::Timer; }
-                KeyCode::Up | KeyCode::Char('k') => {
-                    if app.selected_settings_idx > 0 { app.selected_settings_idx -= 1; }
-                    else { app.selected_settings_idx = 9; }
+        AppMode::Settings => match key.code {
+            KeyCode::Esc => {
+                app.mode = AppMode::Timer;
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if app.selected_settings_idx > 0 {
+                    app.selected_settings_idx -= 1;
+                } else {
+                    app.selected_settings_idx = 9;
                 }
-                KeyCode::Down | KeyCode::Char('j') => {
-                    if app.selected_settings_idx < 9 { app.selected_settings_idx += 1; }
-                    else { app.selected_settings_idx = 0; }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if app.selected_settings_idx < 9 {
+                    app.selected_settings_idx += 1;
+                } else {
+                    app.selected_settings_idx = 0;
                 }
-                KeyCode::Left | KeyCode::Char('h') => {
-                    match app.selected_settings_idx {
-                        0 if app.config.focus_duration > 60 => { app.config.focus_duration -= 60; }
-                        1 if app.config.short_break_duration > 60 => { app.config.short_break_duration -= 60; }
-                        2 if app.config.long_break_duration > 60 => { app.config.long_break_duration -= 60; }
-                        3 => { app.toggle_language(); }
-                        4 => {
-                            app.config.theme = match app.config.theme {
-                                Theme::CatppuccinMocha => Theme::Custom,
-                                Theme::Nord => Theme::CatppuccinMocha,
-                                Theme::Gruvbox => Theme::Nord,
-                                Theme::Dracula => Theme::Gruvbox,
-                                Theme::Monokai => Theme::Dracula,
-                                Theme::SolarizedDark => Theme::Monokai,
-                                Theme::Ocean => Theme::SolarizedDark,
-                                Theme::TokyoNight => Theme::Ocean,
-                                Theme::RosePine => Theme::TokyoNight,
-                                Theme::Custom => Theme::RosePine,
-                            };
-                        }
-                        5 => {
-                            app.config.calendar_view = match app.config.calendar_view {
-                                crate::app::CalendarView::Standard => crate::app::CalendarView::Progress,
-                                crate::app::CalendarView::Heatmap => crate::app::CalendarView::Standard,
-                                crate::app::CalendarView::Progress => crate::app::CalendarView::Heatmap,
-                            };
-                        }
-                        6 => {
-                            app.config.calendar_range = match app.config.calendar_range {
-                                crate::app::CalendarRange::Month => crate::app::CalendarRange::Day,
-                                crate::app::CalendarRange::Week => crate::app::CalendarRange::Month,
-                                crate::app::CalendarRange::Day => crate::app::CalendarRange::Week,
-                            };
-                        }
-                        7 => {
-                            app.config.stats_retention = match app.config.stats_retention {
-                                crate::app::StatsRetention::Month => crate::app::StatsRetention::Forever,
-                                crate::app::StatsRetention::Year => crate::app::StatsRetention::Month,
-                                crate::app::StatsRetention::Forever => crate::app::StatsRetention::Year,
-                            };
-                        }
-                        8 => { app.config.sync_interval_minutes = app.config.sync_interval_minutes.saturating_sub(5); }
-                        _ => {}
+            }
+            KeyCode::Left | KeyCode::Char('h') => {
+                match app.selected_settings_idx {
+                    0 if app.config.focus_duration > 60 => {
+                        app.config.focus_duration -= 60;
                     }
-                    app.save_config();
-                    app.timer_seconds = app.timer_mode.duration(&app.config);
-                }
-                KeyCode::Right | KeyCode::Char('l') => {
-                    match app.selected_settings_idx {
-                        0 => { app.config.focus_duration += 60; }
-                        1 => { app.config.short_break_duration += 60; }
-                        2 => { app.config.long_break_duration += 60; }
-                        3 => { app.toggle_language(); }
-                        4 => {
-                            app.config.theme = match app.config.theme {
-                                Theme::CatppuccinMocha => Theme::Nord,
-                                Theme::Nord => Theme::Gruvbox,
-                                Theme::Gruvbox => Theme::Dracula,
-                                Theme::Dracula => Theme::Monokai,
-                                Theme::Monokai => Theme::SolarizedDark,
-                                Theme::SolarizedDark => Theme::Ocean,
-                                Theme::Ocean => Theme::TokyoNight,
-                                Theme::TokyoNight => Theme::RosePine,
-                                Theme::RosePine => Theme::Custom,
-                                Theme::Custom => Theme::CatppuccinMocha,
-                            };
-                        }
-                        5 => {
-                            app.config.calendar_view = match app.config.calendar_view {
-                                crate::app::CalendarView::Standard => crate::app::CalendarView::Heatmap,
-                                crate::app::CalendarView::Heatmap => crate::app::CalendarView::Progress,
-                                crate::app::CalendarView::Progress => crate::app::CalendarView::Standard,
-                            };
-                        }
-                        6 => {
-                            app.config.calendar_range = match app.config.calendar_range {
-                                crate::app::CalendarRange::Month => crate::app::CalendarRange::Week,
-                                crate::app::CalendarRange::Week => crate::app::CalendarRange::Day,
-                                crate::app::CalendarRange::Day => crate::app::CalendarRange::Month,
-                            };
-                        }
-                        7 => {
-                            app.config.stats_retention = match app.config.stats_retention {
-                                crate::app::StatsRetention::Month => crate::app::StatsRetention::Year,
-                                crate::app::StatsRetention::Year => crate::app::StatsRetention::Forever,
-                                crate::app::StatsRetention::Forever => crate::app::StatsRetention::Month,
-                            };
-                        }
-                        8 => { app.config.sync_interval_minutes = (app.config.sync_interval_minutes + 5).min(120); }
-                        9
-                            if (key.code == KeyCode::Enter || key.code == KeyCode::Right || key.code == KeyCode::Char('l')) => {
-                                app.mode = AppMode::ConfirmLogout;
+                    1 if app.config.short_break_duration > 60 => {
+                        app.config.short_break_duration -= 60;
+                    }
+                    2 if app.config.long_break_duration > 60 => {
+                        app.config.long_break_duration -= 60;
+                    }
+                    3 => {
+                        app.toggle_language();
+                    }
+                    4 => {
+                        app.config.theme = match app.config.theme {
+                            Theme::CatppuccinMocha => Theme::Custom,
+                            Theme::Nord => Theme::CatppuccinMocha,
+                            Theme::Gruvbox => Theme::Nord,
+                            Theme::Dracula => Theme::Gruvbox,
+                            Theme::Monokai => Theme::Dracula,
+                            Theme::SolarizedDark => Theme::Monokai,
+                            Theme::Ocean => Theme::SolarizedDark,
+                            Theme::TokyoNight => Theme::Ocean,
+                            Theme::RosePine => Theme::TokyoNight,
+                            Theme::Custom => Theme::RosePine,
+                        };
+                    }
+                    5 => {
+                        app.config.calendar_view = match app.config.calendar_view {
+                            crate::app::CalendarView::Standard => {
+                                crate::app::CalendarView::Progress
                             }
-                        _ => {}
+                            crate::app::CalendarView::Heatmap => crate::app::CalendarView::Standard,
+                            crate::app::CalendarView::Progress => crate::app::CalendarView::Heatmap,
+                        };
                     }
-                    app.save_config();
-                    app.timer_seconds = app.timer_mode.duration(&app.config);
+                    6 => {
+                        app.config.calendar_range = match app.config.calendar_range {
+                            crate::app::CalendarRange::Month => crate::app::CalendarRange::Day,
+                            crate::app::CalendarRange::Week => crate::app::CalendarRange::Month,
+                            crate::app::CalendarRange::Day => crate::app::CalendarRange::Week,
+                        };
+                    }
+                    7 => {
+                        app.config.stats_retention = match app.config.stats_retention {
+                            crate::app::StatsRetention::Month => {
+                                crate::app::StatsRetention::Forever
+                            }
+                            crate::app::StatsRetention::Year => crate::app::StatsRetention::Month,
+                            crate::app::StatsRetention::Forever => crate::app::StatsRetention::Year,
+                        };
+                    }
+                    8 => {
+                        app.config.sync_interval_minutes =
+                            app.config.sync_interval_minutes.saturating_sub(5);
+                    }
+                    _ => {}
                 }
-                KeyCode::Enter
-                    if app.selected_settings_idx == 9 => {
+                app.save_config();
+                app.timer_seconds = app.timer_mode.duration(&app.config);
+            }
+            KeyCode::Right | KeyCode::Char('l') => {
+                match app.selected_settings_idx {
+                    0 => {
+                        app.config.focus_duration += 60;
+                    }
+                    1 => {
+                        app.config.short_break_duration += 60;
+                    }
+                    2 => {
+                        app.config.long_break_duration += 60;
+                    }
+                    3 => {
+                        app.toggle_language();
+                    }
+                    4 => {
+                        app.config.theme = match app.config.theme {
+                            Theme::CatppuccinMocha => Theme::Nord,
+                            Theme::Nord => Theme::Gruvbox,
+                            Theme::Gruvbox => Theme::Dracula,
+                            Theme::Dracula => Theme::Monokai,
+                            Theme::Monokai => Theme::SolarizedDark,
+                            Theme::SolarizedDark => Theme::Ocean,
+                            Theme::Ocean => Theme::TokyoNight,
+                            Theme::TokyoNight => Theme::RosePine,
+                            Theme::RosePine => Theme::Custom,
+                            Theme::Custom => Theme::CatppuccinMocha,
+                        };
+                    }
+                    5 => {
+                        app.config.calendar_view = match app.config.calendar_view {
+                            crate::app::CalendarView::Standard => crate::app::CalendarView::Heatmap,
+                            crate::app::CalendarView::Heatmap => crate::app::CalendarView::Progress,
+                            crate::app::CalendarView::Progress => {
+                                crate::app::CalendarView::Standard
+                            }
+                        };
+                    }
+                    6 => {
+                        app.config.calendar_range = match app.config.calendar_range {
+                            crate::app::CalendarRange::Month => crate::app::CalendarRange::Week,
+                            crate::app::CalendarRange::Week => crate::app::CalendarRange::Day,
+                            crate::app::CalendarRange::Day => crate::app::CalendarRange::Month,
+                        };
+                    }
+                    7 => {
+                        app.config.stats_retention = match app.config.stats_retention {
+                            crate::app::StatsRetention::Month => crate::app::StatsRetention::Year,
+                            crate::app::StatsRetention::Year => crate::app::StatsRetention::Forever,
+                            crate::app::StatsRetention::Forever => {
+                                crate::app::StatsRetention::Month
+                            }
+                        };
+                    }
+                    8 => {
+                        app.config.sync_interval_minutes =
+                            (app.config.sync_interval_minutes + 5).min(120);
+                    }
+                    9 if (key.code == KeyCode::Enter
+                        || key.code == KeyCode::Right
+                        || key.code == KeyCode::Char('l')) =>
+                    {
                         app.mode = AppMode::ConfirmLogout;
                     }
-                _ => {}
+                    _ => {}
+                }
+                app.save_config();
+                app.timer_seconds = app.timer_mode.duration(&app.config);
             }
+            KeyCode::Enter if app.selected_settings_idx == 9 => {
+                app.mode = AppMode::ConfirmLogout;
+            }
+            _ => {}
         },
 
         AppMode::ListSelector => {
             match key.code {
-                KeyCode::Esc => { app.mode = AppMode::Timer; app.moving_task_id = None; }
+                KeyCode::Esc => {
+                    app.mode = AppMode::Timer;
+                    app.moving_task_id = None;
+                }
                 KeyCode::Enter => {
                     if let Some(moving_id) = app.moving_task_id.take() {
                         // Mover la tarea (y sus subtareas) a la lista destino seleccionada.
                         let target = app.task_lists.get(app.selected_list_idx).cloned();
-                        if let (Some(target), Some(parent)) = (target, app.all_tasks.iter().find(|t| t.id == moving_id).cloned()) {
+                        if let (Some(target), Some(parent)) = (
+                            target,
+                            app.all_tasks.iter().find(|t| t.id == moving_id).cloned(),
+                        ) {
                             if target.id != "@all" && target.id != parent.list_id {
-                                let children: Vec<MoveTaskData> = app.all_tasks.iter()
+                                let children: Vec<MoveTaskData> = app
+                                    .all_tasks
+                                    .iter()
                                     .filter(|t| t.parent_id.as_ref() == Some(&moving_id))
-                                    .map(|t| MoveTaskData { title: t.title.clone(), notes: t.notes.clone(), due: t.due, completed: t.completed })
+                                    .map(|t| MoveTaskData {
+                                        title: t.title.clone(),
+                                        notes: t.notes.clone(),
+                                        due: t.due,
+                                        completed: t.completed,
+                                    })
                                     .collect();
-                                let parent_data = MoveTaskData { title: parent.title.clone(), notes: parent.notes.clone(), due: parent.due, completed: parent.completed };
+                                let parent_data = MoveTaskData {
+                                    title: parent.title.clone(),
+                                    notes: parent.notes.clone(),
+                                    due: parent.due,
+                                    completed: parent.completed,
+                                };
                                 let from_list = parent.list_id.clone();
                                 let to_list = target.id.clone();
                                 let api = api_client.clone();
                                 let sender_clone = sender.clone();
                                 app.loading = true;
                                 tokio::spawn(async move {
-                                    let _ = api.move_task_tree(&from_list, &to_list, &moving_id, parent_data, children).await;
+                                    let _ = api
+                                        .move_task_tree(
+                                            &from_list,
+                                            &to_list,
+                                            &moving_id,
+                                            parent_data,
+                                            children,
+                                        )
+                                        .await;
                                     // Re-sincronizar para reflejar el estado real (haya ido bien o mal).
                                     let _ = sender_clone.send(Event::Sync);
                                 });
@@ -314,18 +398,19 @@ pub async fn handle_key_events(
                         app.switch_list(app.selected_list_idx); // solo caché local; el sync es periódico
                     }
                 }
-                KeyCode::Down | KeyCode::Char('j')
-                    if !app.task_lists.is_empty() => {
-                        app.selected_list_idx = (app.selected_list_idx + 1) % app.task_lists.len();
+                KeyCode::Down | KeyCode::Char('j') if !app.task_lists.is_empty() => {
+                    app.selected_list_idx = (app.selected_list_idx + 1) % app.task_lists.len();
+                }
+                KeyCode::Up | KeyCode::Char('k') if !app.task_lists.is_empty() => {
+                    if app.selected_list_idx == 0 {
+                        app.selected_list_idx = app.task_lists.len() - 1;
+                    } else {
+                        app.selected_list_idx -= 1;
                     }
-                KeyCode::Up | KeyCode::Char('k')
-                    if !app.task_lists.is_empty() => {
-                        if app.selected_list_idx == 0 { app.selected_list_idx = app.task_lists.len() - 1; }
-                        else { app.selected_list_idx -= 1; }
-                    }
+                }
                 _ => {}
             }
-        },
+        }
 
         AppMode::Input | AppMode::SubtaskInput | AppMode::Edit => {
             match key.code {
@@ -333,78 +418,99 @@ pub async fn handle_key_events(
                     app.focused_input = match app.focused_input {
                         InputField::Title => InputField::Notes,
                         InputField::Notes => {
-                            if app.mode == AppMode::Input { InputField::List }
-                            else { InputField::Due }
-                        },
+                            if app.mode == AppMode::Input {
+                                InputField::List
+                            } else {
+                                InputField::Due
+                            }
+                        }
                         InputField::List => InputField::Due,
                         InputField::Due => InputField::Title,
                     };
                 }
-                KeyCode::Esc => { app.mode = AppMode::Timer; app.clear_inputs(); }
-                KeyCode::Enter
-                    if !app.input_title.is_empty() && !app.task_lists.is_empty() => {
-                        let title = app.input_title.clone();
-                        let notes = if app.input_notes.is_empty() { None } else { Some(app.input_notes.clone()) };
-                        let due = App::parse_due_date(&app.input_due);
-                        let target_list_id = if app.mode == AppMode::Input {
-                            app.task_lists[app.input_list_idx].id.clone()
-                        } else if app.mode == AppMode::Edit {
-                            app.tasks.get(app.selected_task).map(|t| t.list_id.clone()).unwrap_or_else(|| app.task_lists[app.selected_list_idx].id.clone())
-                        } else {
-                            app.task_lists[app.selected_list_idx].id.clone()
-                        };
-                        let api = api_client.clone();
-                        let sender_clone = sender.clone();
-                        let mode = app.mode;
-                        let parent_id = if mode == AppMode::SubtaskInput { 
-                            app.tasks.get(app.selected_task).map(|t| {
-                                t.parent_id.clone().unwrap_or(t.id.clone())
-                            })
-                        } else { None };
-                        let edit_id = app.editing_task_id.clone();
-                        
-                        let temp_id = if mode != AppMode::Edit {
-                            let tid = format!("temp_{}", rand::random::<u32>());
-                            app.creating_task_temp_id = Some(tid.clone());
-                            let temp_task = Task {
-                                id: tid.clone(),
-                                list_id: target_list_id.clone(),
-                                title: title.clone(),
-                                completed: false,
-                                due,
-                                updated: Utc::now(),
-                                completed_at: None,
-                                notes: notes.clone(),
-                                parent_id: parent_id.clone(),
-                                pomodoros: 0,
-                            };
-                            
-                            // Insertar en la lista visual inmediatamente
-                            if let Some(pos) = parent_id.as_ref().and_then(|pid| app.tasks.iter().position(|t| &t.id == pid)) {
-                                app.tasks.insert(pos + 1, temp_task);
-                            } else {
-                                app.tasks.insert(0, temp_task);
-                            }
-                            Some(tid)
-                        } else {
-                            None
+                KeyCode::Esc => {
+                    app.mode = AppMode::Timer;
+                    app.clear_inputs();
+                }
+                KeyCode::Enter if !app.input_title.is_empty() && !app.task_lists.is_empty() => {
+                    let title = app.input_title.clone();
+                    let notes = if app.input_notes.is_empty() {
+                        None
+                    } else {
+                        Some(app.input_notes.clone())
+                    };
+                    let due = App::parse_due_date(&app.input_due);
+                    let target_list_id = if app.mode == AppMode::Input {
+                        app.task_lists[app.input_list_idx].id.clone()
+                    } else if app.mode == AppMode::Edit {
+                        app.tasks
+                            .get(app.selected_task)
+                            .map(|t| t.list_id.clone())
+                            .unwrap_or_else(|| app.task_lists[app.selected_list_idx].id.clone())
+                    } else {
+                        app.task_lists[app.selected_list_idx].id.clone()
+                    };
+                    let api = api_client.clone();
+                    let sender_clone = sender.clone();
+                    let mode = app.mode;
+                    let parent_id = if mode == AppMode::SubtaskInput {
+                        app.tasks
+                            .get(app.selected_task)
+                            .map(|t| t.parent_id.clone().unwrap_or(t.id.clone()))
+                    } else {
+                        None
+                    };
+                    let edit_id = app.editing_task_id.clone();
+
+                    let temp_id = if mode != AppMode::Edit {
+                        let tid = format!("temp_{}", rand::random::<u32>());
+                        app.creating_task_temp_id = Some(tid.clone());
+                        let temp_task = Task {
+                            id: tid.clone(),
+                            list_id: target_list_id.clone(),
+                            title: title.clone(),
+                            completed: false,
+                            due,
+                            updated: Utc::now(),
+                            completed_at: None,
+                            notes: notes.clone(),
+                            parent_id: parent_id.clone(),
+                            pomodoros: 0,
                         };
 
-                        app.loading = true; app.mode = AppMode::Timer; app.clear_inputs();
-                        tokio::spawn(async move {
-                            let res = if mode == AppMode::Edit { 
-                                api.update_task(&target_list_id, &edit_id.unwrap(), &title, notes, due).await 
-                            } else { 
-                                api.create_task(&target_list_id, &title, notes, due, parent_id).await 
-                            };
-                            
-                            if res.is_ok() { 
-                                let _ = sender_clone.send(Event::Sync); 
-                            } else if let Some(tid) = temp_id {
-                                let _ = sender_clone.send(Event::ApiTaskFailed(tid));
-                            }
-                        });
-                    }
+                        // Insertar en la lista visual inmediatamente
+                        if let Some(pos) = parent_id
+                            .as_ref()
+                            .and_then(|pid| app.tasks.iter().position(|t| &t.id == pid))
+                        {
+                            app.tasks.insert(pos + 1, temp_task);
+                        } else {
+                            app.tasks.insert(0, temp_task);
+                        }
+                        Some(tid)
+                    } else {
+                        None
+                    };
+
+                    app.loading = true;
+                    app.mode = AppMode::Timer;
+                    app.clear_inputs();
+                    tokio::spawn(async move {
+                        let res = if mode == AppMode::Edit {
+                            api.update_task(&target_list_id, &edit_id.unwrap(), &title, notes, due)
+                                .await
+                        } else {
+                            api.create_task(&target_list_id, &title, notes, due, parent_id)
+                                .await
+                        };
+
+                        if res.is_ok() {
+                            let _ = sender_clone.send(Event::Sync);
+                        } else if let Some(tid) = temp_id {
+                            let _ = sender_clone.send(Event::ApiTaskFailed(tid));
+                        }
+                    });
+                }
                 KeyCode::Left | KeyCode::Char('h') if app.focused_input == InputField::Due => {
                     app.selected_date_preset = match app.selected_date_preset {
                         DatePreset::Today => DatePreset::None,
@@ -415,7 +521,9 @@ pub async fn handle_key_events(
                     app.set_date_preset(app.selected_date_preset);
                 }
                 KeyCode::Left | KeyCode::Char('h') if app.focused_input == InputField::List => {
-                    if app.input_list_idx > 1 || (app.input_list_idx > 0 && app.task_lists[0].id != "@all") {
+                    if app.input_list_idx > 1
+                        || (app.input_list_idx > 0 && app.task_lists[0].id != "@all")
+                    {
                         app.input_list_idx -= 1;
                     } else {
                         app.input_list_idx = app.task_lists.len() - 1;
@@ -436,31 +544,31 @@ pub async fn handle_key_events(
                         app.input_list_idx = 1;
                     }
                 }
-                KeyCode::Char(c) => {
-                    match app.focused_input {
-                        InputField::Title => app.input_title.push(c),
-                        InputField::Notes => app.input_notes.push(c),
-                        InputField::Due => {
-                            app.selected_date_preset = DatePreset::Custom;
-                            app.input_due.push(c);
-                        }
-                        InputField::List => {}
+                KeyCode::Char(c) => match app.focused_input {
+                    InputField::Title => app.input_title.push(c),
+                    InputField::Notes => app.input_notes.push(c),
+                    InputField::Due => {
+                        app.selected_date_preset = DatePreset::Custom;
+                        app.input_due.push(c);
                     }
-                }
-                KeyCode::Backspace => {
-                    match app.focused_input {
-                        InputField::Title => { app.input_title.pop(); }
-                        InputField::Notes => { app.input_notes.pop(); }
-                        InputField::Due => { 
-                            app.selected_date_preset = DatePreset::Custom;
-                            app.input_due.pop(); 
-                        }
-                        InputField::List => {}
+                    InputField::List => {}
+                },
+                KeyCode::Backspace => match app.focused_input {
+                    InputField::Title => {
+                        app.input_title.pop();
                     }
-                }
+                    InputField::Notes => {
+                        app.input_notes.pop();
+                    }
+                    InputField::Due => {
+                        app.selected_date_preset = DatePreset::Custom;
+                        app.input_due.pop();
+                    }
+                    InputField::List => {}
+                },
                 _ => {}
             }
-        },
+        }
 
         AppMode::Timer => {
             match key.code {
@@ -469,7 +577,9 @@ pub async fn handle_key_events(
                 KeyCode::Char('r') => app.reset_timer(),
                 KeyCode::Char('m') if !app.timer_active => app.cycle_timer_mode(),
                 KeyCode::Char('n') => {
-                    if app.task_lists.is_empty() { return; }
+                    if app.task_lists.is_empty() {
+                        return;
+                    }
                     app.mode = AppMode::Input;
                     app.focused_input = InputField::Title;
                     app.set_date_preset(DatePreset::Today);
@@ -479,30 +589,42 @@ pub async fn handle_key_events(
                         app.input_list_idx = app.selected_list_idx;
                     }
                 }
-                KeyCode::Char('a') 
-                    if !app.tasks.is_empty() && app.task_lists[app.selected_list_idx].id != "@all" => { 
-                        app.mode = AppMode::SubtaskInput; 
-                        app.focused_input = InputField::Title;
-                        app.set_date_preset(DatePreset::Today);
-                    }
+                KeyCode::Char('a')
+                    if !app.tasks.is_empty()
+                        && app.task_lists[app.selected_list_idx].id != "@all" =>
+                {
+                    app.mode = AppMode::SubtaskInput;
+                    app.focused_input = InputField::Title;
+                    app.set_date_preset(DatePreset::Today);
+                }
                 KeyCode::Char('e') if !app.timer_active => {
                     if let Some(task) = app.tasks.get(app.selected_task) {
-                        app.mode = AppMode::Edit; 
-                        app.editing_task_id = Some(task.id.clone()); 
-                        app.input_title = task.title.clone(); 
-                        app.input_notes = task.notes.clone().unwrap_or_default(); 
-                        
-                        let date_str = task.due.map(|d: DateTime<Utc>| d.format("%Y-%m-%d").to_string()).unwrap_or_default();
+                        app.mode = AppMode::Edit;
+                        app.editing_task_id = Some(task.id.clone());
+                        app.input_title = task.title.clone();
+                        app.input_notes = task.notes.clone().unwrap_or_default();
+
+                        let date_str = task
+                            .due
+                            .map(|d: DateTime<Utc>| d.format("%Y-%m-%d").to_string())
+                            .unwrap_or_default();
                         app.input_due = date_str.clone();
-                        
+
                         let now = Local::now().format("%Y-%m-%d").to_string();
-                        let tomorrow = (Local::now() + ChronoDuration::days(1)).format("%Y-%m-%d").to_string();
-                        
-                        if date_str == now { app.selected_date_preset = DatePreset::Today; }
-                        else if date_str == tomorrow { app.selected_date_preset = DatePreset::Tomorrow; }
-                        else if date_str.is_empty() { app.selected_date_preset = DatePreset::None; }
-                        else { app.selected_date_preset = DatePreset::Custom; }
-                        
+                        let tomorrow = (Local::now() + ChronoDuration::days(1))
+                            .format("%Y-%m-%d")
+                            .to_string();
+
+                        if date_str == now {
+                            app.selected_date_preset = DatePreset::Today;
+                        } else if date_str == tomorrow {
+                            app.selected_date_preset = DatePreset::Tomorrow;
+                        } else if date_str.is_empty() {
+                            app.selected_date_preset = DatePreset::None;
+                        } else {
+                            app.selected_date_preset = DatePreset::Custom;
+                        }
+
                         app.focused_input = InputField::Title;
                     }
                 }
@@ -533,20 +655,38 @@ pub async fn handle_key_events(
                         }
                     }
                 }
-                KeyCode::Char('/') if !app.timer_active => { app.mode = AppMode::Search; }
-                KeyCode::Char('?') => { app.mode = AppMode::Help; }
-                KeyCode::Char('t') => { app.mode = AppMode::Stats; }
-                KeyCode::Char(',') => { app.mode = AppMode::Settings; }
+                KeyCode::Char('/') if !app.timer_active => {
+                    app.mode = AppMode::Search;
+                }
+                KeyCode::Char('?') => {
+                    app.mode = AppMode::Help;
+                }
+                KeyCode::Char('t') => {
+                    app.mode = AppMode::Stats;
+                }
+                KeyCode::Char(',') => {
+                    app.mode = AppMode::Settings;
+                }
                 KeyCode::Char('[') => app.calendar_prev_month(),
                 KeyCode::Char(']') => app.calendar_next_month(),
-                KeyCode::Tab if !app.timer_active => { app.mode = AppMode::ListSelector; }
+                KeyCode::Tab if !app.timer_active => {
+                    app.mode = AppMode::ListSelector;
+                }
                 KeyCode::Left | KeyCode::Char('h') if !app.timer_active => {
-                    if app.task_lists.is_empty() { return; }
-                    let new = if app.selected_list_idx == 0 { app.task_lists.len() - 1 } else { app.selected_list_idx - 1 };
+                    if app.task_lists.is_empty() {
+                        return;
+                    }
+                    let new = if app.selected_list_idx == 0 {
+                        app.task_lists.len() - 1
+                    } else {
+                        app.selected_list_idx - 1
+                    };
                     app.switch_list(new); // solo muestra la caché local; NO sincroniza (el sync es periódico)
                 }
                 KeyCode::Right | KeyCode::Char('l') if !app.timer_active => {
-                    if app.task_lists.is_empty() { return; }
+                    if app.task_lists.is_empty() {
+                        return;
+                    }
                     let new = (app.selected_list_idx + 1) % app.task_lists.len();
                     app.switch_list(new);
                 }
@@ -557,22 +697,31 @@ pub async fn handle_key_events(
                                 app.confirming_task_id = Some(task.id.clone());
                                 app.mode = AppMode::ConfirmComplete;
                             } else {
-                                let subtasks: Vec<_> = app.tasks.iter().filter(|t| t.parent_id.as_ref() == Some(&task.id)).collect();
+                                let subtasks: Vec<_> = app
+                                    .tasks
+                                    .iter()
+                                    .filter(|t| t.parent_id.as_ref() == Some(&task.id))
+                                    .collect();
                                 if let Some(st) = subtasks.get(app.focus_subtask_idx - 1) {
                                     app.confirming_task_id = Some(st.id.clone());
                                     app.mode = AppMode::ConfirmComplete;
                                 }
                             }
                         }
-                    } else if !app.tasks.is_empty() { 
-                        app.mode = AppMode::ConfirmComplete; 
+                    } else if !app.tasks.is_empty() {
+                        app.mode = AppMode::ConfirmComplete;
                     }
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
                     if app.timer_active {
                         if let Some(task) = app.tasks.get(app.selected_task) {
-                            let subtasks_count = app.tasks.iter().filter(|t| t.parent_id.as_ref() == Some(&task.id)).count();
-                            app.focus_subtask_idx = (app.focus_subtask_idx + 1) % (subtasks_count + 1);
+                            let subtasks_count = app
+                                .tasks
+                                .iter()
+                                .filter(|t| t.parent_id.as_ref() == Some(&task.id))
+                                .count();
+                            app.focus_subtask_idx =
+                                (app.focus_subtask_idx + 1) % (subtasks_count + 1);
                         }
                     } else if !app.tasks.is_empty() {
                         app.selected_task = (app.selected_task + 1) % app.tasks.len();
@@ -583,13 +732,23 @@ pub async fn handle_key_events(
                 KeyCode::Up | KeyCode::Char('k') => {
                     if app.timer_active {
                         if let Some(task) = app.tasks.get(app.selected_task) {
-                            let subtasks_count = app.tasks.iter().filter(|t| t.parent_id.as_ref() == Some(&task.id)).count();
-                            if app.focus_subtask_idx == 0 { app.focus_subtask_idx = subtasks_count; }
-                            else { app.focus_subtask_idx -= 1; }
+                            let subtasks_count = app
+                                .tasks
+                                .iter()
+                                .filter(|t| t.parent_id.as_ref() == Some(&task.id))
+                                .count();
+                            if app.focus_subtask_idx == 0 {
+                                app.focus_subtask_idx = subtasks_count;
+                            } else {
+                                app.focus_subtask_idx -= 1;
+                            }
                         }
                     } else if !app.tasks.is_empty() {
-                        if app.selected_task == 0 { app.selected_task = app.tasks.len() - 1; }
-                        else { app.selected_task -= 1; }
+                        if app.selected_task == 0 {
+                            app.selected_task = app.tasks.len() - 1;
+                        } else {
+                            app.selected_task -= 1;
+                        }
                         app.sync_active_timer_to_task();
                         app.save_selection();
                     }
@@ -611,14 +770,23 @@ pub fn sync_all_lists(api: &Arc<ApiClient>, sender: UnboundedSender<Event>, app:
         // Aún no tenemos las listas: primero las pedimos (ListsUpdate disparará el sync completo).
         tokio::spawn(async move {
             match api.fetch_task_lists().await {
-                Ok(lists) => { let _ = sender.send(Event::ListsUpdate(lists)); }
-                Err(_) => { let _ = sender.send(Event::SyncFailed); }
+                Ok(lists) => {
+                    let _ = sender.send(Event::ListsUpdate(lists));
+                }
+                Err(_) => {
+                    let _ = sender.send(Event::SyncFailed);
+                }
             }
         });
         return;
     }
 
-    let ids: Vec<String> = app.task_lists.iter().filter(|l| l.id != "@all").map(|l| l.id.clone()).collect();
+    let ids: Vec<String> = app
+        .task_lists
+        .iter()
+        .filter(|l| l.id != "@all")
+        .map(|l| l.id.clone())
+        .collect();
     tokio::spawn(async move {
         // Primero subimos lo que el plugin dejó pendiente sin conexión; si falla, main.rs lo
         // re-aplica sobre lo descargado (Event::ApiUpdate) para que no se pierda.
@@ -640,20 +808,30 @@ pub async fn sync_tasks(api: &Arc<ApiClient>, sender: UnboundedSender<Event>, ap
     if app.task_lists.is_empty() {
         tokio::spawn(async move {
             match api.fetch_task_lists().await {
-                Ok(lists) => { let _ = sender.send(Event::ListsUpdate(lists)); }
+                Ok(lists) => {
+                    let _ = sender.send(Event::ListsUpdate(lists));
+                }
                 // Sin red: no vaciamos nada, conservamos la caché local.
-                Err(_) => { let _ = sender.send(Event::SyncFailed); }
+                Err(_) => {
+                    let _ = sender.send(Event::SyncFailed);
+                }
             }
         });
     } else {
         let list_id = app.task_lists[app.selected_list_idx].id.clone();
         if list_id == "@all" {
-            let other_lists: Vec<String> = app.task_lists.iter().filter(|l| l.id != "@all").map(|l| l.id.clone()).collect();
+            let other_lists: Vec<String> = app
+                .task_lists
+                .iter()
+                .filter(|l| l.id != "@all")
+                .map(|l| l.id.clone())
+                .collect();
             tokio::spawn(async move {
                 let _ = crate::outbox::push_pending(&api).await;
                 let mut all_tasks = Vec::new();
                 for id in other_lists {
-                    if let Ok(tasks) = api.fetch_tasks(&id, true).await { // Siempre traer completadas
+                    if let Ok(tasks) = api.fetch_tasks(&id, true).await {
+                        // Siempre traer completadas
                         all_tasks.extend(tasks);
                     }
                 }
@@ -661,9 +839,13 @@ pub async fn sync_tasks(api: &Arc<ApiClient>, sender: UnboundedSender<Event>, ap
             });
         } else {
             tokio::spawn(async move {
-                match api.fetch_tasks(&list_id, true).await { // Siempre traer completadas
-                    Ok(tasks) => { let _ = sender.send(Event::ApiUpdate(list_id, tasks)); }
-                    Err(_) => { /* No enviar nada para no vaciar la lista actual en caso de error de red */ }
+                match api.fetch_tasks(&list_id, true).await {
+                    // Siempre traer completadas
+                    Ok(tasks) => {
+                        let _ = sender.send(Event::ApiUpdate(list_id, tasks));
+                    }
+                    Err(_) => { /* No enviar nada para no vaciar la lista actual en caso de error de red */
+                    }
                 }
             });
         }

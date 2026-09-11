@@ -3,12 +3,12 @@ use crate::app::{Stats, Task, TaskList};
 use crate::events::Event;
 use crate::outbox::{self, PendingOp};
 use chrono::Utc;
-use tokio::sync::mpsc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+use tokio::sync::mpsc;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RuntimeState {
@@ -136,10 +136,7 @@ fn default_overlay_dimming() -> f64 {
 }
 
 fn default_allowed_title_keywords() -> Vec<String> {
-    vec![
-        "youtube music".to_string(),
-        "music.youtube.com".to_string(),
-    ]
+    vec!["youtube music".to_string(), "music.youtube.com".to_string()]
 }
 
 fn default_allowed_classes() -> Vec<String> {
@@ -326,10 +323,7 @@ pub fn atomic_write(path: &Path, content: &str) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let file_name = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("file");
+    let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
     let tmp_file_name = format!(".{}_{}.tmp", file_name, rand::random::<u64>());
     let tmp_path = path.with_file_name(tmp_file_name);
 
@@ -493,6 +487,25 @@ pub fn save_tasks_cache_to(cache: &HashMap<String, Vec<Task>>, path: &Path) -> s
     let data = serde_json::to_string_pretty(cache)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     atomic_write(path, &data)
+}
+
+/// Escribe una duración (en segundos) en config.json conservando el resto de campos. Si el
+/// archivo no existe o está corrupto se parte de la configuración por defecto de la TUI, para
+/// que ésta siga pudiendo deserializarlo completo.
+pub fn set_config_duration(key: &str, seconds: u32) -> Result<(), String> {
+    let path = get_config_dir().join("config.json");
+    let mut cfg: serde_json::Value = fs::read_to_string(&path)
+        .ok()
+        .and_then(|d| serde_json::from_str(&d).ok())
+        .filter(|v: &serde_json::Value| v.is_object())
+        .unwrap_or_else(|| {
+            serde_json::to_value(crate::app::Config::default()).unwrap_or(serde_json::json!({}))
+        });
+    if let Some(obj) = cfg.as_object_mut() {
+        obj.insert(key.to_string(), serde_json::json!(seconds));
+    }
+    let data = serde_json::to_string_pretty(&cfg).map_err(|e| e.to_string())?;
+    fs::write(&path, data).map_err(|e| format!("config.json: {}", e))
 }
 
 pub fn load_config_durations() -> (u32, u32, u32) {
@@ -872,7 +885,13 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
                         &mut rx,
                         10,
                         "Google Tasks create",
-                        client.create_task_returning_id(&target_list_id, &title_val, None, None, parent),
+                        client.create_task_returning_id(
+                            &target_list_id,
+                            &title_val,
+                            None,
+                            None,
+                            parent,
+                        ),
                     )
                     .await;
                     match res {
@@ -925,6 +944,72 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
                 }
                 other => Err(format!(
                     "Unknown task subcommand: '{}'. Expected complete, create, focus",
+                    other
+                )),
+            }
+        }
+        // Duraciones del pomodoro (config.json). Los valores se reciben en MINUTOS y se guardan en
+        // segundos, como los usa la TUI. `get` devuelve las tres duraciones en segundos.
+        "config" => {
+            let action = clean_args.get(1).copied().unwrap_or("get");
+            match action {
+                "get" => {
+                    let (focus, short, long) = load_config_durations();
+                    let out = serde_json::json!({
+                        "focus_duration": focus,
+                        "short_break_duration": short,
+                        "long_break_duration": long,
+                    });
+                    serde_json::to_string_pretty(&out).map_err(|e| e.to_string())
+                }
+                "set" => {
+                    if clean_args.len() < 4 {
+                        return Err("Usage: config set <focus|short|long> <minutes>".to_string());
+                    }
+                    let key = match clean_args[2] {
+                        "focus" | "focus_duration" | "work" => "focus_duration",
+                        "short" | "short_break" | "short_break_duration" => "short_break_duration",
+                        "long" | "long_break" | "long_break_duration" => "long_break_duration",
+                        other => {
+                            return Err(format!(
+                                "Unknown duration key: '{}'. Expected focus, short, long",
+                                other
+                            ))
+                        }
+                    };
+                    let minutes: u64 = clean_args[3]
+                        .parse()
+                        .map_err(|_| format!("Invalid minutes: '{}'", clean_args[3]))?;
+                    if !(1..=180).contains(&minutes) {
+                        return Err("Minutes must be between 1 and 180".to_string());
+                    }
+                    let seconds = (minutes * 60) as u32;
+                    set_config_duration(key, seconds)?;
+
+                    // Si el temporizador está detenido en ese modo, reflejar la nueva duración ya.
+                    let mut state = load_runtime_state();
+                    let affects_mode = matches!(
+                        (key, state.mode.as_str()),
+                        ("focus_duration", "work")
+                            | ("short_break_duration", "short_break")
+                            | ("long_break_duration", "long_break")
+                    );
+                    if affects_mode && state.state == "stopped" {
+                        state.total_seconds = seconds;
+                        state.remaining_seconds = seconds;
+                        save_runtime_state(&state).map_err(|e| e.to_string())?;
+                    }
+
+                    let (focus, short, long) = load_config_durations();
+                    let out = serde_json::json!({
+                        "focus_duration": focus,
+                        "short_break_duration": short,
+                        "long_break_duration": long,
+                    });
+                    serde_json::to_string_pretty(&out).map_err(|e| e.to_string())
+                }
+                other => Err(format!(
+                    "Unknown config command: '{}'. Expected get, set",
                     other
                 )),
             }
@@ -1095,7 +1180,14 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
             //    cualquier otro fallo se anota y seguimos, re-aplicando lo pendiente sobre la caché.
             let mut push_error: Option<String> = None;
             if outbox::pending_count() > 0 {
-                match with_auth_guard(&mut rx, 30, "Uploading pending changes", outbox::push_pending(&client)).await {
+                match with_auth_guard(
+                    &mut rx,
+                    30,
+                    "Uploading pending changes",
+                    outbox::push_pending(&client),
+                )
+                .await
+                {
                     Ok(_) => {}
                     Err(e) if e.starts_with("auth_required") => {
                         mark_google_error(&e);
@@ -1106,7 +1198,14 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
             }
 
             // 2) Descargar listas y tareas.
-            let lists = match with_auth_guard(&mut rx, 10, "Sync fetching lists", client.fetch_task_lists()).await {
+            let lists = match with_auth_guard(
+                &mut rx,
+                10,
+                "Sync fetching lists",
+                client.fetch_task_lists(),
+            )
+            .await
+            {
                 Ok(l) => l,
                 Err(e) => {
                     mark_google_error(&e);
@@ -1264,7 +1363,9 @@ mod tests {
         blocklist.blocked_classes.push("".to_string());
 
         // YouTube estándar está bloqueado
-        assert!(blocklist.is_distraction("Rick Astley - Never Gonna Give You Up - YouTube", "firefox"));
+        assert!(
+            blocklist.is_distraction("Rick Astley - Never Gonna Give You Up - YouTube", "firefox")
+        );
         assert!(blocklist.is_distraction("Facebook - Log In", "firefox"));
         assert!(blocklist.is_distraction("Any Title", "steam"));
 

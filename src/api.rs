@@ -1,25 +1,41 @@
-use crate::app::{Task, TaskList, App};
-use google_tasks1::{api, TasksHub};
-use yup_oauth2::{InstalledFlowAuthenticator, InstalledFlowReturnMethod, authenticator::Authenticator, parse_application_secret};
-use yup_oauth2::authenticator_delegate::InstalledFlowDelegate;
-use hyper_rustls::HttpsConnector;
-use hyper::client::HttpConnector;
-use std::path::PathBuf;
-use std::pin::Pin;
-use std::future::Future;
-use tokio::sync::mpsc;
+use crate::app::{App, Task, TaskList};
 use crate::events::Event;
 use chrono::{DateTime, Utc};
+use google_tasks1::{api, TasksHub};
+use hyper::client::HttpConnector;
+use hyper_rustls::HttpsConnector;
+use std::future::Future;
+use std::path::PathBuf;
+use std::pin::Pin;
+use tokio::sync::mpsc;
+use yup_oauth2::authenticator_delegate::InstalledFlowDelegate;
+use yup_oauth2::{
+    authenticator::Authenticator, parse_application_secret, InstalledFlowAuthenticator,
+    InstalledFlowReturnMethod,
+};
 
-struct TuiDelegate { sender: mpsc::UnboundedSender<Event> }
+struct TuiDelegate {
+    sender: mpsc::UnboundedSender<Event>,
+}
 impl InstalledFlowDelegate for TuiDelegate {
-    fn present_user_url<'a>(&'a self, url: &'a str, _need_code: bool) -> Pin<Box<dyn Future<Output = Result<String, String>> + Send + 'a>> {
-        let url = url.to_string(); let sender = self.sender.clone();
-        Box::pin(async move { let _ = sender.send(Event::NeedsAuth(url)); Ok(String::new()) })
+    fn present_user_url<'a>(
+        &'a self,
+        url: &'a str,
+        _need_code: bool,
+    ) -> Pin<Box<dyn Future<Output = Result<String, String>> + Send + 'a>> {
+        let url = url.to_string();
+        let sender = self.sender.clone();
+        Box::pin(async move {
+            let _ = sender.send(Event::NeedsAuth(url));
+            Ok(String::new())
+        })
     }
 }
 
-pub struct ApiClient { hub: Option<TasksHub<HttpsConnector<HttpConnector>>>, auth: Option<Authenticator<HttpsConnector<HttpConnector>>> }
+pub struct ApiClient {
+    hub: Option<TasksHub<HttpsConnector<HttpConnector>>>,
+    auth: Option<Authenticator<HttpsConnector<HttpConnector>>>,
+}
 
 impl ApiClient {
     pub async fn new(sender: mpsc::UnboundedSender<Event>) -> Self {
@@ -42,18 +58,50 @@ impl ApiClient {
 
         let secret = match secret {
             Some(s) => s,
-            None => return Self { hub: None, auth: None },
+            None => {
+                return Self {
+                    hub: None,
+                    auth: None,
+                }
+            }
         };
 
-        let mut token_path = App::get_config_dir(); token_path.push("pomotask_token.json");
-        let auth = match InstalledFlowAuthenticator::builder(secret, InstalledFlowReturnMethod::HTTPRedirect).persist_tokens_to_disk(token_path).flow_delegate(Box::new(TuiDelegate { sender })).build().await { Ok(a) => a, Err(_) => return Self { hub: None, auth: None } };
-        let https = hyper_rustls::HttpsConnectorBuilder::new().with_native_roots().expect("no native roots found").https_or_http().enable_http1().build();
+        let mut token_path = App::get_config_dir();
+        token_path.push("pomotask_token.json");
+        let auth = match InstalledFlowAuthenticator::builder(
+            secret,
+            InstalledFlowReturnMethod::HTTPRedirect,
+        )
+        .persist_tokens_to_disk(token_path)
+        .flow_delegate(Box::new(TuiDelegate { sender }))
+        .build()
+        .await
+        {
+            Ok(a) => a,
+            Err(_) => {
+                return Self {
+                    hub: None,
+                    auth: None,
+                }
+            }
+        };
+        let https = hyper_rustls::HttpsConnectorBuilder::new()
+            .with_native_roots()
+            .expect("no native roots found")
+            .https_or_http()
+            .enable_http1()
+            .build();
         let client = hyper::Client::builder().build(https);
         let hub = TasksHub::new(client, auth.clone());
-        Self { hub: Some(hub), auth: Some(auth) }
+        Self {
+            hub: Some(hub),
+            auth: Some(auth),
+        }
     }
 
-    async fn ensure_full_permissions(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn ensure_full_permissions(
+        &self,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Some(auth) = &self.auth {
             let scopes = &["https://www.googleapis.com/auth/tasks"];
             auth.token(scopes).await?;
@@ -67,25 +115,52 @@ impl ApiClient {
         self.ensure_full_permissions().await
     }
 
-    pub async fn fetch_task_lists(&self) -> Result<Vec<TaskList>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn fetch_task_lists(
+        &self,
+    ) -> Result<Vec<TaskList>, Box<dyn std::error::Error + Send + Sync>> {
         self.ensure_full_permissions().await?;
-        let hub = match &self.hub { Some(h) => h, None => return Ok(vec![TaskList { id: "@default".to_string(), title: "Default".to_string() }]) };
+        let hub = match &self.hub {
+            Some(h) => h,
+            None => {
+                return Ok(vec![TaskList {
+                    id: "@default".to_string(),
+                    title: "Default".to_string(),
+                }])
+            }
+        };
         let (_, list) = hub.tasklists().list().doit().await?;
-        Ok(list.items.unwrap_or_default().into_iter().map(|l| TaskList { id: l.id.unwrap_or_default(), title: l.title.unwrap_or_default() }).collect())
+        Ok(list
+            .items
+            .unwrap_or_default()
+            .into_iter()
+            .map(|l| TaskList {
+                id: l.id.unwrap_or_default(),
+                title: l.title.unwrap_or_default(),
+            })
+            .collect())
     }
 
-    pub async fn fetch_tasks(&self, list_id: &str, show_completed: bool) -> Result<Vec<Task>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn fetch_tasks(
+        &self,
+        list_id: &str,
+        show_completed: bool,
+    ) -> Result<Vec<Task>, Box<dyn std::error::Error + Send + Sync>> {
         self.ensure_full_permissions().await?;
-        let hub = match &self.hub { Some(h) => h, None => return Ok(self.mock_tasks()) };
-        
+        let hub = match &self.hub {
+            Some(h) => h,
+            None => return Ok(self.mock_tasks()),
+        };
+
         let mut all_raw_tasks = Vec::new();
         let mut page_token: Option<String> = None;
 
         loop {
-            let mut call = hub.tasks().list(list_id)
+            let mut call = hub
+                .tasks()
+                .list(list_id)
                 .show_completed(show_completed)
                 .show_hidden(show_completed);
-            
+
             if let Some(token) = &page_token {
                 call = call.page_token(token);
             }
@@ -100,48 +175,109 @@ impl ApiClient {
                 break;
             }
         }
-        
-        Ok(all_raw_tasks.into_iter().filter(|t| t.title.is_some()).map(|t| {
-            let due = t.due.and_then(|d| DateTime::parse_from_rfc3339(&d).ok().map(|dt| dt.with_timezone(&Utc)));
-            let updated = t.updated.and_then(|d| DateTime::parse_from_rfc3339(&d).ok().map(|dt| dt.with_timezone(&Utc))).unwrap_or_else(Utc::now);
-            let completed_at = t.completed.and_then(|d| DateTime::parse_from_rfc3339(&d).ok().map(|dt| dt.with_timezone(&Utc)));
-            Task { 
-                id: t.id.unwrap_or_default(), 
-                list_id: list_id.to_string(),
-                title: t.title.unwrap_or_else(|| "Untitled".to_string()), 
-                completed: t.status == Some("completed".to_string()), 
-                due, 
-                updated, 
-                completed_at,
-                notes: t.notes, 
-                parent_id: t.parent, 
-                pomodoros: 0 
-            }
-        }).collect())
+
+        Ok(all_raw_tasks
+            .into_iter()
+            .filter(|t| t.title.is_some())
+            .map(|t| {
+                let due = t.due.and_then(|d| {
+                    DateTime::parse_from_rfc3339(&d)
+                        .ok()
+                        .map(|dt| dt.with_timezone(&Utc))
+                });
+                let updated = t
+                    .updated
+                    .and_then(|d| {
+                        DateTime::parse_from_rfc3339(&d)
+                            .ok()
+                            .map(|dt| dt.with_timezone(&Utc))
+                    })
+                    .unwrap_or_else(Utc::now);
+                let completed_at = t.completed.and_then(|d| {
+                    DateTime::parse_from_rfc3339(&d)
+                        .ok()
+                        .map(|dt| dt.with_timezone(&Utc))
+                });
+                Task {
+                    id: t.id.unwrap_or_default(),
+                    list_id: list_id.to_string(),
+                    title: t.title.unwrap_or_else(|| "Untitled".to_string()),
+                    completed: t.status == Some("completed".to_string()),
+                    due,
+                    updated,
+                    completed_at,
+                    notes: t.notes,
+                    parent_id: t.parent,
+                    pomodoros: 0,
+                }
+            })
+            .collect())
     }
 
-    pub async fn toggle_task_completion(&self, list_id: &str, task_id: &str, completed: bool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn toggle_task_completion(
+        &self,
+        list_id: &str,
+        task_id: &str,
+        completed: bool,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.ensure_full_permissions().await?;
-        let hub = match &self.hub { Some(h) => h, None => return Ok(()) };
+        let hub = match &self.hub {
+            Some(h) => h,
+            None => return Ok(()),
+        };
         let task = api::Task {
-            status: Some(if completed { "completed".to_string() } else { "needsAction".to_string() }),
-            completed: if completed { Some(Utc::now().to_rfc3339()) } else { None },
+            status: Some(if completed {
+                "completed".to_string()
+            } else {
+                "needsAction".to_string()
+            }),
+            completed: if completed {
+                Some(Utc::now().to_rfc3339())
+            } else {
+                None
+            },
             ..Default::default()
         };
-        let effective_list_id = if list_id.is_empty() || list_id == "@all" { "@default" } else { list_id };
-        hub.tasks().patch(task, effective_list_id, task_id).doit().await?;
+        let effective_list_id = if list_id.is_empty() || list_id == "@all" {
+            "@default"
+        } else {
+            list_id
+        };
+        hub.tasks()
+            .patch(task, effective_list_id, task_id)
+            .doit()
+            .await?;
         Ok(())
     }
 
-    pub async fn create_task(&self, list_id: &str, title: &str, notes: Option<String>, due: Option<DateTime<Utc>>, parent_id: Option<String>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        self.create_task_returning_id(list_id, title, notes, due, parent_id).await.map(|_| ())
+    pub async fn create_task(
+        &self,
+        list_id: &str,
+        title: &str,
+        notes: Option<String>,
+        due: Option<DateTime<Utc>>,
+        parent_id: Option<String>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.create_task_returning_id(list_id, title, notes, due, parent_id)
+            .await
+            .map(|_| ())
     }
 
     /// Como `create_task`, pero devuelve el id que Google asignó a la tarea (vacío en modo simulado).
     /// Lo usa el buzón de salida para sustituir el id temporal por el real.
-    pub async fn create_task_returning_id(&self, list_id: &str, title: &str, notes: Option<String>, due: Option<DateTime<Utc>>, parent_id: Option<String>) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn create_task_returning_id(
+        &self,
+        list_id: &str,
+        title: &str,
+        notes: Option<String>,
+        due: Option<DateTime<Utc>>,
+        parent_id: Option<String>,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         self.ensure_full_permissions().await?;
-        let hub = match &self.hub { Some(h) => h, None => return Ok(String::new()) };
+        let hub = match &self.hub {
+            Some(h) => h,
+            None => return Ok(String::new()),
+        };
         let task = api::Task {
             title: Some(title.to_string()),
             notes,
@@ -150,7 +286,11 @@ impl ApiClient {
             ..Default::default()
         };
 
-        let effective_list_id = if list_id.is_empty() || list_id == "@all" { "@default" } else { list_id };
+        let effective_list_id = if list_id.is_empty() || list_id == "@all" {
+            "@default"
+        } else {
+            list_id
+        };
         let mut call = hub.tasks().insert(task, effective_list_id);
         if let Some(ref pid) = parent_id {
             call = call.parent(pid);
@@ -158,36 +298,70 @@ impl ApiClient {
 
         // No usamos eprintln! aquí: corrompería la pantalla en modo raw de la TUI.
         // El error se propaga y la UI revierte la tarea optimista (Event::ApiTaskFailed).
-        let (_, created) = call.doit().await.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+        let (_, created) = call
+            .doit()
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
         Ok(created.id.unwrap_or_default())
     }
 
-    pub async fn update_task(&self, list_id: &str, task_id: &str, title: &str, notes: Option<String>, due: Option<DateTime<Utc>>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn update_task(
+        &self,
+        list_id: &str,
+        task_id: &str,
+        title: &str,
+        notes: Option<String>,
+        due: Option<DateTime<Utc>>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.ensure_full_permissions().await?;
-        let hub = match &self.hub { Some(h) => h, None => return Ok(()) };
+        let hub = match &self.hub {
+            Some(h) => h,
+            None => return Ok(()),
+        };
         let task = api::Task {
             title: Some(title.to_string()),
             notes,
             due: due.map(|d| d.to_rfc3339()),
             ..Default::default()
         };
-        let effective_list_id = if list_id.is_empty() || list_id == "@all" { "@default" } else { list_id };
-        hub.tasks().patch(task, effective_list_id, task_id).doit().await?;
+        let effective_list_id = if list_id.is_empty() || list_id == "@all" {
+            "@default"
+        } else {
+            list_id
+        };
+        hub.tasks()
+            .patch(task, effective_list_id, task_id)
+            .doit()
+            .await?;
         Ok(())
     }
 
     /// Inserta una tarea completa en `list_id` (opcionalmente bajo `parent`) y devuelve su nuevo id.
-    async fn insert_full(&self, list_id: &str, data: &MoveTaskData, parent: Option<&str>) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        let hub = match &self.hub { Some(h) => h, None => return Ok(String::new()) };
+    async fn insert_full(
+        &self,
+        list_id: &str,
+        data: &MoveTaskData,
+        parent: Option<&str>,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let hub = match &self.hub {
+            Some(h) => h,
+            None => return Ok(String::new()),
+        };
         let task = api::Task {
             title: Some(data.title.clone()),
             notes: data.notes.clone(),
             due: data.due.map(|d| d.to_rfc3339()),
-            status: Some(if data.completed { "completed".to_string() } else { "needsAction".to_string() }),
+            status: Some(if data.completed {
+                "completed".to_string()
+            } else {
+                "needsAction".to_string()
+            }),
             ..Default::default()
         };
         let mut call = hub.tasks().insert(task, list_id);
-        if let Some(p) = parent { call = call.parent(p); }
+        if let Some(p) = parent {
+            call = call.parent(p);
+        }
         let (_, created) = call.doit().await?;
         Ok(created.id.unwrap_or_default())
     }
@@ -196,19 +370,43 @@ impl ApiClient {
     /// Orden seguro: primero recrea TODO en destino; solo si eso tuvo éxito borra el original
     /// (el borrado del padre elimina en cascada sus subtareas en el origen). Si algo falla antes
     /// del borrado, el origen queda intacto (en el peor caso queda un duplicado en destino).
-    pub async fn move_task_tree(&self, from_list: &str, to_list: &str, task_id: &str, parent: MoveTaskData, children: Vec<MoveTaskData>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn move_task_tree(
+        &self,
+        from_list: &str,
+        to_list: &str,
+        task_id: &str,
+        parent: MoveTaskData,
+        children: Vec<MoveTaskData>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.ensure_full_permissions().await?;
-        let hub = match &self.hub { Some(h) => h, None => return Ok(()) };
+        let hub = match &self.hub {
+            Some(h) => h,
+            None => return Ok(()),
+        };
 
         let new_parent_id = self.insert_full(to_list, &parent, None).await?;
         for child in &children {
-            self.insert_full(to_list, child, Some(&new_parent_id)).await?;
+            self.insert_full(to_list, child, Some(&new_parent_id))
+                .await?;
         }
         hub.tasks().delete(from_list, task_id).doit().await?;
         Ok(())
     }
 
-    fn mock_tasks(&self) -> Vec<Task> { vec![Task { id: "1".to_string(), list_id: "@default".to_string(), title: "Modo Simulado".to_string(), completed: false, due: None, updated: Utc::now(), completed_at: None, notes: None, parent_id: None, pomodoros: 0 }] }
+    fn mock_tasks(&self) -> Vec<Task> {
+        vec![Task {
+            id: "1".to_string(),
+            list_id: "@default".to_string(),
+            title: "Modo Simulado".to_string(),
+            completed: false,
+            due: None,
+            updated: Utc::now(),
+            completed_at: None,
+            notes: None,
+            parent_id: None,
+            pomodoros: 0,
+        }]
+    }
 }
 
 /// Datos mínimos para recrear una tarea al moverla entre listas.

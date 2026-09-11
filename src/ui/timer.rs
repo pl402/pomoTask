@@ -1,22 +1,26 @@
+use chrono::{Local, Timelike, Utc};
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect, Alignment},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{
-        Block, BorderType, Borders, Gauge, Paragraph, ListItem, List
-    },
+    widgets::{Block, BorderType, Borders, Gauge, List, ListItem, Paragraph},
     Frame,
 };
-use chrono::{Local, Timelike, Utc};
 
 use crate::app::{App, TimerMode};
-use crate::ui::palette::Palette;
 use crate::ui::list::render_left_panel;
+use crate::ui::palette::Palette;
 use crate::ui::render_right_panel;
 
 pub fn render_timer_screen(app: &mut App, frame: &mut Frame) {
-    let chunks = Layout::default().direction(Direction::Vertical).constraints([Constraint::Min(0), Constraint::Length(1)]).split(frame.size());
-    let content = Layout::default().direction(Direction::Horizontal).constraints([Constraint::Percentage(60), Constraint::Percentage(40)]).split(chunks[0]);
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(0), Constraint::Length(1)])
+        .split(frame.size());
+    let content = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+        .split(chunks[0]);
     render_left_panel(app, frame, content[0]);
     render_right_panel(app, frame, content[1]);
     render_footer(app, frame, chunks[1]);
@@ -25,28 +29,58 @@ pub fn render_timer_screen(app: &mut App, frame: &mut Frame) {
 pub fn render_timer_mode(app: &App, frame: &mut Frame) {
     let area = frame.size();
     let is_focus = app.timer_mode == TimerMode::Focus;
-    let color = if is_focus { Palette::red(app) } else { Palette::green(app) };
+    let color = if is_focus {
+        Palette::red(app)
+    } else {
+        Palette::green(app)
+    };
 
-    let block = Block::default().borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(color));
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(color));
     frame.render_widget(block, area);
 
-    let chunks = Layout::default().direction(Direction::Vertical).constraints([
-        Constraint::Length(10),
-        Constraint::Length(5),
-        Constraint::Length(4),
-        Constraint::Min(0)
-    ]).margin(5).split(area);
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(10),
+            Constraint::Length(5),
+            Constraint::Length(4),
+            Constraint::Min(0),
+        ])
+        .margin(5)
+        .split(area);
 
     render_big_clock(app, frame, chunks[0], color);
 
     let total = app.timer_mode.duration(&app.config);
     let progress = ((total - app.timer_seconds) as f64 / total as f64).min(1.0);
     let remaining_ratio = app.timer_seconds as f64 / total as f64;
-    let time_label = format!("{:02}:{:02}", app.timer_seconds / 60, app.timer_seconds % 60);
+    let time_label = format!(
+        "{:02}:{:02}",
+        app.timer_seconds / 60,
+        app.timer_seconds % 60
+    );
 
     // Enfoque: barra con color dinámico verde→amarillo→rojo; descanso: color del modo.
-    let gauge_fg = if is_focus { Palette::timer_color(app, remaining_ratio) } else { color };
-    frame.render_widget(Gauge::default().block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded)).gauge_style(Style::default().fg(gauge_fg).bg(Palette::surface0(app))).ratio(progress).label(time_label), chunks[1]);
+    let gauge_fg = if is_focus {
+        Palette::timer_color(app, remaining_ratio)
+    } else {
+        color
+    };
+    frame.render_widget(
+        Gauge::default()
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded),
+            )
+            .gauge_style(Style::default().fg(gauge_fg).bg(Palette::surface0(app)))
+            .ratio(progress)
+            .label(time_label),
+        chunks[1],
+    );
 
     if let Some(task) = app.tasks.get(app.selected_task) {
         let is_main_selected = app.focus_subtask_idx == 0;
@@ -66,23 +100,43 @@ pub fn render_timer_mode(app: &App, frame: &mut Frame) {
 
         let mut focus_text = vec![
             Line::from(vec![
-                Span::styled(format!("{}: ", msg), Style::default().fg(Palette::text(app))),
-                Span::styled(task.title.clone(), Style::default().fg(Palette::mauve(app)).add_modifier(Modifier::BOLD))
+                Span::styled(
+                    format!("{}: ", msg),
+                    Style::default().fg(Palette::text(app)),
+                ),
+                Span::styled(
+                    task.title.clone(),
+                    Style::default()
+                        .fg(Palette::mauve(app))
+                        .add_modifier(Modifier::BOLD),
+                ),
             ]),
-            Line::from(vec![
-                Span::styled(format!("🍅 {} {}", task.pomodoros, app.translate("focus_completed_today")), Style::default().fg(Palette::peach(app)))
-            ])
+            Line::from(vec![Span::styled(
+                format!(
+                    "🍅 {} {}",
+                    task.pomodoros,
+                    app.translate("focus_completed_today")
+                ),
+                Style::default().fg(Palette::peach(app)),
+            )]),
         ];
 
         // Puntos del ciclo Pomodoro: progreso hacia el descanso largo (cada 4).
         if is_focus {
-            let done = if app.session_pomodoros > 0 && app.session_pomodoros.is_multiple_of(4) { 4 } else { (app.session_pomodoros % 4) as usize };
+            let done = if app.session_pomodoros > 0 && app.session_pomodoros.is_multiple_of(4) {
+                4
+            } else {
+                (app.session_pomodoros % 4) as usize
+            };
             let mut dot_spans = vec![];
             for i in 0..4 {
                 if i < done {
                     dot_spans.push(Span::styled("● ", Style::default().fg(Palette::red(app))));
                 } else {
-                    dot_spans.push(Span::styled("○ ", Style::default().fg(Palette::overlay0(app))));
+                    dot_spans.push(Span::styled(
+                        "○ ",
+                        Style::default().fg(Palette::overlay0(app)),
+                    ));
                 }
             }
             focus_text.push(Line::from(""));
@@ -92,27 +146,47 @@ pub fn render_timer_mode(app: &App, frame: &mut Frame) {
         // En la vista "Todas" mostramos la lista de origen de la tarea enfocada.
         if app.is_all_view() {
             let list_name = app.list_title_for(&task.list_id);
-            focus_text.push(Line::from(vec![
-                Span::styled(format!("📋 {}", list_name), Style::default().fg(Palette::subtext0(app)).add_modifier(Modifier::ITALIC))
-            ]));
+            focus_text.push(Line::from(vec![Span::styled(
+                format!("📋 {}", list_name),
+                Style::default()
+                    .fg(Palette::subtext0(app))
+                    .add_modifier(Modifier::ITALIC),
+            )]));
         }
-        frame.render_widget(Paragraph::new(focus_text).alignment(Alignment::Center).wrap(ratatui::widgets::Wrap { trim: true }).style(main_style), chunks[2]);
+        frame.render_widget(
+            Paragraph::new(focus_text)
+                .alignment(Alignment::Center)
+                .wrap(ratatui::widgets::Wrap { trim: true })
+                .style(main_style),
+            chunks[2],
+        );
 
-        let subtasks: Vec<_> = app.tasks.iter().filter(|t| t.parent_id.as_ref() == Some(&task.id)).collect();
+        let subtasks: Vec<_> = app
+            .tasks
+            .iter()
+            .filter(|t| t.parent_id.as_ref() == Some(&task.id))
+            .collect();
         if !subtasks.is_empty() {
-             let mut items = vec![];
-             for (idx, st) in subtasks.iter().enumerate() {
-                 let is_selected = app.focus_subtask_idx == idx + 1;
-                 let symbol = if st.completed { "✅" } else { "☐" };
-                 let style = if is_selected { 
-                     Style::default().fg(Palette::base(app)).bg(Palette::yellow(app))
-                 } else { 
-                     Style::default().fg(Palette::text(app)) 
-                 };
-                 items.push(ListItem::new(format!(" {} {}", symbol, st.title)).style(style));
-             }
-             let list = List::new(items).block(Block::default().title(format!(" {} ", app.translate("new_subtask"))).borders(Borders::ALL).border_type(BorderType::Rounded));
-             frame.render_widget(list, chunks[3]);
+            let mut items = vec![];
+            for (idx, st) in subtasks.iter().enumerate() {
+                let is_selected = app.focus_subtask_idx == idx + 1;
+                let symbol = if st.completed { "✅" } else { "☐" };
+                let style = if is_selected {
+                    Style::default()
+                        .fg(Palette::base(app))
+                        .bg(Palette::yellow(app))
+                } else {
+                    Style::default().fg(Palette::text(app))
+                };
+                items.push(ListItem::new(format!(" {} {}", symbol, st.title)).style(style));
+            }
+            let list = List::new(items).block(
+                Block::default()
+                    .title(format!(" {} ", app.translate("new_subtask")))
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded),
+            );
+            frame.render_widget(list, chunks[3]);
         }
     }
 }
@@ -145,55 +219,129 @@ pub fn render_big_clock(app: &App, frame: &mut Frame, area: Rect, color: ratatui
             _ => continue,
         };
         for i in 0..5 {
-            lines[i].push(Span::styled(format!(" {} ", blocks[idx][i]), Style::default().fg(color).add_modifier(Modifier::BOLD)));
+            lines[i].push(Span::styled(
+                format!(" {} ", blocks[idx][i]),
+                Style::default().fg(color).add_modifier(Modifier::BOLD),
+            ));
         }
     }
 
     let mut final_lines: Vec<Line> = lines.into_iter().map(Line::from).collect();
     final_lines.push(Line::from(""));
-    final_lines.push(Line::from(Span::styled(date_str, Style::default().fg(color).add_modifier(Modifier::ITALIC))));
+    final_lines.push(Line::from(Span::styled(
+        date_str,
+        Style::default().fg(color).add_modifier(Modifier::ITALIC),
+    )));
 
-    frame.render_widget(Paragraph::new(final_lines).alignment(Alignment::Center), area);
+    frame.render_widget(
+        Paragraph::new(final_lines).alignment(Alignment::Center),
+        area,
+    );
 }
 
 pub fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
     let now = Local::now();
     let date_str = now.format("%Y-%m-%d").to_string();
     let time_str = now.format("%H:%M").to_string();
-    let spinner = if app.loading { let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]; frames[app.spinner_frame % frames.len()] } else { "✓" };
-    
-    let timer_label = format!("{:02}:{:02}", app.timer_seconds / 60, app.timer_seconds % 60);
+    let spinner = if app.loading {
+        let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+        frames[app.spinner_frame % frames.len()]
+    } else {
+        "✓"
+    };
+
+    let timer_label = format!(
+        "{:02}:{:02}",
+        app.timer_seconds / 60,
+        app.timer_seconds % 60
+    );
 
     let left_spans = vec![
-        Span::styled(" pomo", Style::default().fg(Palette::text(app)).add_modifier(Modifier::BOLD)),
-        Span::styled("Task ", Style::default().fg(Palette::mauve(app)).add_modifier(Modifier::BOLD)),
-        Span::styled(format!(" {} ", app.translate("footer_hint")), Style::default().fg(Palette::yellow(app))),
+        Span::styled(
+            " pomo",
+            Style::default()
+                .fg(Palette::text(app))
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            "Task ",
+            Style::default()
+                .fg(Palette::mauve(app))
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!(" {} ", app.translate("footer_hint")),
+            Style::default().fg(Palette::yellow(app)),
+        ),
     ];
 
     let mut right_spans = vec![];
     if app.cleaning_frames > 0 {
-        right_spans.push(Span::styled(format!(" {} ", app.translate("cleaning_stats")), Style::default().fg(Palette::yellow(app)).add_modifier(Modifier::BOLD)));
+        right_spans.push(Span::styled(
+            format!(" {} ", app.translate("cleaning_stats")),
+            Style::default()
+                .fg(Palette::yellow(app))
+                .add_modifier(Modifier::BOLD),
+        ));
     }
     if app.copy_feedback_frames > 0 {
-        right_spans.push(Span::styled(format!(" {} ", app.translate("copied_clipboard")), Style::default().fg(Palette::green(app)).add_modifier(Modifier::BOLD)));
+        right_spans.push(Span::styled(
+            format!(" {} ", app.translate("copied_clipboard")),
+            Style::default()
+                .fg(Palette::green(app))
+                .add_modifier(Modifier::BOLD),
+        ));
     }
     let sep = || Span::styled("│", Style::default().fg(Palette::overlay0(app)));
     right_spans.extend(vec![
-        Span::styled(format!(" {}: ", app.translate("timer_short")), Style::default().fg(Palette::subtext0(app))),
-        Span::styled(format!("{} ", timer_label), Style::default().fg(if app.timer_mode == TimerMode::Focus { Palette::red(app) } else { Palette::green(app) })),
+        Span::styled(
+            format!(" {}: ", app.translate("timer_short")),
+            Style::default().fg(Palette::subtext0(app)),
+        ),
+        Span::styled(
+            format!("{} ", timer_label),
+            Style::default().fg(if app.timer_mode == TimerMode::Focus {
+                Palette::red(app)
+            } else {
+                Palette::green(app)
+            }),
+        ),
         sep(),
-        Span::styled(format!(" {}: ", app.translate("sync_short")), Style::default().fg(Palette::subtext0(app))),
-        Span::styled(format!("{} ", spinner), Style::default().fg(Palette::blue(app))),
+        Span::styled(
+            format!(" {}: ", app.translate("sync_short")),
+            Style::default().fg(Palette::subtext0(app)),
+        ),
+        Span::styled(
+            format!("{} ", spinner),
+            Style::default().fg(Palette::blue(app)),
+        ),
         sep(),
-        Span::styled(format!(" {}: ", app.translate("pomodoro_short")), Style::default().fg(Palette::subtext0(app))),
-        Span::styled(format!("{} ", app.session_pomodoros), Style::default().fg(Palette::peach(app))),
+        Span::styled(
+            format!(" {}: ", app.translate("pomodoro_short")),
+            Style::default().fg(Palette::subtext0(app)),
+        ),
+        Span::styled(
+            format!("{} ", app.session_pomodoros),
+            Style::default().fg(Palette::peach(app)),
+        ),
         sep(),
-        Span::styled(format!(" {} | {} ", date_str, time_str), Style::default().fg(Palette::text(app))),
+        Span::styled(
+            format!(" {} | {} ", date_str, time_str),
+            Style::default().fg(Palette::text(app)),
+        ),
     ]);
 
     let footer_line = Line::from(left_spans);
-    frame.render_widget(Paragraph::new(footer_line).alignment(Alignment::Left).style(Style::default().bg(Palette::surface0(app))), area);
-    
+    frame.render_widget(
+        Paragraph::new(footer_line)
+            .alignment(Alignment::Left)
+            .style(Style::default().bg(Palette::surface0(app))),
+        area,
+    );
+
     let status_line = Line::from(right_spans);
-    frame.render_widget(Paragraph::new(status_line).alignment(Alignment::Right), area);
+    frame.render_widget(
+        Paragraph::new(status_line).alignment(Alignment::Right),
+        area,
+    );
 }

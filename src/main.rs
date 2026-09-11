@@ -105,7 +105,9 @@ async fn main() -> Result<()> {
                 Event::SyncFailed => {
                     // Sin conexión: salimos de la pantalla de carga y mostramos la caché local.
                     if app.mode != AppMode::Auth {
-                        pomotask_cli::ipc::mark_google_error("sync_failed: could not reach Google Tasks");
+                        pomotask_cli::ipc::mark_google_error(
+                            "sync_failed: could not reach Google Tasks",
+                        );
                     }
                     app.loading = false;
                     app.rebuild_visible_tasks();

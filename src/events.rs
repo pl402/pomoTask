@@ -1,5 +1,5 @@
-use std::time::Duration;
 use crossterm::event::{self, Event as CrosstermEvent, KeyEvent, MouseEvent};
+use std::time::Duration;
 use tokio::sync::mpsc;
 
 use crate::app::{Task, TaskList};
@@ -40,10 +40,9 @@ impl EventHandler {
 
                 if event::poll(timeout).expect("failed to poll events") {
                     match event::read().expect("failed to read event") {
-                        CrosstermEvent::Key(key)
-                            if key.kind == event::KeyEventKind::Press => {
-                                let _ = _sender.send(Event::Key(key));
-                            }
+                        CrosstermEvent::Key(key) if key.kind == event::KeyEventKind::Press => {
+                            let _ = _sender.send(Event::Key(key));
+                        }
                         CrosstermEvent::Mouse(mouse) => {
                             let _ = _sender.send(Event::Mouse(mouse));
                         }

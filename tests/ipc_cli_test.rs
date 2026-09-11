@@ -267,9 +267,13 @@ async fn test_ipc_task_complete_in_all_list() {
     );
     fs::write(&cache_path, serde_json::to_string(&map).unwrap()).unwrap();
 
-    execute_ipc_command(&["task".to_string(), "complete".to_string(), "t_all_1".to_string()])
-        .await
-        .expect("complete task in all");
+    execute_ipc_command(&[
+        "task".to_string(),
+        "complete".to_string(),
+        "t_all_1".to_string(),
+    ])
+    .await
+    .expect("complete task in all");
 
     let cache_data = fs::read_to_string(&cache_path).unwrap();
     let loaded_map: HashMap<String, Vec<Task>> = serde_json::from_str(&cache_data).unwrap();
@@ -416,7 +420,9 @@ async fn test_ipc_blocklist_commands() {
     .await
     .expect("add-allowed-title");
     let cfg_with_allowed = load_blocklist();
-    assert!(cfg_with_allowed.allowed_title_keywords.contains(&"spotify web".to_string()));
+    assert!(cfg_with_allowed
+        .allowed_title_keywords
+        .contains(&"spotify web".to_string()));
 
     execute_ipc_command(&[
         "blocklist".to_string(),
@@ -426,7 +432,9 @@ async fn test_ipc_blocklist_commands() {
     .await
     .expect("remove-allowed-title");
     let cfg_after_remove = load_blocklist();
-    assert!(!cfg_after_remove.allowed_title_keywords.contains(&"spotify web".to_string()));
+    assert!(!cfg_after_remove
+        .allowed_title_keywords
+        .contains(&"spotify web".to_string()));
 }
 
 #[tokio::test]
@@ -576,9 +584,13 @@ async fn test_ipc_headless_stats_recording() {
     );
     fs::write(&cache_path, serde_json::to_string(&map).unwrap()).unwrap();
 
-    execute_ipc_command(&["task".to_string(), "complete".to_string(), "t_done".to_string()])
-        .await
-        .expect("task complete");
+    execute_ipc_command(&[
+        "task".to_string(),
+        "complete".to_string(),
+        "t_done".to_string(),
+    ])
+    .await
+    .expect("task complete");
 
     let stats_data_2 = fs::read_to_string(&stats_path).unwrap();
     let stats_2: pomotask_cli::app::Stats = serde_json::from_str(&stats_data_2).unwrap();
@@ -672,13 +684,19 @@ async fn test_ipc_offline_changes_go_to_outbox_and_survive_in_cache() {
         "lista_x".to_string(),
     ])
     .await;
-    let created: Task = serde_json::from_str(&res.expect("sin sesión, crear es válido en modo local")).unwrap();
+    let created: Task =
+        serde_json::from_str(&res.expect("sin sesión, crear es válido en modo local")).unwrap();
     assert_eq!(created.title, "Tarea sin conexión");
 
     let ops = load_outbox();
     assert_eq!(ops.len(), 1);
     let temp_id = match &ops[0] {
-        PendingOp::Create { temp_id, list_id, title, .. } => {
+        PendingOp::Create {
+            temp_id,
+            list_id,
+            title,
+            ..
+        } => {
             assert_eq!(list_id, "lista_x");
             assert_eq!(title, "Tarea sin conexión");
             temp_id.clone()
@@ -705,7 +723,88 @@ async fn test_ipc_offline_changes_go_to_outbox_and_survive_in_cache() {
     assert!(matches!(&ops[1], PendingOp::Complete { task_id, .. } if task_id == &temp_id));
 
     // El comando `outbox` expone lo pendiente.
-    let dump = execute_ipc_command(&["outbox".to_string()]).await.expect("outbox");
+    let dump = execute_ipc_command(&["outbox".to_string()])
+        .await
+        .expect("outbox");
     let parsed: Vec<PendingOp> = serde_json::from_str(&dump).unwrap();
     assert_eq!(parsed, ops);
+}
+
+#[tokio::test]
+async fn test_ipc_config_durations() {
+    let _lock = TEST_LOCK.lock().await;
+    let _ctx = TestContext::new("config");
+
+    // Sin config.json: `get` devuelve los valores por defecto.
+    let out = execute_ipc_command(&["config".to_string(), "get".to_string()])
+        .await
+        .expect("config get");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(v["focus_duration"], 25 * 60);
+    assert_eq!(v["short_break_duration"], 5 * 60);
+    assert_eq!(v["long_break_duration"], 15 * 60);
+
+    // Temporizador detenido en modo trabajo: al cambiar el enfoque se refleja en el estado.
+    let state = RuntimeState {
+        mode: "work".to_string(),
+        state: "stopped".to_string(),
+        total_seconds: 25 * 60,
+        remaining_seconds: 25 * 60,
+        ..RuntimeState::default()
+    };
+    save_runtime_state(&state).unwrap();
+
+    let out = execute_ipc_command(&[
+        "config".to_string(),
+        "set".to_string(),
+        "focus".to_string(),
+        "50".to_string(),
+    ])
+    .await
+    .expect("config set focus");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(v["focus_duration"], 50 * 60);
+    let after = load_runtime_state();
+    assert_eq!(after.total_seconds, 50 * 60);
+    assert_eq!(after.remaining_seconds, 50 * 60);
+
+    // Cambiar el descanso corto no toca el estado (modo trabajo), pero sí persiste.
+    execute_ipc_command(&[
+        "config".to_string(),
+        "set".to_string(),
+        "short".to_string(),
+        "7".to_string(),
+    ])
+    .await
+    .expect("config set short");
+    let after2 = load_runtime_state();
+    assert_eq!(after2.total_seconds, 50 * 60);
+    let out = execute_ipc_command(&["config".to_string(), "get".to_string()])
+        .await
+        .unwrap();
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(v["short_break_duration"], 7 * 60);
+
+    // El config.json resultante sigue siendo una Config completa para la TUI.
+    let raw = fs::read_to_string(_ctx.temp_dir.join("config.json")).unwrap();
+    let cfg: pomotask_cli::app::Config = serde_json::from_str(&raw).expect("Config completa");
+    assert_eq!(cfg.focus_duration, 50 * 60);
+
+    // Validaciones.
+    assert!(execute_ipc_command(&[
+        "config".to_string(),
+        "set".to_string(),
+        "focus".to_string(),
+        "0".to_string(),
+    ])
+    .await
+    .is_err());
+    assert!(execute_ipc_command(&[
+        "config".to_string(),
+        "set".to_string(),
+        "nada".to_string(),
+        "5".to_string(),
+    ])
+    .await
+    .is_err());
 }
