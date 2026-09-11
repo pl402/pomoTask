@@ -10,6 +10,7 @@ Plugin nativo de barra y escritorio para **Omarchy Quattro** que integra la téc
   - Clic interactivo para desplegar el panel de control o alternar el temporizador.
 - 📋 **Panel Desplegable Interactivo (`Panel.qml`):**
   - Controles del temporizador: Play / Pausa / Saltar / Reiniciar.
+  - Tarjeta de la tarea activa con el título completo en varias líneas y, debajo, su descripción si la tiene. En la lista los títulos también se envuelven en vez de recortarse.
   - Sincronización bidireccional y navegación de Google Tasks con selector de listas.
   - Tareas en foco (🎯) para asociar el objetivo actual al temporizador.
   - Botón 󰆏 en cada tarea para copiar al portapapeles su título y descripción (vía `wl-copy`); el icono cambia a ✓ un instante como confirmación.

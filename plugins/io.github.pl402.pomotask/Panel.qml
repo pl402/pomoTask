@@ -29,6 +29,18 @@ Panel {
 
   readonly property bool hasActiveTask: !!pomotaskService.activeTaskId && pomotaskService.activeTaskId !== ""
 
+  // Notas (descripción) de la tarea activa, buscadas en la caché de tareas del servicio
+  readonly property string activeTaskNotes: {
+    if (!root.hasActiveTask) return ""
+    var items = pomotaskService.tasks || []
+    for (var i = 0; i < items.length; i++) {
+      if (items[i] && items[i].id === pomotaskService.activeTaskId) {
+        return String(items[i].notes || "").trim()
+      }
+    }
+    return ""
+  }
+
   readonly property var firstPendingTask: {
     var items = root.visibleTaskItems || []
     for (var i = 0; i < items.length; i++) {
@@ -569,60 +581,49 @@ Panel {
             }
 
             // -----------------------------------------------------------------
-            // Título de la Tarea Actual (Grande + Marquee Horizontal)
+            // Tarea Actual: título completo (varias líneas) + descripción si la tiene
             // -----------------------------------------------------------------
             BorderSurface {
               id: activeTaskCard
               width: parent.width
-              implicitHeight: taskMarqueeContainer.implicitHeight + Style.space(12)
+              implicitHeight: activeTaskColumn.implicitHeight + Style.space(16)
               radius: Style.cornerRadius
               color: Style.hoverFillFor(root.contentForeground, Color.accent)
               borderSpec: Border.controlSpec("focus", root.contentForeground, Color.accent)
 
-              Item {
-                id: taskMarqueeContainer
+              readonly property bool hasTask: pomotaskService.activeTaskTitle && pomotaskService.activeTaskTitle !== ""
+
+              Column {
+                id: activeTaskColumn
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.leftMargin: Style.space(12)
                 anchors.rightMargin: Style.space(12)
-                implicitHeight: marqueeText.implicitHeight
-                clip: true
-
-                readonly property bool hasTask: pomotaskService.activeTaskTitle && pomotaskService.activeTaskTitle !== ""
-                readonly property bool isOverflowing: marqueeText.implicitWidth > width
-                readonly property real scrollDistance: Math.max(0, marqueeText.implicitWidth - width + Style.space(20))
+                spacing: Style.space(6)
 
                 Text {
-                  id: marqueeText
+                  width: parent.width
                   textFormat: Text.PlainText
-                  text: taskMarqueeContainer.hasTask
-                    ? " " + pomotaskService.activeTaskTitle
-                    : " Sin tarea seleccionada"
-                  color: taskMarqueeContainer.hasTask ? root.contentForeground : root.dimColor
+                  text: activeTaskCard.hasTask
+                    ? " " + pomotaskService.activeTaskTitle
+                    : " Sin tarea seleccionada"
+                  color: activeTaskCard.hasTask ? root.contentForeground : root.dimColor
                   font.family: root.contentFontFamily
                   font.pixelSize: Style.font.heading
                   font.bold: true
-                  anchors.verticalCenter: parent.verticalCenter
-                  x: 0
+                  wrapMode: Text.Wrap
+                }
 
-                  SequentialAnimation on x {
-                    running: taskMarqueeContainer.hasTask && taskMarqueeContainer.isOverflowing && root.opened
-                    loops: Animation.Infinite
-
-                    PauseAnimation { duration: 1500 }
-                    NumberAnimation {
-                      to: -taskMarqueeContainer.scrollDistance
-                      duration: Math.max(2000, taskMarqueeContainer.scrollDistance * 30)
-                      easing.type: Easing.Linear
-                    }
-                    PauseAnimation { duration: 1500 }
-                    NumberAnimation {
-                      to: 0
-                      duration: 800
-                      easing.type: Easing.InOutQuad
-                    }
-                  }
+                Text {
+                  width: parent.width
+                  visible: activeTaskCard.hasTask && root.activeTaskNotes !== ""
+                  textFormat: Text.PlainText
+                  text: root.activeTaskNotes
+                  color: root.dimColor
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  wrapMode: Text.Wrap
                 }
               }
             }
@@ -806,13 +807,13 @@ Panel {
                           font.family: root.contentFontFamily
                           font.pixelSize: Style.font.body
                           font.strikeout: itemData.task.completed
-                          elide: Text.ElideRight
+                          wrapMode: Text.Wrap
                           width: parent.width
                         }
 
                         Row {
                           spacing: Style.space(6)
-                          visible: (itemData.task.due && itemData.task.due !== "") || (itemData.task.notes && itemData.task.notes !== "") || itemData.task.pomodoros > 0
+                          visible: (itemData.task.due && itemData.task.due !== "") || itemData.task.pomodoros > 0
 
                           // Due date badge
                           BorderSurface {
@@ -831,17 +832,6 @@ Panel {
                               font.family: root.contentFontFamily
                               font.pixelSize: Style.font.caption
                             }
-                          }
-
-                          // Notes badge
-                          Text {
-                            visible: !!itemData.task.notes && itemData.task.notes !== ""
-                            textFormat: Text.PlainText
-                            text: "󰈙"
-                            color: root.dimColor
-                            font.family: root.contentFontFamily
-                            font.pixelSize: Style.font.caption
-                            anchors.verticalCenter: parent.verticalCenter
                           }
 
                           // Pomodoros count badge
