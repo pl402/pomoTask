@@ -21,6 +21,8 @@ Item {
   readonly property string listsCachePath: configDir + "/lists_cache.json"
   readonly property string blocklistPath: configDir + "/blocklist.json"
   readonly property string outboxPath: configDir + "/outbox.json"
+  readonly property string statsPath: configDir + "/stats.json"
+  readonly property string configPath: configDir + "/config.json"
   property string pomotaskBinary: "pomotask-cli"
 
   // -------------------------------------------------------------------------
@@ -123,6 +125,83 @@ Item {
     if (mode === "short_break") return ""
     if (mode === "long_break") return ""
     return ""
+  }
+
+  // -------------------------------------------------------------------------
+  // Resumen del día (stats.json: claves "YYYY-MM-DD HH:00" en hora local)
+  // -------------------------------------------------------------------------
+  property int todayPomodoros: 0
+  property int todayTasksDone: 0
+  property int todayFocusSeconds: 0
+
+  readonly property string todayFocusLabel: {
+    var total = Math.max(0, todayFocusSeconds)
+    var h = Math.floor(total / 3600)
+    var m = Math.floor((total % 3600) / 60)
+    if (h > 0) return h + " h " + (m < 10 ? "0" : "") + m + " min"
+    return m + " min"
+  }
+
+  function todayKeyPrefix() {
+    var d = new Date()
+    var mm = (d.getMonth() + 1 < 10 ? "0" : "") + (d.getMonth() + 1)
+    var dd = (d.getDate() < 10 ? "0" : "") + d.getDate()
+    return d.getFullYear() + "-" + mm + "-" + dd
+  }
+
+  function sumTodayFrom(map) {
+    if (!map || typeof map !== "object") return 0
+    var prefix = todayKeyPrefix()
+    var total = 0
+    for (var key in map) {
+      if (String(key).indexOf(prefix) === 0) total += Number(map[key]) || 0
+    }
+    return total
+  }
+
+  function parseStats(raw) {
+    try {
+      var content = String(raw || "").trim()
+      if (content === "") return
+      var obj = JSON.parse(content)
+      if (!obj || typeof obj !== "object") return
+      root.todayPomodoros = sumTodayFrom(obj.hourly_pomodoros)
+      root.todayTasksDone = sumTodayFrom(obj.hourly_tasks_done)
+      root.todayFocusSeconds = sumTodayFrom(obj.hourly_seconds)
+    } catch (e) {
+      console.warn("PomotaskService", "Error parsing stats:", e)
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Duraciones (config.json, en segundos). Se editan con `ipc config set`.
+  // -------------------------------------------------------------------------
+  property int focusDuration: 25 * 60
+  property int shortBreakDuration: 5 * 60
+  property int longBreakDuration: 15 * 60
+
+  function parseConfig(raw) {
+    try {
+      var content = String(raw || "").trim()
+      if (content === "") return
+      var obj = JSON.parse(content)
+      if (!obj || typeof obj !== "object") return
+      if (obj.focus_duration !== undefined) root.focusDuration = Number(obj.focus_duration) || root.focusDuration
+      if (obj.short_break_duration !== undefined) root.shortBreakDuration = Number(obj.short_break_duration) || root.shortBreakDuration
+      if (obj.long_break_duration !== undefined) root.longBreakDuration = Number(obj.long_break_duration) || root.longBreakDuration
+    } catch (e) {
+      console.warn("PomotaskService", "Error parsing config:", e)
+    }
+  }
+
+  // key: "focus" | "short" | "long"; minutes: 1..180
+  function setDuration(key, minutes) {
+    var m = Math.round(Number(minutes) || 0)
+    if (m < 1 || m > 180) return
+    if (key === "focus") root.focusDuration = m * 60
+    else if (key === "short") root.shortBreakDuration = m * 60
+    else if (key === "long") root.longBreakDuration = m * 60
+    runAction(["config", "set", String(key), String(m)], "Saving duration…")
   }
 
   // -------------------------------------------------------------------------
@@ -528,6 +607,24 @@ Item {
   }
 
   FileView {
+    id: statsWatcher
+    path: root.statsPath
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.parseStats(text())
+  }
+
+  FileView {
+    id: configWatcher
+    path: root.configPath
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.parseConfig(text())
+  }
+
+  FileView {
     id: outboxWatcher
     path: root.outboxPath
     watchChanges: true
@@ -649,6 +746,14 @@ Item {
     running: true
     triggeredOnStart: true
     onTriggered: root.fetchStatus()
+  }
+
+  // Al cambiar de día el resumen "Hoy" debe vaciarse aunque stats.json no cambie.
+  Timer {
+    interval: 60 * 1000
+    repeat: true
+    running: true
+    onTriggered: statsWatcher.reload()
   }
 
   Timer {

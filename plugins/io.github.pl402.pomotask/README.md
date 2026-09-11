@@ -9,13 +9,14 @@ Plugin nativo de barra y escritorio para **Omarchy Quattro** que integra la téc
   - Ancho siempre constante: el título de la tarea activa no va en la barra (salía cortado), se muestra en el tooltip junto con el modo, el porcentaje y el estado.
   - Clic interactivo para desplegar el panel de control o alternar el temporizador.
 - 📋 **Panel Desplegable Interactivo (`Panel.qml`):**
-  - Controles del temporizador: Play / Pausa / Saltar / Reiniciar.
-  - Tarjeta de la tarea activa con el título completo en varias líneas y, debajo, su descripción si la tiene. En la lista los títulos también se envuelven en vez de recortarse.
-  - Sincronización bidireccional y navegación de Google Tasks con selector de listas.
-  - Tareas en foco (🎯) para asociar el objetivo actual al temporizador.
-  - Botón 󰆏 en cada tarea para copiar al portapapeles su título y descripción (vía `wl-copy`); el icono cambia a ✓ un instante como confirmación.
+  - Héroe del temporizador: anillo de progreso con el tiempo dentro y cuatro puntos de ciclo. El estado (en curso, pausado, listo) se lee en el propio anillo; los colores de fase derivan del tema (acento para enfoque, acento atenuado en descansos).
+  - Controles con jerarquía: Iniciar/Pausar grande como acción primaria; Reiniciar (pide una segunda pulsación en 3 s) y Saltar pequeños a los lados.
+  - Tarjeta de la **tarea en foco** con título completo, descripción, subtareas marcables y botón Completar. Sin tarea en foco se muestra un estado vacío que explica qué hacer; en descansos, una tarjeta que recuerda a qué tarea vuelves.
+  - Lista de Google Tasks con selector de listas, contador de pendientes, fecha límite y pomodoros por tarea, y acciones copiar 󰆏 (título + descripción vía `wl-copy`) y enfocar por fila. Mientras corre el temporizador la lista se pliega a una fila "Tareas · N pendientes" que se despliega al clic.
+  - Navegación por teclado en la lista: `J`/`K` mueven el cursor, `Enter` enfoca, `C` completa, `Y` copia, `Esc` quita el cursor. Además `Espacio`/`P` alterna el temporizador, `S` salta la fase, `R` sincroniza y `Q` cierra. El botón `?` del pie muestra la ayuda.
+  - Pie con el resumen de **hoy** (pomodoros, tareas completadas y tiempo de foco) leído de `stats.json`.
   - Creación rápida de nuevas tareas con `Enter`.
-  - Toggles rápidos para activar/desactivar modo anti-distracción y descanso estricto.
+  - Ajustes: modo como grupo de chips, **duraciones editables** en minutos (persisten en `config.json` vía `pomotask-cli ipc config set`), toggles de anti-distracción y descanso estricto, y listas de bloqueo en pestañas (títulos web, apps, excepciones).
 - 🛡️ **Monitor Anti-distracciones (`DistractionMonitor.qml`):**
   - Inspección en tiempo real de títulos y clases de ventana activas en Hyprland.
   - Advertencias instantáneas cuando se detectan sitios o aplicaciones distractoras en modo trabajo.

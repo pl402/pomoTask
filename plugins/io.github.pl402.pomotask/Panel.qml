@@ -29,17 +29,6 @@ Panel {
 
   readonly property bool hasActiveTask: !!pomotaskService.activeTaskId && pomotaskService.activeTaskId !== ""
 
-  // Notas (descripción) de la tarea activa, buscadas en la caché de tareas del servicio
-  readonly property string activeTaskNotes: {
-    if (!root.hasActiveTask) return ""
-    var items = pomotaskService.tasks || []
-    for (var i = 0; i < items.length; i++) {
-      if (items[i] && items[i].id === pomotaskService.activeTaskId) {
-        return String(items[i].notes || "").trim()
-      }
-    }
-    return ""
-  }
 
   readonly property var firstPendingTask: {
     var items = root.visibleTaskItems || []
@@ -288,29 +277,129 @@ Panel {
   }
 
   // -------------------------------------------------------------------------
-  // Helpers
+  // Estado derivado para la vista principal
   // -------------------------------------------------------------------------
-  function renderCycleDots(completed) {
-    var count = Number(completed || 0)
-    var currentInCycle = count % 4
-    var dots = ""
-    for (var i = 0; i < 4; i++) {
-      dots += (i < currentInCycle) ? "● " : "○ "
+  // Tarea activa completa (título, notas, lista) buscada en la caché del servicio.
+  readonly property var activeTask: {
+    if (!root.hasActiveTask) return null
+    var items = pomotaskService.tasks || []
+    for (var i = 0; i < items.length; i++) {
+      if (items[i] && items[i].id === pomotaskService.activeTaskId) return items[i]
     }
-    return dots.trim()
+    return null
+  }
+  readonly property string activeTaskNotes: activeTask ? String(activeTask.notes || "").trim() : ""
+
+  // Subtareas de la tarea activa (pendientes primero, luego hechas).
+  readonly property var activeSubtasks: {
+    if (!root.hasActiveTask) return []
+    var items = pomotaskService.tasks || []
+    var pending = [], done = []
+    for (var i = 0; i < items.length; i++) {
+      var t = items[i]
+      if (t && t.parent_id === pomotaskService.activeTaskId) (t.completed ? done : pending).push(t)
+    }
+    return pending.concat(done)
   }
 
-  function modeBadgeText(mode) {
-    if (mode === "short_break") return " Descanso Corto"
-    if (mode === "long_break") return " Descanso Largo"
-    return " Enfoque"
+  // Pendientes en la lista seleccionada (independiente de "Ver hechas").
+  readonly property int pendingCount: buildTaskTree(pomotaskService.tasks, root.selectedListId, false).length
+
+  // Color de fase derivado del tema: acento para enfoque, acento atenuado en descansos.
+  readonly property color phaseColor: pomotaskService.isWork ? Color.accent : Util.alpha(Color.accent, 0.55)
+
+  function modeLabel(mode) {
+    if (mode === "short_break") return "DESCANSO CORTO"
+    if (mode === "long_break") return "DESCANSO LARGO"
+    return "ENFOQUE"
   }
 
-  function stateBadgeText(state) {
-    if (state === "running") return " En Curso"
-    if (state === "paused") return " Pausado"
-    return "⏹ Detenido"
+  function stateLabel(state) {
+    if (state === "running") return "en curso"
+    if (state === "paused") return "pausado"
+    return "listo"
   }
+
+  readonly property string headerCaption: {
+    if (pomotaskService.isWork && !pomotaskService.isStopped) {
+      return "Pomodoro " + ((pomotaskService.sessionPomodoros % 4) + 1) + " de 4"
+    }
+    if (pomotaskService.isStopped && !root.hasActiveTask && pomotaskService.isWork) return "listo para empezar"
+    return stateLabel(pomotaskService.state)
+  }
+
+  // La lista se pliega mientras el temporizador corre; el usuario puede desplegarla.
+  property bool tasksForceExpanded: false
+  readonly property bool tasksCollapsed: pomotaskService.isRunning && !tasksForceExpanded
+
+  Connections {
+    target: pomotaskService
+    function onIsRunningChanged() { root.tasksForceExpanded = false }
+  }
+
+  // Reiniciar pide una segunda pulsación en 3 s en lugar de un diálogo.
+  property bool resetArmed: false
+  Timer {
+    id: resetArmTimer
+    interval: 3000
+    repeat: false
+    onTriggered: root.resetArmed = false
+  }
+  function requestReset() {
+    if (root.resetArmed) {
+      root.resetArmed = false
+      resetArmTimer.stop()
+      pomotaskService.timerReset()
+    } else {
+      root.resetArmed = true
+      resetArmTimer.restart()
+    }
+  }
+
+  // Cursor de teclado sobre la lista de tareas (-1 = ninguno).
+  property int cursorIndex: -1
+  function moveCursor(delta) {
+    var n = root.visibleTaskItems.length
+    if (n === 0) { root.cursorIndex = -1; return }
+    if (root.tasksCollapsed) root.tasksForceExpanded = true
+    if (root.cursorIndex < 0) root.cursorIndex = delta > 0 ? 0 : n - 1
+    else root.cursorIndex = Math.max(0, Math.min(n - 1, root.cursorIndex + delta))
+  }
+  function cursorTask() {
+    var items = root.visibleTaskItems
+    if (root.cursorIndex < 0 || root.cursorIndex >= items.length) return null
+    return items[root.cursorIndex].task
+  }
+  onVisibleTaskItemsChanged: {
+    if (root.cursorIndex >= root.visibleTaskItems.length) root.cursorIndex = root.visibleTaskItems.length - 1
+  }
+
+  function toggleFocus(task) {
+    if (!task) return
+    if (pomotaskService.activeTaskId === task.id) pomotaskService.clearFocusTask()
+    else pomotaskService.focusTask(task.id)
+  }
+
+  function completeTaskWithCelebration(task) {
+    if (!task) return
+    var willBeCompleted = !task.completed
+    var taskTitle = task.title
+    pomotaskService.completeTask(task.id)
+    if (willBeCompleted) {
+      if (pomotaskService.activeTaskId === task.id) pomotaskService.clearFocusTask()
+      pomotaskService.triggerCelebration(taskTitle)
+      if (root.celebrationOverlay && typeof root.celebrationOverlay.celebrate === "function") {
+        root.celebrationOverlay.celebrate(taskTitle)
+      }
+    }
+  }
+
+  // Pestaña activa de las listas de bloqueo en Ajustes: "titles" | "apps" | "allowed"
+  property string blocklistTab: "titles"
+
+  readonly property string shortcutsHelp: "Espacio/P: iniciar o pausar · S: saltar fase · R: sincronizar\n"
+    + "J/K: mover cursor · Enter: enfocar · C: completar · Y: copiar\n"
+    + "Esc: quitar cursor o cerrar · Q: cerrar"
 
   // -------------------------------------------------------------------------
   // KeyboardPanel
@@ -323,7 +412,7 @@ Panel {
     open: root.opened
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(380))
-    contentHeight: panel.fittedContentHeight(panelColumn.implicitHeight, Style.space(600))
+    contentHeight: panel.fittedContentHeight(panelColumn.implicitHeight, Style.space(640))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -332,12 +421,22 @@ Panel {
         || (typeof newBlockedTitleField !== "undefined" && newBlockedTitleField && newBlockedTitleField.activeFocus)
         || (typeof newBlockedClassField !== "undefined" && newBlockedClassField && newBlockedClassField.activeFocus)
         || (typeof newAllowedTitleField !== "undefined" && newAllowedTitleField && newAllowedTitleField.activeFocus)
+        || (typeof focusMinutesField !== "undefined" && focusMinutesField && focusMinutesField.field.activeFocus)
+        || (typeof shortMinutesField !== "undefined" && shortMinutesField && shortMinutesField.field.activeFocus)
+        || (typeof longMinutesField !== "undefined" && longMinutesField && longMinutesField.field.activeFocus)
         || (typeof listDropdown !== "undefined" && listDropdown && listDropdown.popupOpen)
         || (typeof actionDropdown !== "undefined" && actionDropdown && actionDropdown.popupOpen)
 
-      onActivateRequested: pomotaskService.timerToggle()
+      // Enter: con cursor en la lista enfoca/desenfoca esa tarea; si no, alterna el temporizador.
+      onActivateRequested: {
+        var t = root.cursorTask()
+        if (root.currentView === "main" && t) root.toggleFocus(t)
+        else pomotaskService.timerToggle()
+      }
       onCloseRequested: {
-        if (root.currentView === "settings") {
+        if (root.cursorIndex >= 0) {
+          root.cursorIndex = -1
+        } else if (root.currentView === "settings") {
           root.currentView = "main"
         } else {
           root.close()
@@ -353,6 +452,16 @@ Panel {
           pomotaskService.syncTasks()
         } else if (t === "q" || t === "Q") {
           root.close()
+        } else if (root.currentView === "main" && (t === "j" || t === "J")) {
+          root.moveCursor(1)
+        } else if (root.currentView === "main" && (t === "k" || t === "K")) {
+          root.moveCursor(-1)
+        } else if (root.currentView === "main" && (t === "c" || t === "C")) {
+          root.completeTaskWithCelebration(root.cursorTask())
+        } else if (root.currentView === "main" && (t === "y" || t === "Y")) {
+          var ct = root.cursorTask()
+          if (ct) root.copyTaskToClipboard(ct)
+          else if (root.activeTask) root.copyTaskToClipboard(root.activeTask)
         }
       }
 
@@ -369,7 +478,7 @@ Panel {
           spacing: Style.space(12)
 
           // =================================================================
-          // VISTA 1: PRINCIPAL (Temporizador Ultra-Limpio + Tarea en Foco)
+          // VISTA 1: PRINCIPAL (anillo + tarea en foco + lista)
           // =================================================================
           Column {
             id: mainViewColumn
@@ -377,53 +486,35 @@ Panel {
             width: parent.width
             spacing: Style.space(12)
 
-            // Header Row: Badges a la izquierda | Sincronizar y Ajustes a la derecha
+            // Cabecera: modo y estado a la izquierda | sincronizar y ajustes a la derecha
             Item {
               width: parent.width
-              implicitHeight: Math.max(badgeRow.implicitHeight, headerActionsRow.implicitHeight)
+              implicitHeight: Math.max(modeRow.implicitHeight, headerActionsRow.implicitHeight)
 
               Row {
-                id: badgeRow
+                id: modeRow
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: Style.space(6)
+                spacing: Style.space(8)
 
-                // Mode Badge
-                BorderSurface {
-                  color: Style.selectedFillFor(root.contentForeground, Color.accent)
-                  radius: Style.cornerRadius
-                  implicitWidth: modeBadgeTextItem.implicitWidth + Style.space(10)
-                  implicitHeight: modeBadgeTextItem.implicitHeight + Style.space(4)
-
-                  Text {
-                    id: modeBadgeTextItem
-                    textFormat: Text.PlainText
-                    anchors.centerIn: parent
-                    text: root.modeBadgeText(pomotaskService.mode)
-                    color: Color.accent
-                    font.family: root.contentFontFamily
-                    font.pixelSize: Style.font.caption
-                    font.bold: true
-                  }
+                Text {
+                  textFormat: Text.PlainText
+                  text: root.modeLabel(pomotaskService.mode)
+                  color: Color.accent
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.caption
+                  font.bold: true
+                  font.letterSpacing: 1
+                  anchors.verticalCenter: parent.verticalCenter
                 }
 
-                // State Badge
-                BorderSurface {
-                  color: Style.hoverFillFor(root.contentForeground, Color.accent)
-                  radius: Style.cornerRadius
-                  implicitWidth: stateBadgeTextItem.implicitWidth + Style.space(10)
-                  implicitHeight: stateBadgeTextItem.implicitHeight + Style.space(4)
-
-                  Text {
-                    id: stateBadgeTextItem
-                    textFormat: Text.PlainText
-                    anchors.centerIn: parent
-                    text: root.stateBadgeText(pomotaskService.state)
-                    color: root.contentForeground
-                    font.family: root.contentFontFamily
-                    font.pixelSize: Style.font.caption
-                    font.bold: true
-                  }
+                Text {
+                  textFormat: Text.PlainText
+                  text: root.headerCaption
+                  color: root.dimColor
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.caption
+                  anchors.verticalCenter: parent.verticalCenter
                 }
               }
 
@@ -451,7 +542,7 @@ Panel {
                   iconText: ""
                   foreground: root.contentForeground
                   hoverColor: Color.accent
-                  tooltipText: "Ajustes y Anti-distracciones"
+                  tooltipText: "Ajustes, duraciones y bloqueo"
                   onClicked: root.currentView = "settings"
                 }
               }
@@ -578,23 +669,183 @@ Panel {
                   NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
                 }
               }
+
             }
 
             // -----------------------------------------------------------------
-            // Tarea Actual: título completo (varias líneas) + descripción si la tiene
+            // Héroe: anillo de progreso con el tiempo dentro + puntos de ciclo
+            // -----------------------------------------------------------------
+            Column {
+              width: parent.width
+              spacing: Style.space(14)
+
+              Item {
+                id: ringWrap
+                readonly property int ringSize: Style.space(168)
+                width: parent.width
+                implicitHeight: ringSize
+
+                Canvas {
+                  id: ringCanvas
+                  anchors.horizontalCenter: parent.horizontalCenter
+                  width: ringWrap.ringSize
+                  height: ringWrap.ringSize
+
+                  property real progress: pomotaskService.progress
+                  property color trackColor: Style.selectedFillFor(root.contentForeground, Color.accent)
+                  property color fillColor: root.phaseColor
+                  property real fillOpacity: pomotaskService.isPaused ? 0.55 : 1.0
+
+                  Behavior on progress {
+                    NumberAnimation { duration: 500; easing.type: Easing.OutCubic }
+                  }
+
+                  onProgressChanged: requestPaint()
+                  onTrackColorChanged: requestPaint()
+                  onFillColorChanged: requestPaint()
+                  onFillOpacityChanged: requestPaint()
+
+                  onPaint: {
+                    var ctx = getContext("2d")
+                    ctx.reset()
+                    var stroke = Style.space(8)
+                    var cx = width / 2
+                    var cy = height / 2
+                    var r = (Math.min(width, height) - stroke) / 2
+                    ctx.lineWidth = stroke
+                    ctx.lineCap = "round"
+
+                    ctx.strokeStyle = Qt.rgba(trackColor.r, trackColor.g, trackColor.b, trackColor.a)
+                    ctx.beginPath()
+                    ctx.arc(cx, cy, r, 0, Math.PI * 2)
+                    ctx.stroke()
+
+                    var p = Math.max(0, Math.min(1, progress))
+                    if (p > 0.002) {
+                      ctx.strokeStyle = Qt.rgba(fillColor.r, fillColor.g, fillColor.b, fillColor.a * fillOpacity)
+                      ctx.beginPath()
+                      ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p)
+                      ctx.stroke()
+                    }
+                  }
+                }
+
+                Column {
+                  anchors.centerIn: ringCanvas
+                  spacing: Style.space(2)
+
+                  Text {
+                    textFormat: Text.PlainText
+                    text: pomotaskService.formattedTime
+                    color: pomotaskService.isStopped && !root.hasActiveTask ? root.dimColor : root.contentForeground
+                    font.family: root.contentFontFamily
+                    font.pixelSize: Math.round(Style.font.displayLarge * 1.4)
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    anchors.horizontalCenter: parent.horizontalCenter
+                  }
+
+                  Text {
+                    textFormat: Text.PlainText
+                    text: pomotaskService.isBreak && pomotaskService.isRunning ? "DESCANSO" : root.stateLabel(pomotaskService.state).toUpperCase()
+                    color: root.dimColor
+                    font.family: root.contentFontFamily
+                    font.pixelSize: Style.font.caption
+                    font.letterSpacing: 1
+                    horizontalAlignment: Text.AlignHCenter
+                    anchors.horizontalCenter: parent.horizontalCenter
+                  }
+                }
+              }
+
+              // Puntos del ciclo: hechos en acento, el actual con anillo, el resto atenuado
+              Row {
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: Style.space(10)
+
+                Repeater {
+                  model: 4
+                  delegate: Rectangle {
+                    required property int index
+                    readonly property int doneInCycle: pomotaskService.sessionPomodoros % 4
+                    readonly property bool isDone: index < doneInCycle
+                    readonly property bool isCurrent: index === doneInCycle && pomotaskService.isWork
+                    width: Style.space(8)
+                    height: Style.space(8)
+                    radius: width / 2
+                    color: isDone ? Color.accent : (isCurrent ? "transparent" : Style.selectedFillFor(root.contentForeground, Color.accent))
+                    border.width: isCurrent ? 2 : 0
+                    border.color: Color.accent
+                  }
+                }
+              }
+            }
+
+            // -----------------------------------------------------------------
+            // Controles: Reiniciar | Iniciar/Pausar (primario) | Saltar
+            // -----------------------------------------------------------------
+            Row {
+              anchors.horizontalCenter: parent.horizontalCenter
+              spacing: Style.space(12)
+
+              Button {
+                width: root.resetArmed ? implicitWidth : Style.space(40)
+                verticalPadding: Style.space(11)
+                horizontalPadding: root.resetArmed ? Style.space(10) : 0
+                iconText: ""
+                text: root.resetArmed ? "¿Reiniciar?" : ""
+                fontSize: Style.font.caption
+                bordered: true
+                foreground: root.resetArmed ? Color.urgent : root.dimColor
+                accent: root.resetArmed ? Color.urgent : Color.accent
+                tooltipText: root.resetArmed ? "Pulsa otra vez para confirmar" : "Reiniciar temporizador (pide confirmación)"
+                anchors.verticalCenter: parent.verticalCenter
+                onClicked: root.requestReset()
+              }
+
+              Button {
+                width: Style.space(160)
+                verticalPadding: Style.space(12)
+                iconText: pomotaskService.isRunning ? "" : ""
+                iconSize: Style.font.iconLarge
+                text: pomotaskService.isRunning ? "Pausar" : (pomotaskService.isPaused ? "Continuar" : "Iniciar")
+                fontSize: Style.font.subtitle
+                selected: true
+                bordered: true
+                foreground: root.contentForeground
+                accent: Color.accent
+                tooltipText: pomotaskService.isRunning ? "Pausar temporizador (Espacio)" : "Iniciar temporizador (Espacio)"
+                anchors.verticalCenter: parent.verticalCenter
+                onClicked: pomotaskService.timerToggle()
+              }
+
+              Button {
+                width: Style.space(40)
+                verticalPadding: Style.space(11)
+                horizontalPadding: 0
+                iconText: ""
+                bordered: true
+                foreground: root.dimColor
+                accent: Color.accent
+                tooltipText: "Saltar fase (S)"
+                anchors.verticalCenter: parent.verticalCenter
+                onClicked: pomotaskService.timerSkip()
+              }
+            }
+
+            // -----------------------------------------------------------------
+            // Tarjeta de descanso (solo en descansos)
             // -----------------------------------------------------------------
             BorderSurface {
-              id: activeTaskCard
+              visible: pomotaskService.isBreak
               width: parent.width
-              implicitHeight: activeTaskColumn.implicitHeight + Style.space(16)
+              implicitHeight: breakColumn.implicitHeight + Style.space(28)
               radius: Style.cornerRadius
               color: Style.hoverFillFor(root.contentForeground, Color.accent)
-              borderSpec: Border.controlSpec("focus", root.contentForeground, Color.accent)
-
-              readonly property bool hasTask: pomotaskService.activeTaskTitle && pomotaskService.activeTaskTitle !== ""
+              borderSpec: Border.controlSpec("hover-cursor", root.contentForeground, Color.accent)
 
               Column {
-                id: activeTaskColumn
+                id: breakColumn
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
@@ -605,19 +856,110 @@ Panel {
                 Text {
                   width: parent.width
                   textFormat: Text.PlainText
-                  text: activeTaskCard.hasTask
-                    ? " " + pomotaskService.activeTaskTitle
-                    : " Sin tarea seleccionada"
-                  color: activeTaskCard.hasTask ? root.contentForeground : root.dimColor
+                  text: pomotaskService.isLongBreak ? "Descanso largo: levántate y desconecta" : "Aléjate de la pantalla un momento"
+                  color: root.contentForeground
                   font.family: root.contentFontFamily
-                  font.pixelSize: Style.font.heading
+                  font.pixelSize: Style.font.subtitle
+                  font.bold: true
+                  horizontalAlignment: Text.AlignHCenter
+                  wrapMode: Text.Wrap
+                }
+
+                Text {
+                  width: parent.width
+                  visible: root.hasActiveTask
+                  textFormat: Text.PlainText
+                  text: "Al terminar vuelves a: " + pomotaskService.activeTaskTitle
+                  color: root.dimColor
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  horizontalAlignment: Text.AlignHCenter
+                  wrapMode: Text.Wrap
+                  maximumLineCount: 2
+                  elide: Text.ElideRight
+                }
+              }
+            }
+
+            // -----------------------------------------------------------------
+            // Tarjeta de la tarea en foco (título, notas, subtareas, completar)
+            // -----------------------------------------------------------------
+            BorderSurface {
+              id: activeTaskCard
+              visible: !pomotaskService.isBreak && root.hasActiveTask
+              width: parent.width
+              implicitHeight: activeTaskColumn.implicitHeight + Style.space(24)
+              radius: Style.cornerRadius
+              color: Style.hoverFillFor(root.contentForeground, Color.accent)
+              borderSpec: Border.controlSpec("focus", root.contentForeground, Color.accent)
+
+              Column {
+                id: activeTaskColumn
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.leftMargin: Style.space(12)
+                anchors.rightMargin: Style.space(12)
+                spacing: Style.space(8)
+
+                Item {
+                  width: parent.width
+                  implicitHeight: Math.max(activeLabel.implicitHeight, activeActions.implicitHeight)
+
+                  Text {
+                    id: activeLabel
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    textFormat: Text.PlainText
+                    text: "TAREA EN FOCO"
+                    color: Color.accent
+                    font.family: root.contentFontFamily
+                    font.pixelSize: Style.font.caption
+                    font.bold: true
+                    font.letterSpacing: 1
+                  }
+
+                  Row {
+                    id: activeActions
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Style.space(2)
+
+                    PanelActionButton {
+                      readonly property bool justCopied: root.copiedTaskId !== "" && root.copiedTaskId === pomotaskService.activeTaskId
+                      size: Style.space(22)
+                      iconText: justCopied ? "󰄬" : "󰆏"
+                      foreground: justCopied ? Color.accent : root.dimColor
+                      hoverColor: Color.accent
+                      tooltipText: justCopied ? "¡Copiado!" : "Copiar tarea y descripción (Y)"
+                      onClicked: root.copyTaskToClipboard(root.activeTask || { id: pomotaskService.activeTaskId, title: pomotaskService.activeTaskTitle })
+                    }
+
+                    PanelActionButton {
+                      size: Style.space(22)
+                      iconText: ""
+                      foreground: root.dimColor
+                      hoverColor: Color.urgent
+                      tooltipText: "Quitar el foco de esta tarea"
+                      onClicked: pomotaskService.clearFocusTask()
+                    }
+                  }
+                }
+
+                Text {
+                  width: parent.width
+                  textFormat: Text.PlainText
+                  text: pomotaskService.activeTaskTitle
+                  color: root.contentForeground
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.title
                   font.bold: true
                   wrapMode: Text.Wrap
                 }
 
                 Text {
                   width: parent.width
-                  visible: activeTaskCard.hasTask && root.activeTaskNotes !== ""
+                  visible: root.activeTaskNotes !== ""
                   textFormat: Text.PlainText
                   text: root.activeTaskNotes
                   color: root.dimColor
@@ -625,105 +967,232 @@ Panel {
                   font.pixelSize: Style.font.bodySmall
                   wrapMode: Text.Wrap
                 }
-              }
-            }
 
-            // -----------------------------------------------------------------
-            // Control Action Buttons (Iniciar/Pausar, Saltar, Reiniciar, Terminar Tarea)
-            // -----------------------------------------------------------------
-            Row {
-              width: parent.width
-              spacing: Style.space(8)
+                Column {
+                  width: parent.width
+                  visible: root.activeSubtasks.length > 0
+                  spacing: Style.space(4)
 
-              // Main Play/Pause Button (Solo Ícono)
-              Button {
-                width: (parent.width - Style.space(24)) * 0.25
-                iconText: pomotaskService.isRunning ? "" : ""
-                selected: pomotaskService.isRunning
-                bordered: true
-                foreground: root.contentForeground
-                accent: Color.accent
-                tooltipText: pomotaskService.isRunning ? "Pausar temporizador (Espacio)" : "Iniciar temporizador (Espacio)"
-                onClicked: pomotaskService.timerToggle()
-              }
+                  Repeater {
+                    model: root.activeSubtasks
+                    delegate: Row {
+                      required property var modelData
+                      width: parent.width
+                      spacing: Style.space(6)
 
-              // Skip Button (Solo Ícono)
-              Button {
-                width: (parent.width - Style.space(24)) * 0.25
-                iconText: ""
-                bordered: true
-                foreground: root.contentForeground
-                accent: Color.accent
-                tooltipText: "Saltar fase (S)"
-                onClicked: pomotaskService.timerSkip()
-              }
+                      PanelActionButton {
+                        size: Style.space(20)
+                        fontSize: Style.font.bodySmall
+                        iconText: modelData.completed ? "󰄲" : "󰄱"
+                        foreground: modelData.completed ? Color.accent : root.dimColor
+                        hoverColor: Color.accent
+                        tooltipText: modelData.completed ? "Subtarea completada" : "Marcar subtarea como completada"
+                        anchors.verticalCenter: parent.verticalCenter
+                        onClicked: root.completeTaskWithCelebration(modelData)
+                      }
 
-              // Reset Button (Solo Ícono)
-              Button {
-                width: (parent.width - Style.space(24)) * 0.25
-                iconText: ""
-                bordered: true
-                foreground: root.contentForeground
-                accent: Color.accent
-                tooltipText: "Reiniciar temporizador"
-                onClicked: pomotaskService.timerReset()
-              }
-
-              // Complete Task Button (Prominente / Color Verde de Éxito)
-              Button {
-                width: (parent.width - Style.space(24)) * 0.25
-                iconText: "󰄲"
-                bordered: true
-                selected: true
-                foreground: "#10b981"
-                accent: "#10b981"
-                tooltipText: root.hasActiveTask
-                  ? ("Completar tarea activa: " + pomotaskService.activeTaskTitle)
-                  : (root.firstPendingTask ? ("Completar tarea: " + root.firstPendingTask.title) : "Marcar tarea como terminada")
-                onClicked: root.completeCurrentTask()
-              }
-            }
-
-            // -----------------------------------------------------------------
-            // Google Tasks Section (Visible solo cuando NO está en curso)
-            // -----------------------------------------------------------------
-            Column {
-              id: tasksSection
-              visible: !pomotaskService.isRunning
-              width: parent.width
-              spacing: Style.space(10)
-
-              PanelSeparator {
-                foreground: root.contentForeground
-              }
-
-              Item {
-                width: parent.width
-                implicitHeight: Math.max(tasksHeaderTitle.implicitHeight, toggleCompletedBtn.implicitHeight)
-
-                PanelSectionHeader {
-                  id: tasksHeaderTitle
-                  text: "TAREAS"
-                  foreground: root.contentForeground
-                  fontFamily: root.contentFontFamily
-                  anchors.left: parent.left
-                  anchors.verticalCenter: parent.verticalCenter
+                      Text {
+                        width: parent.width - Style.space(20) - parent.spacing
+                        textFormat: Text.PlainText
+                        text: modelData.title
+                        color: modelData.completed ? root.dimColor : root.contentForeground
+                        font.family: root.contentFontFamily
+                        font.pixelSize: Style.font.bodySmall
+                        font.strikeout: !!modelData.completed
+                        wrapMode: Text.Wrap
+                        anchors.verticalCenter: parent.verticalCenter
+                      }
+                    }
+                  }
                 }
 
                 Button {
-                  id: toggleCompletedBtn
-                  anchors.right: parent.right
-                  anchors.verticalCenter: parent.verticalCenter
-                  text: root.showCompletedTasks ? "Ocultar hechas" : "Ver hechas"
-                  fontSize: Style.font.caption
-                  bordered: false
-                  foreground: root.dimColor
+                  width: parent.width
+                  iconText: "󰄲"
+                  text: "Completar tarea"
+                  bordered: true
+                  foreground: Color.accent
                   accent: Color.accent
-                  onClicked: root.showCompletedTasks = !root.showCompletedTasks
+                  fontSize: Style.font.body
+                  tooltipText: "Marcar la tarea en foco como terminada (C con el cursor en la lista)"
+                  onClicked: root.completeTaskWithCelebration(root.activeTask || { id: pomotaskService.activeTaskId, title: pomotaskService.activeTaskTitle, completed: false })
+                }
+              }
+            }
+
+            // -----------------------------------------------------------------
+            // Estado vacío: sin tarea en foco
+            // -----------------------------------------------------------------
+            BorderSurface {
+              visible: !pomotaskService.isBreak && !root.hasActiveTask
+              width: parent.width
+              implicitHeight: emptyColumn.implicitHeight + Style.space(32)
+              radius: Style.cornerRadius
+              color: "transparent"
+              borderSpec: Border.flat(Util.alpha(root.contentForeground, 0.25), 1)
+
+              Column {
+                id: emptyColumn
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.leftMargin: Style.space(12)
+                anchors.rightMargin: Style.space(12)
+                spacing: Style.space(6)
+
+                Text {
+                  textFormat: Text.PlainText
+                  text: ""
+                  color: Color.muted
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.display
+                  anchors.horizontalCenter: parent.horizontalCenter
+                }
+
+                Text {
+                  width: parent.width
+                  textFormat: Text.PlainText
+                  text: "Sin tarea en foco"
+                  color: root.contentForeground
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.subtitle
+                  font.bold: true
+                  horizontalAlignment: Text.AlignHCenter
+                }
+
+                Text {
+                  width: parent.width
+                  textFormat: Text.PlainText
+                  text: "Elige una de la lista con  o crea una nueva.\nEl pomodoro se contará en la tarea que enfoques."
+                  color: root.dimColor
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  horizontalAlignment: Text.AlignHCenter
+                  wrapMode: Text.Wrap
+                }
+              }
+            }
+
+            // -----------------------------------------------------------------
+            // Tareas: plegadas mientras corre el temporizador
+            // -----------------------------------------------------------------
+            PanelSeparator {
+              foreground: root.contentForeground
+            }
+
+            BorderSurface {
+              id: collapsedTasksRow
+              visible: root.tasksCollapsed
+              width: parent.width
+              implicitHeight: Style.space(34)
+              radius: Style.cornerRadius
+              color: collapsedMouse.containsMouse ? Style.selectedFillFor(root.contentForeground, Color.accent) : Style.hoverFillFor(root.contentForeground, Color.accent)
+
+              Row {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.leftMargin: Style.space(8)
+                spacing: Style.space(8)
+
+                PanelSectionHeader {
+                  text: "TAREAS"
+                  foreground: root.contentForeground
+                  fontFamily: root.contentFontFamily
+                  anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Text {
+                  textFormat: Text.PlainText
+                  text: root.pendingCount + (root.pendingCount === 1 ? " pendiente" : " pendientes")
+                  color: root.dimColor
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.caption
+                  anchors.verticalCenter: parent.verticalCenter
                 }
               }
 
-              // List Selector Dropdown (con nombres reales)
+              Text {
+                anchors.right: parent.right
+                anchors.rightMargin: Style.space(8)
+                anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
+                text: "Mostrar "
+                color: root.dimColor
+                font.family: root.contentFontFamily
+                font.pixelSize: Style.font.caption
+              }
+
+              MouseArea {
+                id: collapsedMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.tasksForceExpanded = true
+              }
+            }
+
+            Column {
+              id: tasksSection
+              visible: !root.tasksCollapsed
+              width: parent.width
+              spacing: Style.space(10)
+
+              Item {
+                width: parent.width
+                implicitHeight: Math.max(tasksHeaderRow.implicitHeight, tasksHeaderActions.implicitHeight)
+
+                Row {
+                  id: tasksHeaderRow
+                  anchors.left: parent.left
+                  anchors.verticalCenter: parent.verticalCenter
+                  spacing: Style.space(8)
+
+                  PanelSectionHeader {
+                    text: "TAREAS"
+                    foreground: root.contentForeground
+                    fontFamily: root.contentFontFamily
+                    anchors.verticalCenter: parent.verticalCenter
+                  }
+
+                  Text {
+                    textFormat: Text.PlainText
+                    text: root.pendingCount + (root.pendingCount === 1 ? " pendiente" : " pendientes")
+                    color: root.dimColor
+                    font.family: root.contentFontFamily
+                    font.pixelSize: Style.font.caption
+                    anchors.verticalCenter: parent.verticalCenter
+                  }
+                }
+
+                Row {
+                  id: tasksHeaderActions
+                  anchors.right: parent.right
+                  anchors.verticalCenter: parent.verticalCenter
+                  spacing: Style.space(2)
+
+                  Button {
+                    text: root.showCompletedTasks ? "Ocultar hechas" : "Ver hechas"
+                    fontSize: Style.font.caption
+                    bordered: false
+                    foreground: root.dimColor
+                    accent: Color.accent
+                    onClicked: root.showCompletedTasks = !root.showCompletedTasks
+                  }
+
+                  Button {
+                    visible: pomotaskService.isRunning
+                    text: "Plegar"
+                    fontSize: Style.font.caption
+                    bordered: false
+                    foreground: root.dimColor
+                    accent: Color.accent
+                    tooltipText: "Ocultar la lista mientras corre el temporizador"
+                    onClicked: { root.tasksForceExpanded = false; root.cursorIndex = -1 }
+                  }
+                }
+              }
+
+              // Selector de lista (solo si hay más de una)
               Dropdown {
                 id: listDropdown
                 label: "Lista"
@@ -732,13 +1201,12 @@ Panel {
                 width: parent.width
                 value: root.selectedListId
                 options: root.listOptions
-                onChanged: function(v) { root.selectedListId = v }
+                onChanged: function(v) { root.selectedListId = v; root.cursorIndex = -1 }
               }
 
-              // Tasks List Column
               Column {
                 width: parent.width
-                spacing: Style.space(4)
+                spacing: Style.space(2)
 
                 Repeater {
                   model: root.visibleTaskItems
@@ -750,16 +1218,30 @@ Panel {
 
                     readonly property var itemData: modelData
                     readonly property bool isFocused: pomotaskService.activeTaskId === itemData.task.id
+                    readonly property bool hasCursor: root.cursorIndex === index
 
                     width: panelColumn.width
                     implicitHeight: taskContent.implicitHeight + Style.space(10)
                     radius: Style.cornerRadius
                     color: isFocused
                       ? Style.selectedFillFor(root.contentForeground, Color.accent)
-                      : (taskMouse.containsMouse ? Style.hoverFillFor(root.contentForeground, Color.accent) : "transparent")
+                      : (hasCursor ? Style.hoverFillFor(root.contentForeground, Color.accent) : "transparent")
                     borderSpec: isFocused
                       ? Border.controlSpec("focus", root.contentForeground, Color.accent)
-                      : (taskMouse.containsMouse ? Border.controlSpec("hover-cursor", root.contentForeground, Color.accent) : Border.none())
+                      : (hasCursor ? Border.controlSpec("hover-cursor", root.contentForeground, Color.accent) : Border.none())
+
+                    // Marca del cursor de teclado
+                    Rectangle {
+                      visible: taskRow.hasCursor
+                      anchors.left: parent.left
+                      anchors.top: parent.top
+                      anchors.bottom: parent.bottom
+                      anchors.topMargin: Style.space(6)
+                      anchors.bottomMargin: Style.space(6)
+                      width: 2
+                      radius: 1
+                      color: Color.accent
+                    }
 
                     Row {
                       id: taskContent
@@ -770,35 +1252,22 @@ Panel {
                       anchors.rightMargin: Style.space(8)
                       spacing: Style.space(8)
 
-                      // Complete / Checkbox Button
+                      // Completar / checkbox
                       PanelActionButton {
                         size: Style.space(22)
                         iconText: itemData.task.completed ? "󰄲" : "󰄱"
                         foreground: itemData.task.completed ? Color.accent : root.contentForeground
                         hoverColor: Color.accent
-                        tooltipText: itemData.task.completed ? "Completada" : "Marcar como completada"
+                        tooltipText: itemData.task.completed ? "Completada" : "Marcar como completada (C)"
                         anchors.verticalCenter: parent.verticalCenter
-                        onClicked: {
-                          var willBeCompleted = !itemData.task.completed
-                          var taskTitle = itemData.task.title
-                          pomotaskService.completeTask(itemData.task.id)
-                          if (willBeCompleted) {
-                            if (pomotaskService.activeTaskId === itemData.task.id) {
-                              pomotaskService.clearFocusTask()
-                            }
-                            pomotaskService.triggerCelebration(taskTitle)
-                            if (root.celebrationOverlay && typeof root.celebrationOverlay.celebrate === "function") {
-                              root.celebrationOverlay.celebrate(taskTitle)
-                            }
-                          }
-                        }
+                        onClicked: root.completeTaskWithCelebration(itemData.task)
                       }
 
-                      // Task Title and Badges
+                      // Título y badges
                       Column {
                         width: parent.width - Style.space(22) * 3 - parent.spacing * 3 - (itemData.isSubtask ? Style.space(16) : 0)
                         anchors.verticalCenter: parent.verticalCenter
-                        spacing: Style.space(2)
+                        spacing: Style.space(3)
 
                         Text {
                           textFormat: Text.PlainText
@@ -815,7 +1284,6 @@ Panel {
                           spacing: Style.space(6)
                           visible: (itemData.task.due && itemData.task.due !== "") || itemData.task.pomodoros > 0
 
-                          // Due date badge
                           BorderSurface {
                             visible: !!itemData.task.due && itemData.task.due !== ""
                             color: Style.hoverFillFor(root.contentForeground, Color.accent)
@@ -834,7 +1302,6 @@ Panel {
                             }
                           }
 
-                          // Pomodoros count badge
                           Text {
                             visible: itemData.task.pomodoros > 0
                             textFormat: Text.PlainText
@@ -848,60 +1315,56 @@ Panel {
                         }
                       }
 
-                      // Copy Task Button (título + descripción al portapapeles)
+                      // Copiar (título + descripción)
                       PanelActionButton {
                         readonly property bool justCopied: root.copiedTaskId !== "" && root.copiedTaskId === itemData.task.id
                         size: Style.space(22)
                         iconText: justCopied ? "󰄬" : "󰆏"
                         foreground: justCopied ? Color.accent : root.dimColor
                         hoverColor: Color.accent
-                        tooltipText: justCopied ? "¡Copiado!" : (itemData.task.notes && itemData.task.notes !== "" ? "Copiar tarea y descripción" : "Copiar tarea")
+                        tooltipText: justCopied ? "¡Copiado!" : (itemData.task.notes && itemData.task.notes !== "" ? "Copiar tarea y descripción (Y)" : "Copiar tarea (Y)")
                         anchors.verticalCenter: parent.verticalCenter
                         onClicked: root.copyTaskToClipboard(itemData.task)
                       }
 
-                      // Focus Target Button ()
+                      // Enfocar
                       PanelActionButton {
                         size: Style.space(22)
                         iconText: ""
                         foreground: isFocused ? Color.accent : root.dimColor
                         hoverColor: Color.accent
-                        tooltipText: isFocused ? "Quitar enfoque activo" : "Enfocar esta tarea"
+                        tooltipText: isFocused ? "Quitar foco (Enter)" : "Enfocar esta tarea (Enter)"
                         anchors.verticalCenter: parent.verticalCenter
-                        onClicked: {
-                          if (isFocused) {
-                            pomotaskService.clearFocusTask()
-                          } else {
-                            pomotaskService.focusTask(itemData.task.id)
-                          }
-                        }
+                        onClicked: root.toggleFocus(itemData.task)
                       }
                     }
 
+                    // El hover del ratón mueve el cursor: un solo resaltado en pantalla.
                     MouseArea {
-                      id: taskMouse
                       anchors.fill: parent
                       hoverEnabled: true
                       acceptedButtons: Qt.NoButton
+                      onEntered: root.cursorIndex = index
                     }
                   }
                 }
 
                 Text {
                   visible: root.visibleTaskItems.length === 0
+                  width: parent.width
                   textFormat: Text.PlainText
-                  text: "No hay tareas para mostrar"
+                  text: root.showCompletedTasks ? "No hay tareas en esta lista" : "Todo hecho por aquí. Añade una tarea o activa \"Ver hechas\"."
                   color: root.dimColor
                   font.family: root.contentFontFamily
                   font.pixelSize: Style.font.bodySmall
                   horizontalAlignment: Text.AlignHCenter
-                  width: parent.width
-                  topPadding: Style.space(8)
-                  bottomPadding: Style.space(8)
+                  wrapMode: Text.Wrap
+                  topPadding: Style.space(6)
+                  bottomPadding: Style.space(6)
                 }
               }
 
-              // Quick Task Creation Row
+              // Alta rápida
               Row {
                 width: parent.width
                 spacing: Style.space(8)
@@ -926,10 +1389,76 @@ Panel {
                 }
               }
             }
+
+            // -----------------------------------------------------------------
+            // Pie: resumen de hoy + ayuda de atajos
+            // -----------------------------------------------------------------
+            PanelSeparator {
+              foreground: root.contentForeground
+            }
+
+            Item {
+              width: parent.width
+              implicitHeight: Math.max(todayRow.implicitHeight, shortcutsBtn.implicitHeight)
+
+              Row {
+                id: todayRow
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Style.space(10)
+
+                PanelSectionHeader {
+                  text: "HOY"
+                  foreground: root.contentForeground
+                  fontFamily: root.contentFontFamily
+                  anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Text {
+                  textFormat: Text.PlainText
+                  text: " " + pomotaskService.todayPomodoros
+                  color: Color.accent
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.caption
+                  font.bold: true
+                  anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Text {
+                  textFormat: Text.PlainText
+                  text: "󰄲 " + pomotaskService.todayTasksDone + (pomotaskService.todayTasksDone === 1 ? " tarea" : " tareas")
+                  color: root.dimColor
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.caption
+                  anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Text {
+                  textFormat: Text.PlainText
+                  text: pomotaskService.todayFocusLabel + " de foco"
+                  color: root.dimColor
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.caption
+                  anchors.verticalCenter: parent.verticalCenter
+                }
+              }
+
+              PanelActionButton {
+                id: shortcutsBtn
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                size: Style.space(22)
+                fontSize: Style.font.caption
+                iconText: "?"
+                foreground: root.dimColor
+                hoverColor: Color.accent
+                tooltipText: root.shortcutsHelp
+              }
+            }
           }
 
           // =================================================================
-          // VISTA 2: AJUSTES Y ANTI-DISTRACCIONES
+          // VISTA 2: AJUSTES (modo, duraciones, comportamiento, bloqueo)
           // =================================================================
           Column {
             id: settingsViewColumn
@@ -937,31 +1466,90 @@ Panel {
             width: parent.width
             spacing: Style.space(12)
 
-            // Header con botón Volver
+            // Cabecera: volver + título | abrir TUI
             Item {
               width: parent.width
-              implicitHeight: Math.max(backButton.implicitHeight, settingsHeaderTitle.implicitHeight)
+              implicitHeight: Math.max(settingsBackRow.implicitHeight, tuiButton.implicitHeight)
 
-              Button {
-                id: backButton
+              Row {
+                id: settingsBackRow
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
-                iconText: ""
-                text: "Volver"
-                bordered: true
-                fontSize: Style.font.caption
-                foreground: root.contentForeground
-                accent: Color.accent
-                onClicked: root.currentView = "main"
+                spacing: Style.space(8)
+
+                PanelActionButton {
+                  size: Style.space(26)
+                  fontSize: Style.font.body
+                  iconText: ""
+                  bordered: true
+                  foreground: root.contentForeground
+                  hoverColor: Color.accent
+                  tooltipText: "Volver (Esc)"
+                  anchors.verticalCenter: parent.verticalCenter
+                  onClicked: root.currentView = "main"
+                }
+
+                Text {
+                  textFormat: Text.PlainText
+                  text: "Ajustes"
+                  color: root.contentForeground
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.title
+                  font.bold: true
+                  anchors.verticalCenter: parent.verticalCenter
+                }
               }
 
-              PanelSectionHeader {
-                id: settingsHeaderTitle
+              Button {
+                id: tuiButton
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                text: "AJUSTES Y REGLAS"
+                iconText: ""
+                text: "Abrir TUI"
+                fontSize: Style.font.caption
+                bordered: false
+                foreground: root.dimColor
+                accent: Color.accent
+                tooltipText: "Abrir PomoTask en una terminal (calendario, estadísticas, sesión de Google)"
+                onClicked: root.openTui()
+              }
+            }
+
+            // Modo
+            Column {
+              width: parent.width
+              spacing: Style.space(8)
+
+              PanelSectionHeader {
+                text: "MODO"
                 foreground: root.contentForeground
                 fontFamily: root.contentFontFamily
+              }
+
+              ButtonGroup {
+                width: parent.width
+                options: [
+                  { value: "work", label: "Enfoque", icon: "" },
+                  { value: "short_break", label: "Corto", icon: "" },
+                  { value: "long_break", label: "Largo", icon: "" }
+                ]
+                value: pomotaskService.mode
+                foreground: root.contentForeground
+                accent: Color.accent
+                fontFamily: root.contentFontFamily
+                fontSize: Style.font.bodySmall
+                focusable: false
+                onChanged: function(v) { pomotaskService.setMode(v) }
+              }
+
+              Text {
+                width: parent.width
+                textFormat: Text.PlainText
+                text: "Cambiar de modo reinicia el temporizador con la duración de ese modo."
+                color: root.dimColor
+                font.family: root.contentFontFamily
+                font.pixelSize: Style.font.caption
+                wrapMode: Text.Wrap
               }
             }
 
@@ -969,63 +1557,64 @@ Panel {
               foreground: root.contentForeground
             }
 
-            // Sección: Selector de Modos Manuales
+            // Duraciones (minutos)
             Column {
               width: parent.width
               spacing: Style.space(6)
 
+              PanelSectionHeader {
+                text: "DURACIONES (MINUTOS)"
+                foreground: root.contentForeground
+                fontFamily: root.contentFontFamily
+              }
+
+              NumberField {
+                id: focusMinutesField
+                width: parent.width
+                label: "Enfoque"
+                from: 1
+                to: 180
+                value: Math.round(pomotaskService.focusDuration / 60)
+                foreground: root.contentForeground
+                accent: Color.accent
+                fontFamily: root.contentFontFamily
+                onModified: function(v) { pomotaskService.setDuration("focus", v) }
+              }
+
+              NumberField {
+                id: shortMinutesField
+                width: parent.width
+                label: "Descanso corto"
+                from: 1
+                to: 60
+                value: Math.round(pomotaskService.shortBreakDuration / 60)
+                foreground: root.contentForeground
+                accent: Color.accent
+                fontFamily: root.contentFontFamily
+                onModified: function(v) { pomotaskService.setDuration("short", v) }
+              }
+
+              NumberField {
+                id: longMinutesField
+                width: parent.width
+                label: "Descanso largo"
+                from: 1
+                to: 120
+                value: Math.round(pomotaskService.longBreakDuration / 60)
+                foreground: root.contentForeground
+                accent: Color.accent
+                fontFamily: root.contentFontFamily
+                onModified: function(v) { pomotaskService.setDuration("long", v) }
+              }
+
               Text {
+                width: parent.width
                 textFormat: Text.PlainText
-                text: "Cambio Manual de Modo"
-                color: root.contentForeground
+                text: "Se aplican al próximo pomodoro de ese tipo; la TUI usa los mismos valores."
+                color: root.dimColor
                 font.family: root.contentFontFamily
-                font.pixelSize: Style.font.bodySmall
-                font.bold: true
-              }
-
-              Button {
-                width: parent.width
-                iconText: ""
-                text: "Sesión de Trabajo (25 min de enfoque)"
-                selected: pomotaskService.mode === "work"
-                bordered: true
-                foreground: root.contentForeground
-                accent: Color.accent
-                fontSize: Style.font.caption
-                onClicked: {
-                  pomotaskService.setMode("work")
-                  root.currentView = "main"
-                }
-              }
-
-              Button {
-                width: parent.width
-                iconText: ""
-                text: "Pausa Corta (5 min para estirar y descansar la vista)"
-                selected: pomotaskService.mode === "short_break"
-                bordered: true
-                foreground: root.contentForeground
-                accent: Color.accent
-                fontSize: Style.font.caption
-                onClicked: {
-                  pomotaskService.setMode("short_break")
-                  root.currentView = "main"
-                }
-              }
-
-              Button {
-                width: parent.width
-                iconText: ""
-                text: "Pausa Larga (15 min de recuperación profunda)"
-                selected: pomotaskService.mode === "long_break"
-                bordered: true
-                foreground: root.contentForeground
-                accent: Color.accent
-                fontSize: Style.font.caption
-                onClicked: {
-                  pomotaskService.setMode("long_break")
-                  root.currentView = "main"
-                }
+                font.pixelSize: Style.font.caption
+                wrapMode: Text.Wrap
               }
             }
 
@@ -1033,17 +1622,17 @@ Panel {
               foreground: root.contentForeground
             }
 
-            // Sección: Anti-distracciones y Bloqueo
+            // Comportamiento
             PanelSectionHeader {
-              text: "COMPORTAMIENTO Y BLOQUEO"
+              text: "COMPORTAMIENTO"
               foreground: root.contentForeground
               fontFamily: root.contentFontFamily
             }
 
             Toggle {
               width: parent.width
-              label: "Modo Anti-distracciones"
-              description: "Detecta sitios y apps distractoras durante el trabajo"
+              label: "Modo anti-distracciones"
+              description: "Detecta sitios y apps distractoras durante el enfoque"
               checked: pomotaskService.antiDistraction
               foreground: root.contentForeground
               accent: Color.accent
@@ -1052,87 +1641,60 @@ Panel {
 
             Toggle {
               width: parent.width
-              label: "Bloqueo Estricto en Descanso"
-              description: "Bloquea la sesión del sistema al entrar en pausa activa"
+              label: "Bloqueo estricto en descanso"
+              description: "Bloquea la sesión del sistema al entrar en descanso"
               checked: pomotaskService.strictBreak
               foreground: root.contentForeground
               accent: Color.accent
               onClicked: pomotaskService.toggleStrictBreak()
             }
 
-            // Distraction Action Dropdown
-            Dropdown {
-              id: actionDropdown
-              label: "Acción al detectar distracción"
-              showLabel: true
-              width: parent.width
-              value: (pomotaskService.blocklist && pomotaskService.blocklist.action) ? pomotaskService.blocklist.action : "warn"
-              options: root.actionOptions
-              onChanged: function(v) { pomotaskService.blocklistSetAction(v) }
-            }
-
-            // Overlay Dimming / Visibility Slider
-            Column {
-              width: parent.width
-              spacing: Style.space(6)
-
-              Item {
-                width: parent.width
-                height: dimmingTitleText.implicitHeight
-
-                Text {
-                  id: dimmingTitleText
-                  anchors.left: parent.left
-                  anchors.verticalCenter: parent.verticalCenter
-                  textFormat: Text.PlainText
-                  text: "Oscurecimiento del fondo (" + Math.round(((pomotaskService.blocklist && typeof pomotaskService.blocklist.overlay_dimming === "number") ? pomotaskService.blocklist.overlay_dimming : 0.40) * 100) + "%)"
-                  color: root.contentForeground
-                  font.family: root.contentFontFamily
-                  font.pixelSize: Style.font.bodySmall
-                }
-
-                Text {
-                  anchors.right: parent.right
-                  anchors.verticalCenter: parent.verticalCenter
-                  textFormat: Text.PlainText
-                  text: Math.round((1.0 - ((pomotaskService.blocklist && typeof pomotaskService.blocklist.overlay_dimming === "number") ? pomotaskService.blocklist.overlay_dimming : 0.40)) * 100) + "% visibilidad"
-                  color: Color.accent
-                  font.family: root.contentFontFamily
-                  font.pixelSize: Style.font.caption
-                }
-              }
-
-              PanelSlider {
-                width: parent.width
-                minimum: 0.0
-                maximum: 0.95
-                step: 0.05
-                value: (pomotaskService.blocklist && typeof pomotaskService.blocklist.overlay_dimming === "number")
-                  ? pomotaskService.blocklist.overlay_dimming
-                  : 0.40
-                onReleased: function(val) {
-                  pomotaskService.blocklistSetDimming(val)
-                }
-              }
-            }
-
             PanelSeparator {
               foreground: root.contentForeground
             }
 
+            // Bloqueo: una pestaña a la vez
+            PanelSectionHeader {
+              text: "BLOQUEO"
+              foreground: root.contentForeground
+              fontFamily: root.contentFontFamily
+            }
+
+            ButtonGroup {
+              width: parent.width
+              options: [
+                { value: "titles", label: "Títulos web" },
+                { value: "apps", label: "Apps" },
+                { value: "allowed", label: "Excepciones" }
+              ]
+              value: root.blocklistTab
+              foreground: root.contentForeground
+              accent: Color.accent
+              fontFamily: root.contentFontFamily
+              fontSize: Style.font.bodySmall
+              focusable: false
+              onChanged: function(v) { root.blocklistTab = v }
+            }
+
+            Text {
+              width: parent.width
+              textFormat: Text.PlainText
+              text: root.blocklistTab === "titles"
+                ? "Palabras que, si aparecen en el título de la ventana activa, cuentan como distracción."
+                : (root.blocklistTab === "apps"
+                  ? "Clases de ventana (apps) que cuentan como distracción durante el enfoque."
+                  : "Excepciones con prioridad sobre las reglas de bloqueo (ej. YouTube Music).")
+              color: root.dimColor
+              font.family: root.contentFontFamily
+              font.pixelSize: Style.font.caption
+              wrapMode: Text.Wrap
+            }
+
             // Sub-section: Blocked Web Titles / Keywords
             Column {
+              visible: root.blocklistTab === "titles"
               width: parent.width
               spacing: Style.space(6)
-
-              Text {
-                textFormat: Text.PlainText
-                text: " Sitios Web y Palabras Bloqueadas"
-                color: root.contentForeground
-                font.family: root.contentFontFamily
-                font.pixelSize: Style.font.bodySmall
-                font.bold: true
-              }
 
               Flow {
                 width: parent.width
@@ -1210,23 +1772,11 @@ Panel {
               }
             }
 
-            PanelSeparator {
-              foreground: root.contentForeground
-            }
-
             // Sub-section: Blocked Application Classes
             Column {
+              visible: root.blocklistTab === "apps"
               width: parent.width
               spacing: Style.space(6)
-
-              Text {
-                textFormat: Text.PlainText
-                text: " Aplicaciones Bloqueadas"
-                color: root.contentForeground
-                font.family: root.contentFontFamily
-                font.pixelSize: Style.font.bodySmall
-                font.bold: true
-              }
 
               Flow {
                 width: parent.width
@@ -1304,23 +1854,11 @@ Panel {
               }
             }
 
-            PanelSeparator {
-              foreground: root.contentForeground
-            }
-
             // Sub-section: Allowed Exceptions (Whitelist)
             Column {
+              visible: root.blocklistTab === "allowed"
               width: parent.width
               spacing: Style.space(6)
-
-              Text {
-                textFormat: Text.PlainText
-                text: " Excepciones Permitidas (Lista Blanca)"
-                color: root.contentForeground
-                font.family: root.contentFontFamily
-                font.pixelSize: Style.font.bodySmall
-                font.bold: true
-              }
 
               Text {
                 textFormat: Text.PlainText
@@ -1410,15 +1948,60 @@ Panel {
               foreground: root.contentForeground
             }
 
-            // TUI Launcher Button
-            Button {
+            // Distraction Action Dropdown
+            Dropdown {
+              id: actionDropdown
+              label: "Acción al detectar distracción"
+              showLabel: true
               width: parent.width
-              iconText: ""
-              text: "Abrir PomoTask TUI en Terminal"
-              bordered: true
-              foreground: root.contentForeground
-              accent: Color.accent
-              onClicked: root.openTui()
+              value: (pomotaskService.blocklist && pomotaskService.blocklist.action) ? pomotaskService.blocklist.action : "warn"
+              options: root.actionOptions
+              onChanged: function(v) { pomotaskService.blocklistSetAction(v) }
+            }
+
+            // Overlay Dimming / Visibility Slider
+            Column {
+              width: parent.width
+              spacing: Style.space(6)
+
+              Item {
+                width: parent.width
+                height: dimmingTitleText.implicitHeight
+
+                Text {
+                  id: dimmingTitleText
+                  anchors.left: parent.left
+                  anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
+                  text: "Oscurecimiento del fondo (" + Math.round(((pomotaskService.blocklist && typeof pomotaskService.blocklist.overlay_dimming === "number") ? pomotaskService.blocklist.overlay_dimming : 0.40) * 100) + "%)"
+                  color: root.contentForeground
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.bodySmall
+                }
+
+                Text {
+                  anchors.right: parent.right
+                  anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
+                  text: Math.round((1.0 - ((pomotaskService.blocklist && typeof pomotaskService.blocklist.overlay_dimming === "number") ? pomotaskService.blocklist.overlay_dimming : 0.40)) * 100) + "% visibilidad"
+                  color: Color.accent
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.caption
+                }
+              }
+
+              PanelSlider {
+                width: parent.width
+                minimum: 0.0
+                maximum: 0.95
+                step: 0.05
+                value: (pomotaskService.blocklist && typeof pomotaskService.blocklist.overlay_dimming === "number")
+                  ? pomotaskService.blocklist.overlay_dimming
+                  : 0.40
+                onReleased: function(val) {
+                  pomotaskService.blocklistSetDimming(val)
+                }
+              }
             }
           }
         }
