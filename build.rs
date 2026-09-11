@@ -15,7 +15,8 @@ fn main() {
 
     println!("cargo:rerun-if-changed=client_secret.json");
     if Path::new("client_secret.json").exists() {
-        let content = fs::read_to_string("client_secret.json").unwrap_or_else(|_| placeholder.to_string());
+        let content =
+            fs::read_to_string("client_secret.json").unwrap_or_else(|_| placeholder.to_string());
         fs::write(&dest, content).expect("no se pudo escribir embedded_secret.json");
     } else {
         fs::write(&dest, placeholder).expect("no se pudo escribir embedded_secret.json");
