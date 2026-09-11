@@ -394,6 +394,108 @@ Panel {
     }
   }
 
+  // Fila de chips mutuamente excluyentes que reparten el ancho completo (el
+  // ButtonGroup del shell dimensiona cada chip a su contenido).
+  component EqualChips: Row {
+    id: chips
+    property var options: []
+    property string value: ""
+    signal changed(string value)
+    spacing: Style.space(6)
+
+    Repeater {
+      model: chips.options
+      delegate: Button {
+        required property var modelData
+        width: (chips.width - chips.spacing * (chips.options.length - 1)) / chips.options.length
+        text: modelData.label
+        iconText: modelData.icon || ""
+        selected: modelData.value === chips.value
+        bordered: true
+        foreground: root.contentForeground
+        accent: Color.accent
+        fontFamily: root.contentFontFamily
+        fontSize: Style.font.bodySmall
+        onClicked: chips.changed(modelData.value)
+      }
+    }
+  }
+
+  // Fila "Etiqueta ........ [-] 25 min [+]" para editar una duración en minutos.
+  component DurationRow: Item {
+    id: durationRow
+    property string label: ""
+    property string key: ""          // "focus" | "short" | "long"
+    property int seconds: 0
+    property int minMinutes: 1
+    property int maxMinutes: 180
+    readonly property int minutes: Math.round(seconds / 60)
+    width: parent ? parent.width : implicitWidth
+    implicitHeight: Style.space(34)
+
+    function bump(delta) {
+      var next = Math.max(minMinutes, Math.min(maxMinutes, minutes + delta))
+      if (next !== minutes) pomotaskService.setDuration(key, next)
+    }
+
+    Text {
+      anchors.left: parent.left
+      anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
+      text: durationRow.label
+      color: root.contentForeground
+      font.family: root.contentFontFamily
+      font.pixelSize: Style.font.body
+    }
+
+    Row {
+      anchors.right: parent.right
+      anchors.verticalCenter: parent.verticalCenter
+      spacing: Style.space(6)
+
+      PanelActionButton {
+        size: Style.space(24)
+        fontSize: Style.font.bodySmall
+        iconText: "−"
+        bordered: true
+        enabled: durationRow.minutes > durationRow.minMinutes
+        foreground: root.dimColor
+        hoverColor: Color.accent
+        tooltipText: "Un minuto menos"
+        anchors.verticalCenter: parent.verticalCenter
+        onClicked: durationRow.bump(-1)
+      }
+
+      Item {
+        width: Style.space(58)
+        height: Style.space(24)
+
+        Text {
+          anchors.centerIn: parent
+          textFormat: Text.PlainText
+          text: durationRow.minutes + " min"
+          color: root.contentForeground
+          font.family: root.contentFontFamily
+          font.pixelSize: Style.font.body
+          font.bold: true
+        }
+      }
+
+      PanelActionButton {
+        size: Style.space(24)
+        fontSize: Style.font.bodySmall
+        iconText: "+"
+        bordered: true
+        enabled: durationRow.minutes < durationRow.maxMinutes
+        foreground: root.dimColor
+        hoverColor: Color.accent
+        tooltipText: "Un minuto más"
+        anchors.verticalCenter: parent.verticalCenter
+        onClicked: durationRow.bump(1)
+      }
+    }
+  }
+
   // Pestaña activa de las listas de bloqueo en Ajustes: "titles" | "apps" | "allowed"
   property string blocklistTab: "titles"
 
@@ -421,9 +523,6 @@ Panel {
         || (typeof newBlockedTitleField !== "undefined" && newBlockedTitleField && newBlockedTitleField.activeFocus)
         || (typeof newBlockedClassField !== "undefined" && newBlockedClassField && newBlockedClassField.activeFocus)
         || (typeof newAllowedTitleField !== "undefined" && newAllowedTitleField && newAllowedTitleField.activeFocus)
-        || (typeof focusMinutesField !== "undefined" && focusMinutesField && focusMinutesField.field.activeFocus)
-        || (typeof shortMinutesField !== "undefined" && shortMinutesField && shortMinutesField.field.activeFocus)
-        || (typeof longMinutesField !== "undefined" && longMinutesField && longMinutesField.field.activeFocus)
         || (typeof listDropdown !== "undefined" && listDropdown && listDropdown.popupOpen)
         || (typeof actionDropdown !== "undefined" && actionDropdown && actionDropdown.popupOpen)
 
@@ -1474,7 +1573,7 @@ Panel {
                 fontFamily: root.contentFontFamily
               }
 
-              ButtonGroup {
+              EqualChips {
                 width: parent.width
                 options: [
                   { value: "work", label: "Enfoque", icon: "" },
@@ -1482,11 +1581,6 @@ Panel {
                   { value: "long_break", label: "Largo", icon: "" }
                 ]
                 value: pomotaskService.mode
-                foreground: root.contentForeground
-                accent: Color.accent
-                fontFamily: root.contentFontFamily
-                fontSize: Style.font.bodySmall
-                focusable: false
                 onChanged: function(v) { pomotaskService.setMode(v) }
               }
 
@@ -1511,48 +1605,33 @@ Panel {
               spacing: Style.space(6)
 
               PanelSectionHeader {
-                text: "DURACIONES (MINUTOS)"
+                text: "DURACIONES"
                 foreground: root.contentForeground
                 fontFamily: root.contentFontFamily
               }
 
-              NumberField {
-                id: focusMinutesField
-                width: parent.width
+              DurationRow {
                 label: "Enfoque"
-                from: 1
-                to: 180
-                value: Math.round(pomotaskService.focusDuration / 60)
-                foreground: root.contentForeground
-                accent: Color.accent
-                fontFamily: root.contentFontFamily
-                onModified: function(v) { pomotaskService.setDuration("focus", v) }
+                key: "focus"
+                seconds: pomotaskService.focusDuration
+                minMinutes: 1
+                maxMinutes: 180
               }
 
-              NumberField {
-                id: shortMinutesField
-                width: parent.width
+              DurationRow {
                 label: "Descanso corto"
-                from: 1
-                to: 60
-                value: Math.round(pomotaskService.shortBreakDuration / 60)
-                foreground: root.contentForeground
-                accent: Color.accent
-                fontFamily: root.contentFontFamily
-                onModified: function(v) { pomotaskService.setDuration("short", v) }
+                key: "short"
+                seconds: pomotaskService.shortBreakDuration
+                minMinutes: 1
+                maxMinutes: 60
               }
 
-              NumberField {
-                id: longMinutesField
-                width: parent.width
+              DurationRow {
                 label: "Descanso largo"
-                from: 1
-                to: 120
-                value: Math.round(pomotaskService.longBreakDuration / 60)
-                foreground: root.contentForeground
-                accent: Color.accent
-                fontFamily: root.contentFontFamily
-                onModified: function(v) { pomotaskService.setDuration("long", v) }
+                key: "long"
+                seconds: pomotaskService.longBreakDuration
+                minMinutes: 1
+                maxMinutes: 120
               }
 
               Text {
@@ -1608,7 +1687,7 @@ Panel {
               fontFamily: root.contentFontFamily
             }
 
-            ButtonGroup {
+            EqualChips {
               width: parent.width
               options: [
                 { value: "titles", label: "Títulos web" },
@@ -1616,11 +1695,6 @@ Panel {
                 { value: "allowed", label: "Excepciones" }
               ]
               value: root.blocklistTab
-              foreground: root.contentForeground
-              accent: Color.accent
-              fontFamily: root.contentFontFamily
-              fontSize: Style.font.bodySmall
-              focusable: false
               onChanged: function(v) { root.blocklistTab = v }
             }
 
