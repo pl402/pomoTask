@@ -39,6 +39,30 @@ Panel {
     return null
   }
 
+  // Id de la tarea copiada recientemente; se usa para mostrar un ✓ breve en su botón
+  property string copiedTaskId: ""
+
+  Timer {
+    id: copiedFeedbackTimer
+    interval: 1500
+    repeat: false
+    onTriggered: root.copiedTaskId = ""
+  }
+
+  // Copia al portapapeles la tarea: título y, si tiene, su descripción (notas)
+  function copyTaskToClipboard(task) {
+    if (!task) return
+    var text = String(task.title || "").trim()
+    var notes = String(task.notes || "").trim()
+    if (notes !== "") {
+      text = text === "" ? notes : text + "\n\n" + notes
+    }
+    if (text === "") return
+    Quickshell.execDetached(["bash", "-c", "printf %s " + Util.shellQuote(text) + " | wl-copy"])
+    root.copiedTaskId = String(task.id || "")
+    copiedFeedbackTimer.restart()
+  }
+
   function completeCurrentTask() {
     var taskTitle = ""
     var taskId = ""
@@ -771,7 +795,7 @@ Panel {
 
                       // Task Title and Badges
                       Column {
-                        width: parent.width - Style.space(22) * 2 - parent.spacing * 2 - (itemData.isSubtask ? Style.space(16) : 0)
+                        width: parent.width - Style.space(22) * 3 - parent.spacing * 3 - (itemData.isSubtask ? Style.space(16) : 0)
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: Style.space(2)
 
@@ -832,6 +856,18 @@ Panel {
                             anchors.verticalCenter: parent.verticalCenter
                           }
                         }
+                      }
+
+                      // Copy Task Button (título + descripción al portapapeles)
+                      PanelActionButton {
+                        readonly property bool justCopied: root.copiedTaskId !== "" && root.copiedTaskId === itemData.task.id
+                        size: Style.space(22)
+                        iconText: justCopied ? "󰄬" : "󰆏"
+                        foreground: justCopied ? Color.accent : root.dimColor
+                        hoverColor: Color.accent
+                        tooltipText: justCopied ? "¡Copiado!" : (itemData.task.notes && itemData.task.notes !== "" ? "Copiar tarea y descripción" : "Copiar tarea")
+                        anchors.verticalCenter: parent.verticalCenter
+                        onClicked: root.copyTaskToClipboard(itemData.task)
                       }
 
                       // Focus Target Button ()

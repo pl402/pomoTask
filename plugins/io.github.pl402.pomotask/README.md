@@ -12,6 +12,7 @@ Plugin nativo de barra y escritorio para **Omarchy Quattro** que integra la téc
   - Controles del temporizador: Play / Pausa / Saltar / Reiniciar.
   - Sincronización bidireccional y navegación de Google Tasks con selector de listas.
   - Tareas en foco (🎯) para asociar el objetivo actual al temporizador.
+  - Botón 󰆏 en cada tarea para copiar al portapapeles su título y descripción (vía `wl-copy`); el icono cambia a ✓ un instante como confirmación.
   - Creación rápida de nuevas tareas con `Enter`.
   - Toggles rápidos para activar/desactivar modo anti-distracción y descanso estricto.
 - 🛡️ **Monitor Anti-distracciones (`DistractionMonitor.qml`):**
