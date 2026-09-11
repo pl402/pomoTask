@@ -365,6 +365,9 @@ Panel {
     if (root.cursorIndex < 0) root.cursorIndex = delta > 0 ? 0 : n - 1
     else root.cursorIndex = Math.max(0, Math.min(n - 1, root.cursorIndex + delta))
   }
+  onCursorIndexChanged: {
+    if (root.cursorIndex >= 0 && typeof listScroll !== "undefined" && listScroll) listScroll.ensureVisible(root.cursorIndex)
+  }
   function cursorTask() {
     var items = root.visibleTaskItems
     if (root.cursorIndex < 0 || root.cursorIndex >= items.length) return null
@@ -496,6 +499,25 @@ Panel {
     }
   }
 
+  // Altura máxima de contenido del panel (misma regla que fittedContentHeight): la lista
+  // de tareas se ajusta a lo que sobra para que cabecera, anillo, tarjeta, alta rápida y
+  // pie se vean siempre a la vez; solo la lista hace scroll.
+  readonly property real panelMaxContentHeight: Math.min(Style.space(760),
+    panel.availableCardHeight > 0 ? panel.availableCardHeight : Style.space(760)) - panel.verticalContentInset
+
+  // Suma la altura de los hijos visibles de una Column (más su spacing) saltando `skip`.
+  function visibleHeightExcept(col, skip) {
+    var h = 0
+    var n = 0
+    for (var i = 0; i < col.children.length; i++) {
+      var c = col.children[i]
+      if (!c || !c.visible || c === skip) continue
+      h += c.height
+      n++
+    }
+    return h + col.spacing * Math.max(0, n - 1)
+  }
+
   // Pestaña activa de las listas de bloqueo en Ajustes: "titles" | "apps" | "allowed"
   property string blocklistTab: "titles"
 
@@ -514,7 +536,7 @@ Panel {
     open: root.opened
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(380))
-    contentHeight: panel.fittedContentHeight(panelColumn.implicitHeight, Style.space(640))
+    contentHeight: panel.fittedContentHeight(panelColumn.implicitHeight, Style.space(760))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -1251,164 +1273,193 @@ Panel {
                 onChanged: function(v) { root.selectedListId = v; root.cursorIndex = -1 }
               }
 
-              Column {
+              // Lista con scroll propio: ocupa lo que sobra del panel y nada más
+              Flickable {
+                id: listScroll
                 width: parent.width
-                spacing: Style.space(2)
+                readonly property real maxHeight: root.panelMaxContentHeight
+                  - (root.visibleHeightExcept(mainViewColumn, tasksSection) + mainViewColumn.spacing)
+                  - (root.visibleHeightExcept(tasksSection, listScroll) + tasksSection.spacing)
+                height: Math.max(Style.space(96), Math.min(listColumn.implicitHeight, maxHeight))
+                contentWidth: width
+                contentHeight: listColumn.implicitHeight
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                flickableDirection: Flickable.VerticalFlick
 
-                Repeater {
-                  model: root.visibleTaskItems
+                ScrollBar.vertical: ScrollBar {
+                  policy: listScroll.contentHeight > listScroll.height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
+                }
 
-                  delegate: BorderSurface {
-                    id: taskRow
-                    required property var modelData
-                    required property int index
+                // Mantiene visible la fila del cursor de teclado
+                function ensureVisible(index) {
+                  var it = taskRepeater.itemAt(index)
+                  if (!it) return
+                  if (it.y < contentY) contentY = it.y
+                  else if (it.y + it.height > contentY + height) contentY = Math.max(0, it.y + it.height - height)
+                }
 
-                    readonly property var itemData: modelData
-                    readonly property bool isFocused: pomotaskService.activeTaskId === itemData.task.id
-                    readonly property bool hasCursor: root.cursorIndex === index
+                  Column {
+                    id: listColumn
+                    width: listScroll.width
+                    spacing: Style.space(2)
 
-                    width: panelColumn.width
-                    implicitHeight: taskContent.implicitHeight + Style.space(10)
-                    radius: Style.cornerRadius
-                    color: isFocused
-                      ? Style.selectedFillFor(root.contentForeground, Color.accent)
-                      : (hasCursor ? Style.hoverFillFor(root.contentForeground, Color.accent) : "transparent")
-                    borderSpec: isFocused
-                      ? Border.controlSpec("focus", root.contentForeground, Color.accent)
-                      : (hasCursor ? Border.controlSpec("hover-cursor", root.contentForeground, Color.accent) : Border.none())
+                    Repeater {
+                      id: taskRepeater
+                      model: root.visibleTaskItems
 
-                    // Marca del cursor de teclado
-                    Rectangle {
-                      visible: taskRow.hasCursor
-                      anchors.left: parent.left
-                      anchors.top: parent.top
-                      anchors.bottom: parent.bottom
-                      anchors.topMargin: Style.space(6)
-                      anchors.bottomMargin: Style.space(6)
-                      width: 2
-                      radius: 1
-                      color: Color.accent
-                    }
+                      delegate: BorderSurface {
+                        id: taskRow
+                        required property var modelData
+                        required property int index
 
-                    Row {
-                      id: taskContent
-                      anchors.left: parent.left
-                      anchors.right: parent.right
-                      anchors.verticalCenter: parent.verticalCenter
-                      anchors.leftMargin: (itemData.isSubtask ? Style.space(24) : Style.space(8))
-                      anchors.rightMargin: Style.space(8)
-                      spacing: Style.space(8)
+                        readonly property var itemData: modelData
+                        readonly property bool isFocused: pomotaskService.activeTaskId === itemData.task.id
+                        readonly property bool hasCursor: root.cursorIndex === index
 
-                      // Completar / checkbox
-                      PanelActionButton {
-                        size: Style.space(22)
-                        iconText: itemData.task.completed ? "󰄲" : "󰄱"
-                        foreground: itemData.task.completed ? Color.accent : root.contentForeground
-                        hoverColor: Color.accent
-                        tooltipText: itemData.task.completed ? "Completada" : "Marcar como completada (C)"
-                        anchors.verticalCenter: parent.verticalCenter
-                        onClicked: root.completeTaskWithCelebration(itemData.task)
-                      }
+                        width: listColumn.width
+                        implicitHeight: taskContent.implicitHeight + Style.space(10)
+                        radius: Style.cornerRadius
+                        color: isFocused
+                          ? Style.selectedFillFor(root.contentForeground, Color.accent)
+                          : (hasCursor ? Style.hoverFillFor(root.contentForeground, Color.accent) : "transparent")
+                        borderSpec: isFocused
+                          ? Border.controlSpec("focus", root.contentForeground, Color.accent)
+                          : (hasCursor ? Border.controlSpec("hover-cursor", root.contentForeground, Color.accent) : Border.none())
 
-                      // Título y badges
-                      Column {
-                        width: parent.width - Style.space(22) * 3 - parent.spacing * 3 - (itemData.isSubtask ? Style.space(16) : 0)
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: Style.space(3)
-
-                        Text {
-                          textFormat: Text.PlainText
-                          text: (itemData.isSubtask ? "↳ " : "") + itemData.task.title
-                          color: itemData.task.completed ? root.dimColor : root.contentForeground
-                          font.family: root.contentFontFamily
-                          font.pixelSize: Style.font.body
-                          font.strikeout: itemData.task.completed
-                          wrapMode: Text.Wrap
-                          width: parent.width
+                        // Marca del cursor de teclado
+                        Rectangle {
+                          visible: taskRow.hasCursor
+                          anchors.left: parent.left
+                          anchors.top: parent.top
+                          anchors.bottom: parent.bottom
+                          anchors.topMargin: Style.space(6)
+                          anchors.bottomMargin: Style.space(6)
+                          width: 2
+                          radius: 1
+                          color: Color.accent
                         }
 
                         Row {
-                          spacing: Style.space(6)
-                          visible: (itemData.task.due && itemData.task.due !== "") || itemData.task.pomodoros > 0
+                          id: taskContent
+                          anchors.left: parent.left
+                          anchors.right: parent.right
+                          anchors.verticalCenter: parent.verticalCenter
+                          anchors.leftMargin: (itemData.isSubtask ? Style.space(24) : Style.space(8))
+                          anchors.rightMargin: Style.space(8)
+                          spacing: Style.space(8)
 
-                          BorderSurface {
-                            visible: !!itemData.task.due && itemData.task.due !== ""
-                            color: Style.hoverFillFor(root.contentForeground, Color.accent)
-                            radius: Style.cornerRadius
-                            implicitWidth: dueLabel.implicitWidth + Style.space(8)
-                            implicitHeight: dueLabel.implicitHeight + Style.space(2)
+                          // Completar / checkbox
+                          PanelActionButton {
+                            size: Style.space(22)
+                            iconText: itemData.task.completed ? "󰄲" : "󰄱"
+                            foreground: itemData.task.completed ? Color.accent : root.contentForeground
+                            hoverColor: Color.accent
+                            tooltipText: itemData.task.completed ? "Completada" : "Marcar como completada (C)"
+                            anchors.verticalCenter: parent.verticalCenter
+                            onClicked: root.completeTaskWithCelebration(itemData.task)
+                          }
+
+                          // Título y badges
+                          Column {
+                            width: parent.width - Style.space(22) * 3 - parent.spacing * 3 - (itemData.isSubtask ? Style.space(16) : 0)
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: Style.space(3)
 
                             Text {
-                              id: dueLabel
                               textFormat: Text.PlainText
-                              anchors.centerIn: parent
-                              text: "󰃭 " + root.formatDueDate(itemData.task.due)
-                              color: root.contentForeground
+                              text: (itemData.isSubtask ? "↳ " : "") + itemData.task.title
+                              color: itemData.task.completed ? root.dimColor : root.contentForeground
                               font.family: root.contentFontFamily
-                              font.pixelSize: Style.font.caption
+                              font.pixelSize: Style.font.body
+                              font.strikeout: itemData.task.completed
+                              wrapMode: Text.Wrap
+                              width: parent.width
+                            }
+
+                            Row {
+                              spacing: Style.space(6)
+                              visible: (itemData.task.due && itemData.task.due !== "") || itemData.task.pomodoros > 0
+
+                              BorderSurface {
+                                visible: !!itemData.task.due && itemData.task.due !== ""
+                                color: Style.hoverFillFor(root.contentForeground, Color.accent)
+                                radius: Style.cornerRadius
+                                implicitWidth: dueLabel.implicitWidth + Style.space(8)
+                                implicitHeight: dueLabel.implicitHeight + Style.space(2)
+
+                                Text {
+                                  id: dueLabel
+                                  textFormat: Text.PlainText
+                                  anchors.centerIn: parent
+                                  text: "󰃭 " + root.formatDueDate(itemData.task.due)
+                                  color: root.contentForeground
+                                  font.family: root.contentFontFamily
+                                  font.pixelSize: Style.font.caption
+                                }
+                              }
+
+                              Text {
+                                visible: itemData.task.pomodoros > 0
+                                textFormat: Text.PlainText
+                                text: " " + itemData.task.pomodoros
+                                color: Color.accent
+                                font.family: root.contentFontFamily
+                                font.pixelSize: Style.font.caption
+                                font.bold: true
+                                anchors.verticalCenter: parent.verticalCenter
+                              }
                             }
                           }
 
-                          Text {
-                            visible: itemData.task.pomodoros > 0
-                            textFormat: Text.PlainText
-                            text: " " + itemData.task.pomodoros
-                            color: Color.accent
-                            font.family: root.contentFontFamily
-                            font.pixelSize: Style.font.caption
-                            font.bold: true
+                          // Copiar (título + descripción)
+                          PanelActionButton {
+                            readonly property bool justCopied: root.copiedTaskId !== "" && root.copiedTaskId === itemData.task.id
+                            size: Style.space(22)
+                            iconText: justCopied ? "󰄬" : "󰆏"
+                            foreground: justCopied ? Color.accent : root.dimColor
+                            hoverColor: Color.accent
+                            tooltipText: justCopied ? "¡Copiado!" : (itemData.task.notes && itemData.task.notes !== "" ? "Copiar tarea y descripción (Y)" : "Copiar tarea (Y)")
                             anchors.verticalCenter: parent.verticalCenter
+                            onClicked: root.copyTaskToClipboard(itemData.task)
+                          }
+
+                          // Enfocar
+                          PanelActionButton {
+                            size: Style.space(22)
+                            iconText: ""
+                            foreground: isFocused ? Color.accent : root.dimColor
+                            hoverColor: Color.accent
+                            tooltipText: isFocused ? "Quitar foco (Enter)" : "Enfocar esta tarea (Enter)"
+                            anchors.verticalCenter: parent.verticalCenter
+                            onClicked: root.toggleFocus(itemData.task)
                           }
                         }
-                      }
 
-                      // Copiar (título + descripción)
-                      PanelActionButton {
-                        readonly property bool justCopied: root.copiedTaskId !== "" && root.copiedTaskId === itemData.task.id
-                        size: Style.space(22)
-                        iconText: justCopied ? "󰄬" : "󰆏"
-                        foreground: justCopied ? Color.accent : root.dimColor
-                        hoverColor: Color.accent
-                        tooltipText: justCopied ? "¡Copiado!" : (itemData.task.notes && itemData.task.notes !== "" ? "Copiar tarea y descripción (Y)" : "Copiar tarea (Y)")
-                        anchors.verticalCenter: parent.verticalCenter
-                        onClicked: root.copyTaskToClipboard(itemData.task)
-                      }
-
-                      // Enfocar
-                      PanelActionButton {
-                        size: Style.space(22)
-                        iconText: ""
-                        foreground: isFocused ? Color.accent : root.dimColor
-                        hoverColor: Color.accent
-                        tooltipText: isFocused ? "Quitar foco (Enter)" : "Enfocar esta tarea (Enter)"
-                        anchors.verticalCenter: parent.verticalCenter
-                        onClicked: root.toggleFocus(itemData.task)
+                        // El hover del ratón mueve el cursor: un solo resaltado en pantalla.
+                        MouseArea {
+                          anchors.fill: parent
+                          hoverEnabled: true
+                          acceptedButtons: Qt.NoButton
+                          onEntered: root.cursorIndex = index
+                        }
                       }
                     }
 
-                    // El hover del ratón mueve el cursor: un solo resaltado en pantalla.
-                    MouseArea {
-                      anchors.fill: parent
-                      hoverEnabled: true
-                      acceptedButtons: Qt.NoButton
-                      onEntered: root.cursorIndex = index
+                    Text {
+                      visible: root.visibleTaskItems.length === 0
+                      width: parent.width
+                      textFormat: Text.PlainText
+                      text: root.showCompletedTasks ? "No hay tareas en esta lista" : "Todo hecho por aquí. Añade una tarea o activa \"Ver hechas\"."
+                      color: root.dimColor
+                      font.family: root.contentFontFamily
+                      font.pixelSize: Style.font.bodySmall
+                      horizontalAlignment: Text.AlignHCenter
+                      wrapMode: Text.Wrap
+                      topPadding: Style.space(6)
+                      bottomPadding: Style.space(6)
                     }
                   }
-                }
-
-                Text {
-                  visible: root.visibleTaskItems.length === 0
-                  width: parent.width
-                  textFormat: Text.PlainText
-                  text: root.showCompletedTasks ? "No hay tareas en esta lista" : "Todo hecho por aquí. Añade una tarea o activa \"Ver hechas\"."
-                  color: root.dimColor
-                  font.family: root.contentFontFamily
-                  font.pixelSize: Style.font.bodySmall
-                  horizontalAlignment: Text.AlignHCenter
-                  wrapMode: Text.Wrap
-                  topPadding: Style.space(6)
-                  bottomPadding: Style.space(6)
-                }
               }
 
               // Alta rápida
