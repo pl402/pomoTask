@@ -1721,7 +1721,7 @@ Panel {
 
             Toggle {
               width: parent.width
-              label: "Encadenar fases automáticamente"
+              label: "Ciclo automático"
               checked: pomotaskService.autoCycle
               foreground: root.contentForeground
               accent: Color.accent
