@@ -21,6 +21,9 @@ pub struct RuntimeState {
     pub active_task_title: Option<String>,
     pub strict_break: bool,
     pub anti_distraction: bool,
+    /// Ciclo automático: al agotarse una fase la siguiente arranca sola (trabajo → descanso → trabajo).
+    #[serde(default)]
+    pub auto_cycle: bool,
     #[serde(default)]
     pub target_end_timestamp: Option<i64>,
     /// Estado de la conexión con Google Tasks. `None` = aún no se ha comprobado.
@@ -46,6 +49,7 @@ impl Default for RuntimeState {
             active_task_title: None,
             strict_break: false,
             anti_distraction: true,
+            auto_cycle: false,
             target_end_timestamp: None,
             google_connected: None,
             last_sync_at: None,
@@ -416,8 +420,15 @@ pub fn load_runtime_state_from(path: &Path) -> RuntimeState {
                             state.total_seconds = focus_dur;
                         }
                         state.remaining_seconds = state.total_seconds;
-                        state.state = "stopped".to_string();
-                        state.target_end_timestamp = None;
+                        if state.auto_cycle {
+                            // Ciclo automático: la siguiente fase arranca sola desde ahora (no se
+                            // encadenan varias fases si el equipo estuvo suspendido mucho tiempo).
+                            state.state = "running".to_string();
+                            state.target_end_timestamp = Some(now + state.total_seconds as i64);
+                        } else {
+                            state.state = "stopped".to_string();
+                            state.target_end_timestamp = None;
+                        }
                         let _ = save_runtime_state_to(&state, path);
                     } else {
                         state.remaining_seconds = diff as u32;
@@ -559,7 +570,10 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
         }
         "timer" => {
             if clean_args.len() < 2 {
-                return Err("Missing timer action: start, pause, toggle, skip, reset".to_string());
+                return Err(
+                    "Missing timer action: start, pause, toggle, skip, reset, mode, toggle-auto"
+                        .to_string(),
+                );
             }
             let (focus_dur, short_dur, long_dur) = load_config_durations();
             let mut state = load_runtime_state();
@@ -613,6 +627,10 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
                     state.remaining_seconds = state.total_seconds;
                     state.state = "stopped".to_string();
                 }
+                "toggle-auto" => {
+                    // No toca el temporizador en curso; solo cambia cómo termina cada fase.
+                    state.auto_cycle = !state.auto_cycle;
+                }
                 "reset" => {
                     state.target_end_timestamp = None;
                     state.remaining_seconds = state.total_seconds;
@@ -649,7 +667,7 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
                 }
                 other => {
                     return Err(format!(
-                        "Unknown timer command: '{}'. Expected start, pause, toggle, skip, reset, mode",
+                        "Unknown timer command: '{}'. Expected start, pause, toggle, skip, reset, mode, toggle-auto",
                         other
                     ));
                 }
@@ -1325,6 +1343,7 @@ mod tests {
             active_task_title: Some("Implement IPC".to_string()),
             strict_break: false,
             anti_distraction: true,
+            auto_cycle: false,
             target_end_timestamp: Some(1700000000),
             google_connected: None,
             last_sync_at: None,
@@ -1440,6 +1459,7 @@ mod tests {
             active_task_title: Some("My Task".to_string()),
             strict_break: true,
             anti_distraction: false,
+            auto_cycle: false,
             target_end_timestamp: None,
             google_connected: None,
             last_sync_at: None,
@@ -1479,6 +1499,60 @@ mod tests {
 
         assert_eq!(loaded.action, "hud");
         assert!(loaded.blocked_classes.contains(&"vlc".to_string()));
+
+        let _ = std::fs::remove_dir_all(temp_dir);
+    }
+
+    fn expired_break_state(auto_cycle: bool) -> RuntimeState {
+        RuntimeState {
+            state: "running".to_string(),
+            mode: "short_break".to_string(),
+            total_seconds: 300,
+            remaining_seconds: 1,
+            auto_cycle,
+            target_end_timestamp: Some(Utc::now().timestamp() - 10),
+            ..RuntimeState::default()
+        }
+    }
+
+    #[test]
+    fn test_expired_phase_stops_without_auto_cycle() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("pomotask_test_auto_off_{}", rand::random::<u64>()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let path = temp_dir.join("runtime_state.json");
+        save_runtime_state_to(&expired_break_state(false), &path).unwrap();
+
+        let loaded = load_runtime_state_from(&path);
+        assert_eq!(loaded.mode, "work");
+        assert_eq!(loaded.state, "stopped");
+        assert_eq!(loaded.target_end_timestamp, None);
+
+        let _ = std::fs::remove_dir_all(temp_dir);
+    }
+
+    #[test]
+    fn test_expired_phase_continues_with_auto_cycle() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("pomotask_test_auto_on_{}", rand::random::<u64>()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let path = temp_dir.join("runtime_state.json");
+        save_runtime_state_to(&expired_break_state(true), &path).unwrap();
+
+        let loaded = load_runtime_state_from(&path);
+        assert_eq!(loaded.mode, "work");
+        assert_eq!(loaded.state, "running");
+        assert!(loaded.auto_cycle);
+        let target = loaded
+            .target_end_timestamp
+            .expect("nueva fase con fin programado");
+        assert!(target > Utc::now().timestamp());
+        assert_eq!(loaded.remaining_seconds, loaded.total_seconds);
+
+        // Y se persistió: una segunda lectura sigue en marcha, sin volver a cambiar de fase.
+        let again = load_runtime_state_from(&path);
+        assert_eq!(again.mode, "work");
+        assert_eq!(again.state, "running");
 
         let _ = std::fs::remove_dir_all(temp_dir);
     }

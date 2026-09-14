@@ -1719,6 +1719,15 @@ Panel {
               onClicked: pomotaskService.toggleStrictBreak()
             }
 
+            Toggle {
+              width: parent.width
+              label: "Encadenar fases automáticamente"
+              checked: pomotaskService.autoCycle
+              foreground: root.contentForeground
+              accent: Color.accent
+              onClicked: pomotaskService.toggleAutoCycle()
+            }
+
             PanelSeparator {
               foreground: root.contentForeground
             }

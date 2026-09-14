@@ -16,7 +16,7 @@ Plugin nativo de barra y escritorio para **Omarchy Quattro** que integra la téc
   - Navegación por teclado en la lista: `J`/`K` mueven el cursor, `Enter` enfoca, `C` completa, `Y` copia, `Esc` quita el cursor. Además `Espacio`/`P` alterna el temporizador, `S` salta la fase, `R` sincroniza y `Q` cierra. El botón `?` del pie muestra la ayuda.
   - Pie con el resumen de **hoy** (pomodoros, tareas completadas y tiempo de foco) leído de `stats.json`.
   - Creación rápida de nuevas tareas con `Enter`.
-  - Ajustes: modo como grupo de chips, **duraciones editables** en minutos (persisten en `config.json` vía `pomotask-cli ipc config set`), toggles de anti-distracción y descanso estricto, y listas de bloqueo en pestañas (títulos web, apps, excepciones).
+  - Ajustes: modo como grupo de chips, **duraciones editables** en minutos (persisten en `config.json` vía `pomotask-cli ipc config set`), toggles de anti-distracción, bloqueo de pantalla en descansos y **ciclo automático** (al terminar el trabajo arranca solo el descanso, y al terminar el descanso vuelve solo al trabajo; `auto_cycle` en `runtime_state.json`, se alterna con `pomotask-cli ipc timer toggle-auto`), y listas de bloqueo en pestañas (títulos web, apps, excepciones).
 - 🛡️ **Monitor Anti-distracciones (`DistractionMonitor.qml`):**
   - Inspección en tiempo real de títulos y clases de ventana activas en Hyprland.
   - Tres acciones al detectar una distracción en modo trabajo, elegibles en Ajustes y visualmente distintas:

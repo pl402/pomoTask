@@ -40,6 +40,7 @@ Item {
   property string activeTaskTitle: ""
   property bool strictBreak: false
   property bool antiDistraction: true
+  property bool autoCycle: false     // encadenar fases sin intervención
 
   // -------------------------------------------------------------------------
   // Google Connection State (escrito por el CLI en runtime_state.json)
@@ -274,6 +275,7 @@ Item {
         root.activeTaskTitle = obj.active_task_title ? String(obj.active_task_title) : ""
         if (obj.strict_break !== undefined) root.strictBreak = Boolean(obj.strict_break)
         if (obj.anti_distraction !== undefined) root.antiDistraction = Boolean(obj.anti_distraction)
+        if (obj.auto_cycle !== undefined) root.autoCycle = Boolean(obj.auto_cycle)
 
         if (obj.state === "running" && obj.target_end_timestamp) {
           var nowSec = Math.floor(Date.now() / 1000)
@@ -507,6 +509,10 @@ Item {
     runAction(["blocklist", "toggle-strict"], "Toggling strict break…")
   }
   function blocklistToggleStrictBreak() { toggleStrictBreak() }
+
+  function toggleAutoCycle() {
+    runAction(["timer", "toggle-auto"], "Toggling auto cycle…")
+  }
 
   function toggleAntiDistraction() {
     runAction(["blocklist", "toggle-anti-distraction"], "Toggling anti-distraction…")

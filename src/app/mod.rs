@@ -1083,6 +1083,7 @@ impl App {
             active_task_title,
             strict_break: false,
             anti_distraction: true,
+            auto_cycle: false,
             target_end_timestamp,
             google_connected: None,
             last_sync_at: None,
@@ -1096,6 +1097,7 @@ impl App {
         // Campos que no son del temporizador: los conservamos tal cual los dejó el IPC/plugin.
         state.strict_break = existing.strict_break;
         state.anti_distraction = existing.anti_distraction;
+        state.auto_cycle = existing.auto_cycle;
         state.google_connected = existing.google_connected;
         state.last_sync_at = existing.last_sync_at;
         state.last_sync_error = existing.last_sync_error;

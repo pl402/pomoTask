@@ -15,6 +15,8 @@ Item {
   property bool sideEffects: true
   property bool dismissedForCurrentBreak: false
   property string _lastLockedPhase: ""
+  // Para avisar cuando el ciclo automático devuelve al trabajo sin que el usuario toque nada.
+  property bool _wasBreakRunning: false
   property int currentTipIndex: 0
 
   readonly property bool isBreakActive: service !== null
@@ -75,9 +77,28 @@ Item {
     Quickshell.execDetached(["omarchy-system-lock"])
   }
 
+  function notifyBackToWork() {
+    if (!root.sideEffects) return
+    var task = service.activeTaskTitle && String(service.activeTaskTitle) !== ""
+      ? String(service.activeTaskTitle)
+      : "tu sesión de concentración"
+    Quickshell.execDetached([
+      "omarchy-notification-send",
+      "-u", "normal",
+      "-g", "󰔟",
+      "--app-name", "PomoTask",
+      "Descanso terminado",
+      "De vuelta a: " + task
+    ])
+  }
+
   function handleBreakTransition() {
     if (!service) return
     var isBreak = service.isBreak && service.isRunning
+    if (root._wasBreakRunning && !isBreak && service.isWork && service.isRunning && service.autoCycle) {
+      notifyBackToWork()
+    }
+    root._wasBreakRunning = isBreak
     if (isBreak) {
       var phaseKey = service.mode + "_" + service.sessionPomodoros + "_" + service.totalSeconds
       if (service.strictBreak) {

@@ -48,6 +48,7 @@ async fn test_ipc_status() {
         active_task_title: Some("My Special Task".to_string()),
         strict_break: false,
         anti_distraction: true,
+        auto_cycle: false,
         target_end_timestamp: None,
         google_connected: None,
         last_sync_at: None,
