@@ -29,7 +29,6 @@ Panel {
 
   readonly property bool hasActiveTask: !!pomotaskService.activeTaskId && pomotaskService.activeTaskId !== ""
 
-
   readonly property var firstPendingTask: {
     var items = root.visibleTaskItems || []
     for (var i = 0; i < items.length; i++) {
@@ -1135,7 +1134,7 @@ Panel {
                 Text {
                   width: parent.width
                   textFormat: Text.PlainText
-                  text: "Elige una de la lista con  o crea una nueva.\nEl pomodoro se contará en la tarea que enfoques."
+                  text: "Enfoca una tarea de la lista con "
                   color: root.dimColor
                   font.family: root.contentFontFamily
                   font.pixelSize: Style.font.bodySmall
@@ -1648,15 +1647,6 @@ Panel {
                 onChanged: function(v) { pomotaskService.setMode(v) }
               }
 
-              Text {
-                width: parent.width
-                textFormat: Text.PlainText
-                text: "Cambiar de modo reinicia el temporizador con la duración de ese modo."
-                color: root.dimColor
-                font.family: root.contentFontFamily
-                font.pixelSize: Style.font.caption
-                wrapMode: Text.Wrap
-              }
             }
 
             PanelSeparator {
@@ -1698,15 +1688,6 @@ Panel {
                 maxMinutes: 120
               }
 
-              Text {
-                width: parent.width
-                textFormat: Text.PlainText
-                text: "Se aplican al próximo pomodoro de ese tipo; la TUI usa los mismos valores."
-                color: root.dimColor
-                font.family: root.contentFontFamily
-                font.pixelSize: Style.font.caption
-                wrapMode: Text.Wrap
-              }
             }
 
             PanelSeparator {
@@ -1722,8 +1703,7 @@ Panel {
 
             Toggle {
               width: parent.width
-              label: "Modo anti-distracciones"
-              description: "Detecta sitios y apps distractoras durante el enfoque"
+              label: "Anti-distracciones"
               checked: pomotaskService.antiDistraction
               foreground: root.contentForeground
               accent: Color.accent
@@ -1732,8 +1712,7 @@ Panel {
 
             Toggle {
               width: parent.width
-              label: "Bloqueo estricto en descanso"
-              description: "Bloquea la sesión del sistema al entrar en descanso"
+              label: "Bloquear pantalla en descansos"
               checked: pomotaskService.strictBreak
               foreground: root.contentForeground
               accent: Color.accent
@@ -1760,20 +1739,6 @@ Panel {
               ]
               value: root.blocklistTab
               onChanged: function(v) { root.blocklistTab = v }
-            }
-
-            Text {
-              width: parent.width
-              textFormat: Text.PlainText
-              text: root.blocklistTab === "titles"
-                ? "Palabras que, si aparecen en el título de la ventana activa, cuentan como distracción."
-                : (root.blocklistTab === "apps"
-                  ? "Clases de ventana (apps) que cuentan como distracción durante el enfoque."
-                  : "Excepciones con prioridad sobre las reglas de bloqueo (ej. YouTube Music).")
-              color: root.dimColor
-              font.family: root.contentFontFamily
-              font.pixelSize: Style.font.caption
-              wrapMode: Text.Wrap
             }
 
             // Sub-section: Blocked Web Titles / Keywords
@@ -1946,14 +1911,6 @@ Panel {
               width: parent.width
               spacing: Style.space(6)
 
-              Text {
-                textFormat: Text.PlainText
-                text: "Tienen prioridad sobre las reglas de bloqueo (ej. YouTube Music)."
-                color: root.dimColor
-                font.family: root.contentFontFamily
-                font.pixelSize: Style.font.caption
-              }
-
               Flow {
                 width: parent.width
                 spacing: Style.space(6)
@@ -2012,7 +1969,7 @@ Panel {
                 TextField {
                   id: newAllowedTitleField
                   width: parent.width - addAllowedBtn.width - parent.spacing
-                  placeholderText: "Añadir excepción (ej. youtube music)..."
+                  placeholderText: "Permitir siempre (ej. youtube music)..."
                   foreground: root.contentForeground
                   accent: Color.accent
                   onAccepted: root.addAllowedTitle()
@@ -2060,7 +2017,7 @@ Panel {
                   anchors.left: parent.left
                   anchors.verticalCenter: parent.verticalCenter
                   textFormat: Text.PlainText
-                  text: "Oscurecimiento del fondo (" + Math.round(((pomotaskService.blocklist && typeof pomotaskService.blocklist.overlay_dimming === "number") ? pomotaskService.blocklist.overlay_dimming : 0.40) * 100) + "%)"
+                  text: "Oscurecimiento"
                   color: root.contentForeground
                   font.family: root.contentFontFamily
                   font.pixelSize: Style.font.bodySmall
@@ -2070,7 +2027,7 @@ Panel {
                   anchors.right: parent.right
                   anchors.verticalCenter: parent.verticalCenter
                   textFormat: Text.PlainText
-                  text: Math.round((1.0 - ((pomotaskService.blocklist && typeof pomotaskService.blocklist.overlay_dimming === "number") ? pomotaskService.blocklist.overlay_dimming : 0.40)) * 100) + "% visibilidad"
+                  text: Math.round(((pomotaskService.blocklist && typeof pomotaskService.blocklist.overlay_dimming === "number") ? pomotaskService.blocklist.overlay_dimming : 0.40) * 100) + "%"
                   color: Color.accent
                   font.family: root.contentFontFamily
                   font.pixelSize: Style.font.caption

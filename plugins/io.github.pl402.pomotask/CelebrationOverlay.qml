@@ -314,17 +314,6 @@ Item {
 
               Text {
                 textFormat: Text.PlainText
-                text: "Tarea finalizada"
-                color: Color.dimColor ? Color.dimColor : Qt.darker(Color.foreground, 1.4)
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-                font.bold: true
-                horizontalAlignment: Text.AlignHCenter
-                width: parent.width
-              }
-
-              Text {
-                textFormat: Text.PlainText
                 text: "“" + root.completedTaskTitle + "”"
                 color: Color.foreground
                 font.family: Style.font.family

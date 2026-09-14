@@ -427,36 +427,6 @@ Item {
             }
           }
 
-          // Footer Hint Row
-          Rectangle {
-            Layout.fillWidth: true
-            implicitHeight: Style.space(32)
-            radius: Style.cornerRadius
-            color: Qt.rgba(1, 1, 1, 0.02)
-
-            RowLayout {
-              anchors.centerIn: parent
-              spacing: Style.space(6)
-
-              Text {
-                textFormat: Text.PlainText
-                text: "󰌌"
-                color: Color.menu.text
-                opacity: 0.5
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-              }
-
-              Text {
-                textFormat: Text.PlainText
-                text: "Regresa a tu ventana de trabajo para continuar enfocado"
-                color: Color.menu.text
-                opacity: 0.5
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-              }
-            }
-          }
         }
       }
     }
