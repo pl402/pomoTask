@@ -465,6 +465,12 @@ Item {
     if (root.activeTaskId === taskId) {
       root.activeTaskId = ""
       root.activeTaskTitle = ""
+      // Completar la tarea en foco detiene el pomodoro en curso (el CLI hace lo mismo al
+      // escribir runtime_state); lo reflejamos ya para que el reloj no siga un segundo más.
+      if (root.isWork && !root.isStopped) {
+        root.state = "stopped"
+        root.remainingSeconds = root.totalSeconds
+      }
     }
     runAction(["task", "complete", String(taskId)], "Completing task…")
   }

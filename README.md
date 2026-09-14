@@ -147,9 +147,9 @@ PomoTask-CLI incluye subcomandos headless pensados para scripts, automatización
 | Subcomando | Descripción |
 | :--- | :--- |
 | `pomotask-cli ipc status` | Obtiene el estado actual del temporizador y tarea activa en JSON |
-| `pomotask-cli ipc timer <start\|pause\|toggle\|skip\|reset\|toggle-auto>` | Controla el temporizador de Pomodoro. `toggle-auto` activa el ciclo automático: al agotarse una fase la siguiente arranca sola (trabajo → descanso → trabajo) |
+| `pomotask-cli ipc timer <start\|pause\|toggle\|skip\|reset\|toggle-auto>` | Controla el temporizador de Pomodoro. `toggle-auto` activa el ciclo automático: al agotarse una fase la siguiente arranca sola (trabajo → descanso → trabajo). Hacia el trabajo solo encadena si hay tarea en foco; si no, queda listo esperando |
 | `pomotask-cli ipc tasks list [--list-id <id>]` | Lista las tareas en formato JSON estructurado |
-| `pomotask-cli ipc task complete <task_id>` | Marca una tarea como completada (optimistic + sync) |
+| `pomotask-cli ipc task complete <task_id>` | Marca una tarea como completada (optimistic + sync). Si era la tarea en foco y había un pomodoro en curso, el temporizador se detiene y queda con la duración completa |
 | `pomotask-cli ipc task create --title "<t>" [--list-id <id>] [--parent <id>]` | Crea una nueva tarea o subtarea |
 | `pomotask-cli ipc task focus <task_id\|clear>` | Asigna o remueve la tarea activa del temporizador |
 | `pomotask-cli ipc sync` | Fuerza la sincronización de listas con Google Tasks |

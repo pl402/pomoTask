@@ -221,9 +221,15 @@ async fn test_ipc_task_complete() {
     );
     fs::write(&cache_path, serde_json::to_string(&map).unwrap()).unwrap();
 
+    // Pomodoro en curso sobre la tarea que vamos a completar.
     let mut initial_state = load_runtime_state();
     initial_state.active_task_id = Some("t1".to_string());
     initial_state.active_task_title = Some("Task 1".to_string());
+    initial_state.state = "running".to_string();
+    initial_state.mode = "work".to_string();
+    initial_state.total_seconds = 1500;
+    initial_state.remaining_seconds = 900;
+    initial_state.target_end_timestamp = Some(Utc::now().timestamp() + 900);
     save_runtime_state(&initial_state).unwrap();
 
     execute_ipc_command(&["task".to_string(), "complete".to_string(), "t1".to_string()])
@@ -240,9 +246,13 @@ async fn test_ipc_task_complete() {
         .unwrap();
     assert!(task.completed);
 
+    // Al completar la tarea en foco el pomodoro se detiene y queda listo para la siguiente.
     let state = load_runtime_state();
     assert_eq!(state.active_task_id, None);
     assert_eq!(state.active_task_title, None);
+    assert_eq!(state.state, "stopped");
+    assert_eq!(state.target_end_timestamp, None);
+    assert_eq!(state.remaining_seconds, 1500);
 }
 
 #[tokio::test]

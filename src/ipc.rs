@@ -420,7 +420,11 @@ pub fn load_runtime_state_from(path: &Path) -> RuntimeState {
                             state.total_seconds = focus_dur;
                         }
                         state.remaining_seconds = state.total_seconds;
-                        if state.auto_cycle {
+                        // Hacia el trabajo solo se encadena si hay una tarea en foco: sin tarea
+                        // no tiene sentido arrancar un pomodoro vacío; se queda listo esperando.
+                        let chain_next = state.auto_cycle
+                            && (state.mode != "work" || state.active_task_id.is_some());
+                        if chain_next {
                             // Ciclo automático: la siguiente fase arranca sola desde ahora (no se
                             // encadenan varias fases si el equipo estuvo suspendido mucho tiempo).
                             state.state = "running".to_string();
@@ -756,11 +760,18 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
                     save_tasks_cache(&cache).map_err(|e| e.to_string())?;
                     record_headless_task_done();
 
-                    // Si la tarea completada era la activa, quitarla de runtime_state
+                    // Si la tarea completada era la activa, quitarla de runtime_state. Si además
+                    // había un pomodoro en curso, se detiene: el trabajo terminó antes de tiempo y
+                    // el temporizador queda listo (duración completa) para la siguiente tarea.
                     let mut state = load_runtime_state();
                     if state.active_task_id.as_deref() == Some(task_id) {
                         state.active_task_id = None;
                         state.active_task_title = None;
+                        if state.mode == "work" && state.state != "stopped" {
+                            state.state = "stopped".to_string();
+                            state.target_end_timestamp = None;
+                            state.remaining_seconds = state.total_seconds;
+                        }
                         let _ = save_runtime_state(&state);
                     }
 
@@ -1510,9 +1521,64 @@ mod tests {
             total_seconds: 300,
             remaining_seconds: 1,
             auto_cycle,
+            active_task_id: Some("t1".to_string()),
+            active_task_title: Some("Tarea uno".to_string()),
             target_end_timestamp: Some(Utc::now().timestamp() - 10),
             ..RuntimeState::default()
         }
+    }
+
+    #[test]
+    fn test_expired_break_without_active_task_waits_even_with_auto_cycle() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "pomotask_test_auto_notask_{}",
+            rand::random::<u64>()
+        ));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let path = temp_dir.join("runtime_state.json");
+        let mut state = expired_break_state(true);
+        state.active_task_id = None;
+        state.active_task_title = None;
+        save_runtime_state_to(&state, &path).unwrap();
+
+        // Sin tarea en foco el trabajo queda preparado pero detenido.
+        let loaded = load_runtime_state_from(&path);
+        assert_eq!(loaded.mode, "work");
+        assert_eq!(loaded.state, "stopped");
+        assert_eq!(loaded.target_end_timestamp, None);
+        assert_eq!(loaded.remaining_seconds, loaded.total_seconds);
+        assert!(loaded.auto_cycle);
+
+        let _ = std::fs::remove_dir_all(temp_dir);
+    }
+
+    #[test]
+    fn test_expired_work_without_active_task_still_chains_into_break() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "pomotask_test_auto_break_{}",
+            rand::random::<u64>()
+        ));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let path = temp_dir.join("runtime_state.json");
+        let state = RuntimeState {
+            state: "running".to_string(),
+            mode: "work".to_string(),
+            total_seconds: 1500,
+            remaining_seconds: 1,
+            auto_cycle: true,
+            session_pomodoros: 0,
+            target_end_timestamp: Some(Utc::now().timestamp() - 10),
+            ..RuntimeState::default()
+        };
+        save_runtime_state_to(&state, &path).unwrap();
+
+        // El descanso sí arranca solo aunque no haya tarea: descansar no necesita tarea.
+        let loaded = load_runtime_state_from(&path);
+        assert_eq!(loaded.mode, "short_break");
+        assert_eq!(loaded.state, "running");
+        assert!(loaded.target_end_timestamp.is_some());
+
+        let _ = std::fs::remove_dir_all(temp_dir);
     }
 
     #[test]

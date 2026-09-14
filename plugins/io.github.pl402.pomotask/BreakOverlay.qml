@@ -92,11 +92,26 @@ Item {
     ])
   }
 
+  // Con ciclo automático pero sin tarea en foco, el trabajo no arranca solo: avisamos para
+  // que el usuario elija una tarea y lo inicie.
+  function notifyPickTask() {
+    if (!root.sideEffects) return
+    Quickshell.execDetached([
+      "omarchy-notification-send",
+      "-u", "normal",
+      "-g", "󰔟",
+      "--app-name", "PomoTask",
+      "Descanso terminado",
+      "Elige una tarea para empezar el siguiente pomodoro."
+    ])
+  }
+
   function handleBreakTransition() {
     if (!service) return
     var isBreak = service.isBreak && service.isRunning
-    if (root._wasBreakRunning && !isBreak && service.isWork && service.isRunning && service.autoCycle) {
-      notifyBackToWork()
+    if (root._wasBreakRunning && !isBreak && service.isWork && service.autoCycle) {
+      if (service.isRunning) notifyBackToWork()
+      else if (service.isStopped && !service.activeTaskId) notifyPickTask()
     }
     root._wasBreakRunning = isBreak
     if (isBreak) {
