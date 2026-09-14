@@ -119,7 +119,7 @@ El plugin de PomoTask para **Omarchy Quattro** (`io.github.pl402.pomotask`) prop
   - Gestión completa de Google Tasks con selector de lista, creación rápida de tareas y foco en tareas individuales (🎯).
   - Toggles para modo anti-distracciones y bloqueo estricto de descansos.
   - Botón de acceso directo para abrir la TUI completa en terminal.
-- **Monitor Anti-distracciones (`DistractionMonitor.qml`)**: Monitorea eventos de Hyprland en tiempo real; si se abre una ventana o pestaña bloqueada durante el enfoque, emite advertencias OSD y desenfoca la distracción.
+- **Monitor Anti-distracciones (`DistractionMonitor.qml`)**: Monitorea eventos de Hyprland en tiempo real; si se abre una ventana o pestaña bloqueada durante el enfoque, reacciona según la acción configurada: aviso discreto abajo, pantalla de enfoque oscurecida u ocultar la ventana hasta el descanso.
 - **Overlay de Descanso (`BreakOverlay.qml`)**: Pantalla de pausa activa y estiramientos durante los descansos o bloqueo de pantalla si el modo estricto está habilitado.
 
 ### Configuración del Monitor Anti-distracciones
@@ -129,10 +129,16 @@ Las reglas de bloqueo se configuran en `~/.config/pomotask/blocklist.json`:
 {
   "title_keywords": ["facebook", "twitter", "x.com", "instagram", "reddit", "youtube.com", "tiktok", "netflix", "twitch.tv"],
   "blocked_classes": ["steam", "discord", "spotify"],
-  "action": "warn_and_unfocus"
+  "action": "warn"
 }
 ```
-Acciones disponibles: `"warn"`, `"warn_and_unfocus"`, `"minimize"`.
+Acciones disponibles (`action`):
+
+- `"warn"` — **Aviso discreto**: una tarjeta pequeña abajo al centro (estilo OSD de Omarchy) con la distracción detectada, la tarea en foco y el tiempo restante. No oscurece ni bloquea nada.
+- `"hud"` — **Pantalla de enfoque**: oscurece toda la pantalla (grado configurable con `overlay_dimming`) y muestra encima la tarea, el reloj y el progreso mientras la distracción siga activa.
+- `"minimize"` — **Ocultar ventana**: manda la ventana al workspace especial `special:minimized` y muestra el aviso discreto explicándolo. Las ventanas ocultas vuelven solas a su workspace original al terminar o pausar el trabajo (o al desactivar el monitor).
+
+Los valores antiguos `"warn_and_unfocus"` y `"unfocus"` se tratan como `"hud"`. Las acciones sobre ventanas usan la API Lua de `hyprctl dispatch` (`hl.dsp.*`, Hyprland ≥ 0.56).
 
 ## 💻 Interfaz IPC y Subcomandos CLI
 

@@ -11,6 +11,46 @@ Item {
 
   property var service: null
   property bool active: false
+  // Acción configurada (ya normalizada por el monitor): "warn" | "hud" | "minimize".
+  property string mode: "warn"
+  // Título de la ventana distractora detectada.
+  property string title: ""
+
+  // Aviso pequeño (modos "warn" y "minimize"): se muestra mientras la distracción sigue
+  // activa y permanece unos segundos más para que dé tiempo a leerlo (en "minimize" la
+  // ventana desaparece al instante y la detección se apaga en el siguiente sondeo).
+  readonly property int toastLingerMs: 4000
+  property bool toastLingering: false
+  property string toastTitle: ""
+  property string toastMode: "warn"
+
+  readonly property bool running: service !== null && service.isWork && service.isRunning
+  readonly property bool toastVisible: mode !== "hud" && running && (overlayVisible || toastLingering)
+
+  readonly property string taskTitle: (service && service.activeTaskTitle && String(service.activeTaskTitle) !== "")
+    ? String(service.activeTaskTitle)
+    : "tu sesión de concentración"
+
+  onActiveChanged: {
+    if (active) {
+      toastTitle = title
+      toastMode = mode
+      toastLingering = false
+      lingerTimer.stop()
+    } else if (toastTitle !== "") {
+      toastLingering = true
+      lingerTimer.restart()
+    }
+  }
+
+  onTitleChanged: if (active && title !== "") toastTitle = title
+
+  Timer {
+    id: lingerTimer
+    interval: root.toastLingerMs
+    repeat: false
+    onTriggered: root.toastLingering = false
+  }
 
   readonly property real dimmingOpacity: {
     if (service && service.blocklist && typeof service.blocklist.overlay_dimming === "number") {
@@ -24,9 +64,99 @@ Item {
     && service.isWork
     && service.isRunning
 
+  // ---------------------------------------------------------------------------
+  // Aviso discreto: tarjeta pequeña abajo al centro, estilo OSD de Omarchy.
+  // Sin oscurecer la pantalla; solo informa (y en "minimize", explica qué pasó).
+  // ---------------------------------------------------------------------------
+  PanelWindow {
+    id: toastWindow
+    visible: root.toastVisible
+    anchors { top: true; bottom: true; left: true; right: true }
+    color: "transparent"
+    exclusionMode: ExclusionMode.Ignore
+    WlrLayershell.namespace: "omarchy-pomotask-distraction-toast"
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    mask: Region {}
+
+    BorderSurface {
+      id: toastCard
+      // Anchos deterministas (sin depender del layout) para evitar bucles de binding:
+      // icono + hueco + la línea más larga, acotada para que no cruce la pantalla.
+      readonly property real pad: Style.space(12)
+      readonly property real gap: Style.space(12)
+      readonly property real maxTextWidth: Math.min(Style.space(520), toastWindow.width - Style.space(48) - toastIcon.implicitWidth - gap - pad * 2 - borderLeft - borderRight)
+      readonly property real textWidth: Math.max(0, Math.min(maxTextWidth, Math.max(toastLine1.implicitWidth, toastLine2.implicitWidth)))
+
+      anchors.horizontalCenter: parent.horizontalCenter
+      anchors.bottom: parent.bottom
+      anchors.bottomMargin: Style.space(67)
+      width: borderLeft + pad + toastIcon.implicitWidth + gap + textWidth + pad + borderRight
+      height: borderTop + pad + Math.max(toastIcon.implicitHeight, toastLine1.implicitHeight + Style.space(2) + toastLine2.implicitHeight) + pad + borderBottom
+      radius: Style.cornerRadius
+      color: Util.alpha(Color.background, 0.97)
+      borderSpec: Border.surfaceSpec("popups", "border", Color.popups.border, Math.max(1, Style.space(2)))
+      opacity: root.toastVisible ? 1.0 : 0.0
+      transform: Translate {
+        y: root.toastVisible ? 0 : Style.space(12)
+        Behavior on y { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+      }
+      Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+
+      Text {
+        id: toastIcon
+        x: toastCard.borderLeft + toastCard.pad
+        anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
+        text: root.toastMode === "minimize" ? "󰖲" : "󰀦"
+        color: root.toastMode === "minimize" ? Color.accent : Color.popups.text
+        font.family: Style.font.family
+        font.pixelSize: Style.font.display
+      }
+
+      Column {
+        x: toastIcon.x + toastIcon.implicitWidth + toastCard.gap
+        anchors.verticalCenter: parent.verticalCenter
+        width: toastCard.textWidth
+        spacing: Style.space(2)
+
+        Text {
+          id: toastLine1
+          width: parent.width
+          textFormat: Text.PlainText
+          text: root.toastMode === "minimize"
+            ? "Ventana oculta hasta el descanso: " + root.toastTitle
+            : "Distracción: " + root.toastTitle
+          color: Color.popups.text
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+          font.bold: true
+          elide: Text.ElideRight
+        }
+
+        Text {
+          id: toastLine2
+          width: parent.width
+          textFormat: Text.PlainText
+          text: (root.toastMode === "minimize" ? "Sigue con " : "Vuelve a ")
+            + root.taskTitle
+            + " · " + (root.service ? root.service.formattedTime : "--:--") + " restantes"
+          color: Util.alpha(Color.popups.text, 0.65)
+          font.family: Style.font.family
+          font.pixelSize: Style.font.bodySmall
+          elide: Text.ElideRight
+        }
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pantalla de enfoque (modo "hud"): oscurece toda la pantalla y muestra la tarjeta
+  // con la tarea, el reloj y el progreso encima de la distracción.
+  // ---------------------------------------------------------------------------
   PanelWindow {
     id: window
-    visible: root.overlayVisible
+    visible: root.mode === "hud" && root.overlayVisible
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore

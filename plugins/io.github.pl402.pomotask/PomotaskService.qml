@@ -214,6 +214,18 @@ Item {
   property var taskLists: []
   property var blocklist: null
 
+  // Acción anti-distracción normalizada: "warn" (aviso discreto abajo), "hud" (pantalla de
+  // enfoque a pantalla completa) o "minimize" (ocultar la ventana hasta el descanso).
+  // Los valores antiguos "warn_and_unfocus"/"unfocus" se tratan como "hud".
+  readonly property string distractionAction: normalizeDistractionAction(blocklist ? blocklist.action : "")
+
+  function normalizeDistractionAction(raw) {
+    var a = String(raw || "").trim().toLowerCase()
+    if (a === "hud" || a === "minimize") return a
+    if (a === "warn_and_unfocus" || a === "unfocus") return "hud"
+    return "warn"
+  }
+
   // -------------------------------------------------------------------------
   // Process State & Diagnostics
   // -------------------------------------------------------------------------

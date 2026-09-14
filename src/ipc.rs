@@ -126,7 +126,7 @@ pub struct BlocklistConfig {
     pub allowed_title_keywords: Vec<String>,
     #[serde(default = "default_allowed_classes")]
     pub allowed_classes: Vec<String>,
-    pub action: String, // "warn", "warn_and_unfocus", "minimize"
+    pub action: String, // "warn" (aviso discreto), "hud" (pantalla de enfoque), "minimize" (ocultar ventana)
     #[serde(default = "default_overlay_dimming")]
     pub overlay_dimming: f64, // 0.0 to 1.0 (default 0.40 = 60% background visibility)
 }
@@ -171,6 +171,18 @@ impl Default for BlocklistConfig {
             action: "warn".to_string(),
             overlay_dimming: default_overlay_dimming(),
         }
+    }
+}
+
+/// Normaliza la acción anti-distracción a uno de los tres valores que entiende el plugin.
+/// Acepta los nombres antiguos (`warn_and_unfocus`, `unfocus`) como sinónimos de `hud`.
+/// Devuelve `None` si el valor no se reconoce.
+pub fn normalize_distraction_action(raw: &str) -> Option<&'static str> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "warn" => Some("warn"),
+        "hud" | "warn_and_unfocus" | "unfocus" => Some("hud"),
+        "minimize" => Some("minimize"),
+        _ => None,
     }
 }
 
@@ -1040,10 +1052,16 @@ pub async fn execute_ipc_command(args: &[String]) -> Result<String, String> {
                 }
                 "set-action" => {
                     if clean_args.len() < 3 {
-                        return Err("Missing action parameter (warn, warn_and_unfocus, minimize)".to_string());
+                        return Err("Missing action parameter (warn, hud, minimize)".to_string());
                     }
+                    let action = normalize_distraction_action(clean_args[2]).ok_or_else(|| {
+                        format!(
+                            "Unknown distraction action '{}'. Expected warn, hud or minimize",
+                            clean_args[2]
+                        )
+                    })?;
                     let mut config = load_blocklist();
-                    config.action = clean_args[2].to_string();
+                    config.action = action.to_string();
                     save_blocklist(&config).map_err(|e| e.to_string())?;
                     serde_json::to_string_pretty(&config).map_err(|e| e.to_string())
                 }
@@ -1381,6 +1399,21 @@ mod tests {
     }
 
     #[test]
+    fn test_normalize_distraction_action() {
+        assert_eq!(normalize_distraction_action("warn"), Some("warn"));
+        assert_eq!(normalize_distraction_action(" HUD "), Some("hud"));
+        assert_eq!(normalize_distraction_action("minimize"), Some("minimize"));
+        // Nombres antiguos guardados en blocklist.json de versiones previas
+        assert_eq!(
+            normalize_distraction_action("warn_and_unfocus"),
+            Some("hud")
+        );
+        assert_eq!(normalize_distraction_action("unfocus"), Some("hud"));
+        assert_eq!(normalize_distraction_action("explode"), None);
+        assert_eq!(normalize_distraction_action(""), None);
+    }
+
+    #[test]
     fn test_blocklist_serialization() {
         let blocklist = BlocklistConfig::default();
         let json = serde_json::to_string_pretty(&blocklist).expect("serialize");
@@ -1438,13 +1471,13 @@ mod tests {
         let bl_path = temp_dir.join("blocklist.json");
 
         let mut config = BlocklistConfig::default();
-        config.action = "warn_and_unfocus".to_string();
+        config.action = "hud".to_string();
         config.blocked_classes.push("vlc".to_string());
 
         save_blocklist_to(&config, &bl_path).unwrap();
         let loaded = load_blocklist_from(&bl_path);
 
-        assert_eq!(loaded.action, "warn_and_unfocus");
+        assert_eq!(loaded.action, "hud");
         assert!(loaded.blocked_classes.contains(&"vlc".to_string()));
 
         let _ = std::fs::remove_dir_all(temp_dir);

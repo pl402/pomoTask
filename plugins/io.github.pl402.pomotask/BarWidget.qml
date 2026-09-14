@@ -48,6 +48,8 @@ BarWidget {
     id: distractionOverlay
     service: root.service
     active: distractionMonitor.distractionActive
+    mode: distractionMonitor.action
+    title: distractionMonitor.currentDistractionTitle
   }
 
   readonly property alias distractionOverlay: distractionOverlay

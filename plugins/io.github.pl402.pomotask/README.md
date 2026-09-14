@@ -19,7 +19,11 @@ Plugin nativo de barra y escritorio para **Omarchy Quattro** que integra la téc
   - Ajustes: modo como grupo de chips, **duraciones editables** en minutos (persisten en `config.json` vía `pomotask-cli ipc config set`), toggles de anti-distracción y descanso estricto, y listas de bloqueo en pestañas (títulos web, apps, excepciones).
 - 🛡️ **Monitor Anti-distracciones (`DistractionMonitor.qml`):**
   - Inspección en tiempo real de títulos y clases de ventana activas en Hyprland.
-  - Advertencias instantáneas cuando se detectan sitios o aplicaciones distractoras en modo trabajo.
+  - Tres acciones al detectar una distracción en modo trabajo, elegibles en Ajustes y visualmente distintas:
+    - **Aviso discreto abajo** (`warn`): tarjeta pequeña abajo al centro, estilo OSD, con la distracción, la tarea y el tiempo restante. No tapa nada.
+    - **Pantalla de enfoque** (`hud`): oscurece toda la pantalla (oscurecimiento configurable) y pone encima la tarea, el reloj y el progreso.
+    - **Ocultar ventana hasta el descanso** (`minimize`): la ventana se va a `special:minimized` y aparece el aviso discreto explicándolo; al terminar o pausar el trabajo las ventanas vuelven solas a su workspace original. Si se abre el workspace especial para mirarla, se vuelve a cerrar.
+  - Las acciones sobre ventanas usan la API Lua de `hyprctl dispatch` (`hl.dsp.window.move`, `hl.dsp.workspace.toggle_special`), obligatoria desde Hyprland 0.56; la instancia líder es la única que las ejecuta. Los valores antiguos `warn_and_unfocus`/`unfocus` se leen como `hud`.
 - 🔒 **Bloqueo Estricto en Descansos (`BreakOverlay.qml`):**
   - Bloqueo de pantalla automático (`omarchy system lock`) o recordatorio inmersivo al entrar en pausas de descanso.
 

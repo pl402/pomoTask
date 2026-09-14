@@ -95,10 +95,13 @@ Panel {
   property string selectedListId: "@all"
   property bool showCompletedTasks: false
 
+  // Las tres acciones se distinguen a la vista: aviso pequeño abajo sin tapar nada,
+  // pantalla completa oscurecida con la tarea encima, o la ventana desaparece a un
+  // workspace especial y vuelve sola al terminar/pausar el trabajo.
   readonly property var actionOptions: [
-    { value: "warn", label: "Solo advertir (OSD)" },
-    { value: "warn_and_unfocus", label: "Advertir y desenfocar" },
-    { value: "minimize", label: "Minimizar ventana" }
+    { value: "warn", label: "Aviso discreto abajo" },
+    { value: "hud", label: "Pantalla de enfoque (oscurece todo)" },
+    { value: "minimize", label: "Ocultar ventana hasta el descanso" }
   ]
 
   readonly property var listOptions: {
@@ -2037,15 +2040,16 @@ Panel {
               label: "Acción al detectar distracción"
               showLabel: true
               width: parent.width
-              value: (pomotaskService.blocklist && pomotaskService.blocklist.action) ? pomotaskService.blocklist.action : "warn"
+              value: pomotaskService.distractionAction
               options: root.actionOptions
               onChanged: function(v) { pomotaskService.blocklistSetAction(v) }
             }
 
-            // Overlay Dimming / Visibility Slider
+            // Overlay Dimming / Visibility Slider (solo aplica a la pantalla de enfoque)
             Column {
               width: parent.width
               spacing: Style.space(6)
+              visible: pomotaskService.distractionAction === "hud"
 
               Item {
                 width: parent.width
