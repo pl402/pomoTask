@@ -129,12 +129,7 @@ Item {
     var address = String(windowObj.address || "")
     if (address === "") return
     var wsName = (windowObj.workspace && windowObj.workspace.name) ? String(windowObj.workspace.name) : ""
-
-    if (wsName === root.hiddenWorkspace) {
-      // El usuario abrió el workspace especial para mirar la ventana oculta: se vuelve a cerrar.
-      hyprDispatch("hl.dsp.workspace.toggle_special(" + luaString(root.hiddenWorkspace.replace(/^special:/, "")) + ")")
-      return
-    }
+    if (wsName === root.hiddenWorkspace) return // ya está oculta; ese caso lo trata checkHiddenWindow()
 
     if (!isMinimized(address)) {
       var list = root.minimizedWindows.slice()
@@ -142,6 +137,68 @@ Item {
       root.minimizedWindows = list
     }
     moveWindowSilently(address, root.hiddenWorkspace)
+  }
+
+  function closeHiddenWorkspace() {
+    hyprDispatch("hl.dsp.workspace.toggle_special(" + luaString(root.hiddenWorkspace.replace(/^special:/, "")) + ")")
+  }
+
+  // La ventana activa está en el workspace oculto. Hyprland deja el foco en la única ventana
+  // de un escritorio aunque se haya movido a un especial cerrado, así que "activa" no significa
+  // "visible": hay que mirar si algún monitor tiene ese especial abierto. Si está abierto (el
+  // usuario lo abrió para mirar), se cierra; si no, la ventana no se ve y no es distracción.
+  // Alternar el especial sin comprobarlo lo ABRÍA y provocaba un ciclo mostrar/ocultar.
+  property var pendingHiddenWindow: null
+
+  function checkHiddenWindow(windowObj) {
+    root.pendingHiddenWindow = windowObj
+    if (monitorsProc.running) return
+    monitorsProc.running = true
+  }
+
+  function resolveHiddenWindow(monitorsJson) {
+    var win = root.pendingHiddenWindow
+    root.pendingHiddenWindow = null
+    if (!win || !root.monitorActive) {
+      clearDistraction()
+      return
+    }
+    var specialOpen = false
+    try {
+      var mons = JSON.parse(monitorsJson)
+      for (var i = 0; i < mons.length; i++) {
+        var sp = mons[i].specialWorkspace
+        if (sp && String(sp.name || "") === root.hiddenWorkspace) {
+          specialOpen = true
+          break
+        }
+      }
+    } catch (e) {
+      specialOpen = false
+    }
+
+    if (!specialOpen) {
+      clearDistraction()
+      return
+    }
+
+    root.distractionActive = true
+    root.currentDistractionAddress = String(win.address || "")
+    root.currentDistractionTitle = String(win.title || win.initialTitle || "Distracción detectada")
+    if (root.sideEffects && root.action === "minimize") closeHiddenWorkspace()
+  }
+
+  Process {
+    id: monitorsProc
+    running: false
+    command: ["hyprctl", "-j", "monitors"]
+    stdout: StdioCollector {
+      id: monitorsStdout
+      waitForEnd: true
+    }
+    onExited: function(exitCode) {
+      root.resolveHiddenWindow(exitCode === 0 ? String(monitorsStdout.text || "[]") : "[]")
+    }
   }
 
   // Devuelve todas las ventanas ocultas a su workspace original.
@@ -211,10 +268,13 @@ Item {
           var appClass = win["class"] || ""
           var initialClass = win.initialClass || ""
 
-          if (root.isDistraction(title, initialTitle, appClass, initialClass)) {
-            root.handleDistraction(win)
-          } else {
+          var wsName = (win.workspace && win.workspace.name) ? String(win.workspace.name) : ""
+          if (!root.isDistraction(title, initialTitle, appClass, initialClass)) {
             root.clearDistraction()
+          } else if (wsName === root.hiddenWorkspace) {
+            root.checkHiddenWindow(win)
+          } else {
+            root.handleDistraction(win)
           }
         } else {
           root.clearDistraction()

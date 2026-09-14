@@ -136,7 +136,7 @@ Acciones disponibles (`action`):
 
 - `"warn"` — **Aviso discreto**: una tarjeta pequeña abajo al centro (estilo OSD de Omarchy) con la distracción detectada, la tarea en foco y el tiempo restante. No oscurece ni bloquea nada.
 - `"hud"` — **Pantalla de enfoque**: oscurece toda la pantalla (grado configurable con `overlay_dimming`) y muestra encima la tarea, el reloj y el progreso mientras la distracción siga activa.
-- `"minimize"` — **Ocultar ventana**: manda la ventana al workspace especial `special:minimized` y muestra el aviso discreto explicándolo. Las ventanas ocultas vuelven solas a su workspace original al terminar o pausar el trabajo (o al desactivar el monitor).
+- `"minimize"` — **Ocultar ventana**: manda la ventana al workspace especial `special:minimized` y muestra el aviso discreto explicándolo. Las ventanas ocultas vuelven solas a su workspace original al terminar o pausar el trabajo (o al desactivar el monitor). Si era la única ventana del escritorio, Hyprland conserva el foco en ella aunque esté oculta; el plugin lo tiene en cuenta y solo cierra el especial si está abierto de verdad.
 
 Los valores antiguos `"warn_and_unfocus"` y `"unfocus"` se tratan como `"hud"`. Las acciones sobre ventanas usan la API Lua de `hyprctl dispatch` (`hl.dsp.*`, Hyprland ≥ 0.56).
 
